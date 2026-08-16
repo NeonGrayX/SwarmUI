@@ -10,11 +10,18 @@ import { AppShell } from './components/shell/AppShell';
 import { RequirePermission } from './api/permissions';
 import { Placeholder } from './pages/Placeholder';
 import { GeneratePage } from './pages/Generate';
+import { LibraryPage } from './pages/Library';
 import { DESTINATIONS, type Destination } from './nav/destinations';
 
 /** Destinations that have a real screen. Anything not listed renders an honest placeholder. */
 const IMPLEMENTED: Record<string, ComponentType> = {
-    workspace: GeneratePage
+    workspace: GeneratePage,
+    // Every Library destination shares one shell, keyed by destination id.
+    ...Object.fromEntries(
+        ['history', 'models', 'loras', 'vaes', 'embeddings', 'controlnets', 'wildcards', 'presets'].map(
+            id => [id, () => <LibraryPage destinationId={id} />] as const
+        )
+    )
 };
 
 /** Which phase of the build delivers each screen, and a one-line summary of what it will do.
