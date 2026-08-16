@@ -34,6 +34,7 @@ public static class AdminAPI
         API.RegisterAPICall(ListConnectedUsers, false, Permissions.ReadServerInfoPanels);
         API.RegisterAPICall(CheckForUpdates, false, Permissions.Restart);
         API.RegisterAPICall(UpdateAndRestart, true, Permissions.Restart);
+        API.RegisterAPICall(ListExtensions, false, Permissions.ManageExtensions);
         API.RegisterAPICall(InstallExtension, true, Permissions.ManageExtensions);
         API.RegisterAPICall(UpdateExtension, true, Permissions.ManageExtensions);
         API.RegisterAPICall(UninstallExtension, true, Permissions.ManageExtensions);
@@ -833,6 +834,78 @@ public static class AdminAPI
         File.WriteAllText("src/bin/must_rebuild", "yes");
         Program.RequestRestart();
         return new JObject() { ["success"] = true, ["result"] = fails.Count > 0 ? fails.JoinString("\n") + "\nRestarting..." : "Update successful. Restarting... (please wait a moment, then refresh the page)" };
+    }
+
+    [API.APIDescription("Lists installed and available extensions. The legacy Text2Image page renders this data server-side; this route exposes the same information to API clients.",
+        """
+            "installed":
+            [
+                {
+                    "name": "MyExtension",
+                    "version": "abc1234 (2026-01-02 03:04:05)",
+                    "author": "Someone",
+                    "description": "Does a thing.",
+                    "license": "MIT",
+                    "readme_url": "https://github.com/...",
+                    "tags": ["Parameters", "Nodes"],
+                    "is_core": false, // built-in, cannot be uninstalled
+                    "can_update": true,
+                    "is_old_repo": false // installed from a superseded repo
+                }
+            ],
+            "available":
+            [
+                {
+                    "name": "OtherExtension",
+                    "author": "Someone Else",
+                    "description": "Does another thing.",
+                    "license": "MIT",
+                    "url": "https://github.com/...",
+                    "tags": ["Tabs", "UI"],
+                    "folder_names": ["OtherExtension"],
+                    "is_installed": false,
+                    "is_disabled": false // installed but switched off in settings
+                }
+            ]
+        """)]
+    public static async Task<JObject> ListExtensions(Session session)
+    {
+        JArray installed = [];
+        foreach (Extension ext in Program.Extensions.Extensions)
+        {
+            installed.Add(new JObject()
+            {
+                ["name"] = ext.ExtensionName,
+                ["version"] = ext.Version,
+                ["author"] = ext.ExtensionAuthor,
+                ["description"] = ext.Description,
+                ["license"] = ext.License,
+                ["readme_url"] = ext.ReadmeURL,
+                ["tags"] = JArray.FromObject(ext.Tags),
+                ["is_core"] = ext.IsCore,
+                ["can_update"] = ext.CanUpdate,
+                ["is_old_repo"] = ext.IsOldRepo
+            });
+        }
+        HashSet<string> installedNames = [.. Program.Extensions.Extensions.Select(e => e.ExtensionName)];
+        JArray available = [];
+        foreach (ExtensionsManager.ExtensionInfo info in Program.Extensions.KnownExtensions)
+        {
+            bool isInstalled = installedNames.Contains(info.Name) || info.FolderNames.Any(installedNames.Contains);
+            available.Add(new JObject()
+            {
+                ["name"] = info.Name,
+                ["author"] = info.Author,
+                ["description"] = info.Description,
+                ["license"] = info.License,
+                ["url"] = info.URL,
+                ["tags"] = JArray.FromObject(info.Tags),
+                ["folder_names"] = JArray.FromObject(info.FolderNames),
+                ["is_installed"] = isInstalled,
+                ["is_disabled"] = info.FolderNames.Any(Program.Extensions.IsDisabled)
+            });
+        }
+        return new JObject() { ["installed"] = installed, ["available"] = available };
     }
 
     [API.APIDescription("Installs an extension from the known extensions list. Does not trigger a restart.",

@@ -1,0 +1,276 @@
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { KeyRound, Trash2 } from 'lucide-react';
+import { api } from '@/api/client';
+import { useSession } from '@/api/hooks';
+import { useMyUserData } from '@/library/hooks';
+import { Field } from '@/components/form/Field';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+
+interface AuthToken {
+    id: string;
+    created: number;
+    last_active: number;
+    user_agent: string;
+    origin_address: string;
+    is_current: boolean;
+}
+
+/** The auth-token routes all refuse when the server has no user authorization configured. */
+const AUTH_DISABLED = 'Authorization is not enabled.';
+
+function unixToText(seconds: number): string {
+    return seconds ? new Date(seconds * 1000).toLocaleString() : 'never';
+}
+
+const INPUT =
+    'w-full rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]';
+
+export function AccountPage() {
+    const session = useSession();
+    const userData = useMyUserData();
+
+    return (
+        <div className="h-full overflow-y-auto p-4">
+            <div className="grid max-w-3xl gap-3" style={{ ['--sw-field-label-width' as string]: '10rem' }}>
+                <Panel title="Profile">
+                    <Field id="user" label="User ID" density="compact">
+                        <span className="text-sm text-fg">{session.data?.user_id ?? '—'}</span>
+                    </Field>
+                    <Field id="perms" label="Permissions" density="compact">
+                        <span className="text-sm text-fg">
+                            {session.data?.permissions.length ?? 0} granted
+                        </span>
+                    </Field>
+                    <Field id="lang" label="Language" density="compact">
+                        <span className="text-sm text-fg">{userData.data?.language ?? '—'}</span>
+                    </Field>
+                </Panel>
+
+                <ChangePasswordPanel />
+                <AuthTokensPanel />
+            </div>
+        </div>
+    );
+}
+
+function ChangePasswordPanel() {
+    const [current, setCurrent] = useState('');
+    const [next, setNext] = useState('');
+    const [confirm, setConfirm] = useState('');
+    const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+    const change = useMutation({
+        mutationFn: () => api.post('ChangePassword', { oldPassword: current, newPassword: next }),
+        onSuccess: () => {
+            setMessage({ ok: true, text: 'Password changed.' });
+            setCurrent('');
+            setNext('');
+            setConfirm('');
+        },
+        onError: (e: unknown) =>
+            setMessage({ ok: false, text: e instanceof Error ? e.message : 'Failed to change password.' })
+    });
+
+    const mismatch = next.length > 0 && confirm.length > 0 && next !== confirm;
+    const canSubmit = current && next && next === confirm && !change.isPending;
+
+    return (
+        <Panel title="Change password">
+            <Field id="current-pw" label="Current password" density="compact">
+                <input
+                    id="current-pw"
+                    type="password"
+                    autoComplete="current-password"
+                    value={current}
+                    onChange={e => setCurrent(e.target.value)}
+                    className={INPUT}
+                />
+            </Field>
+            <Field id="new-pw" label="New password" density="compact">
+                <input
+                    id="new-pw"
+                    type="password"
+                    autoComplete="new-password"
+                    value={next}
+                    onChange={e => setNext(e.target.value)}
+                    className={INPUT}
+                />
+            </Field>
+            <Field id="confirm-pw" label="Confirm new password" density="compact">
+                <input
+                    id="confirm-pw"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirm}
+                    onChange={e => setConfirm(e.target.value)}
+                    className={INPUT}
+                />
+            </Field>
+            {mismatch && (
+                <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
+                    The new passwords don't match.
+                </p>
+            )}
+            {message && (
+                <p
+                    className="mt-1 text-xs"
+                    style={{ color: message.ok ? 'var(--backend-running)' : 'var(--backend-errored)' }}
+                >
+                    {message.text}
+                </p>
+            )}
+            <div className="mt-2 flex justify-end">
+                <button
+                    type="button"
+                    disabled={!canSubmit}
+                    onClick={() => change.mutate()}
+                    className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
+                    style={{ background: 'var(--emphasis)', color: 'var(--emphasis-text)' }}
+                >
+                    {change.isPending ? 'Changing…' : 'Change password'}
+                </button>
+            </div>
+        </Panel>
+    );
+}
+
+function AuthTokensPanel() {
+    const queryClient = useQueryClient();
+    const [pendingRevoke, setPendingRevoke] = useState<string | null>(null);
+    const [newToken, setNewToken] = useState<string | null>(null);
+    const [reason, setReason] = useState('');
+
+    const tokens = useQuery({
+        queryKey: ['auth-tokens'],
+        queryFn: () => api.post<{ tokens: AuthToken[] }>('ListMyAuthTokens')
+    });
+
+    const invalidate = () => queryClient.invalidateQueries({ queryKey: ['auth-tokens'] });
+
+    const create = useMutation({
+        // `reason` is required and is stored as the token's user-agent label.
+        mutationFn: () => api.post<{ token: string }>('CreateAuthToken', { reason: reason.trim() }),
+        onSuccess: data => {
+            setNewToken(data.token);
+            setReason('');
+            invalidate();
+        }
+    });
+    const revoke = useMutation({
+        mutationFn: (id: string) => api.post('RevokeMyAuthToken', { tokenId: id }),
+        onSuccess: invalidate
+    });
+
+    const list = tokens.data?.tokens ?? [];
+    const authDisabled =
+        tokens.isError && tokens.error instanceof Error && tokens.error.message.includes(AUTH_DISABLED);
+
+    // Nothing here works without user authorization, so say so plainly instead of showing an error.
+    if (authDisabled) {
+        return (
+            <Panel title="API auth tokens">
+                <p className="text-sm text-fg-soft">
+                    This server runs without user authorization, so API tokens aren't used. Enable
+                    authorization in Server &rarr; Configuration to issue them.
+                </p>
+            </Panel>
+        );
+    }
+
+    return (
+        <Panel title="API auth tokens">
+            <p className="mb-2 text-xs text-fg-soft">
+                Tokens let external tools call the Swarm API as you. Treat them like passwords.
+            </p>
+
+            {newToken && (
+                <div className="mb-2 rounded border border-default bg-surface-sunken p-2">
+                    <p className="mb-1 text-xs text-fg-soft">
+                        New token — copy it now, it won't be shown again.
+                    </p>
+                    <code className="block break-all font-mono text-xs text-fg">{newToken}</code>
+                </div>
+            )}
+
+            {tokens.isPending ? (
+                <p className="text-sm text-fg-soft">Loading…</p>
+            ) : list.length === 0 ? (
+                <p className="text-sm text-fg-soft">No tokens issued.</p>
+            ) : (
+                <ul className="divide-y divide-[var(--light-border)]">
+                    {list.map(token => (
+                        <li key={token.id} className="flex items-center gap-3 py-1.5">
+                            <KeyRound size={14} className="shrink-0 text-fg-soft" aria-hidden />
+                            <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">{token.id}</span>
+                            {token.is_current && (
+                                <span className="shrink-0 text-xs" style={{ color: 'var(--backend-running)' }}>
+                                    this session
+                                </span>
+                            )}
+                            <span className="shrink-0 text-xs text-fg-soft" title={token.user_agent}>
+                                active {unixToText(token.last_active)}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setPendingRevoke(token.id)}
+                                aria-label="Revoke token"
+                                title="Revoke token"
+                                className="shrink-0 rounded p-1 hover:bg-[var(--sw-hover)]"
+                                style={{ color: 'var(--backend-errored)' }}
+                            >
+                                <Trash2 size={13} aria-hidden />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <div className="mt-3 flex items-end gap-2">
+                <label className="min-w-0 flex-1">
+                    <span className="mb-1 block text-xs text-fg-soft">What is this token for?</span>
+                    <input
+                        type="text"
+                        value={reason}
+                        maxLength={500}
+                        onChange={e => setReason(e.target.value)}
+                        placeholder="eg my automation script"
+                        className={INPUT}
+                    />
+                </label>
+                <button
+                    type="button"
+                    onClick={() => create.mutate()}
+                    disabled={create.isPending || !reason.trim()}
+                    className="shrink-0 rounded border border-default px-3 py-1.5 text-sm text-fg disabled:opacity-40 hover:bg-[var(--sw-hover)]"
+                >
+                    {create.isPending ? 'Creating…' : 'Create token'}
+                </button>
+            </div>
+
+            <ConfirmDialog
+                open={pendingRevoke !== null}
+                title="Revoke token?"
+                body={<>Anything using this token will immediately lose access.</>}
+                confirmLabel="Revoke"
+                destructive
+                onConfirm={() => {
+                    if (pendingRevoke) {
+                        revoke.mutate(pendingRevoke);
+                    }
+                    setPendingRevoke(null);
+                }}
+                onCancel={() => setPendingRevoke(null)}
+            />
+        </Panel>
+    );
+}
+
+function Panel(props: { title: string; children: React.ReactNode }) {
+    return (
+        <section className="rounded-lg border border-default bg-surface p-4">
+            <h2 className="mb-2 text-sm font-medium text-fg-strong">{props.title}</h2>
+            {props.children}
+        </section>
+    );
+}
