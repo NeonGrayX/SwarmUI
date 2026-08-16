@@ -5,10 +5,17 @@ import {
     redirect,
     type AnyRoute
 } from '@tanstack/react-router';
+import { type ComponentType } from 'react';
 import { AppShell } from './components/shell/AppShell';
 import { RequirePermission } from './api/permissions';
 import { Placeholder } from './pages/Placeholder';
+import { GeneratePage } from './pages/Generate';
 import { DESTINATIONS, type Destination } from './nav/destinations';
+
+/** Destinations that have a real screen. Anything not listed renders an honest placeholder. */
+const IMPLEMENTED: Record<string, ComponentType> = {
+    workspace: GeneratePage
+};
 
 /** Which phase of the build delivers each screen, and a one-line summary of what it will do.
  *  Drives the placeholders so every routed screen is honest about its state. */
@@ -54,12 +61,17 @@ const indexRoute = createRoute({
 
 function routeFor(destination: Destination): AnyRoute {
     const info = PHASE_INFO[destination.id] ?? { phase: 'a later phase', summary: '' };
+    const Screen = IMPLEMENTED[destination.id];
     return createRoute({
         getParentRoute: () => rootRoute,
         path: destination.path,
         component: () => (
             <RequirePermission perm={destination.permission}>
-                <Placeholder destination={destination} phase={info.phase} summary={info.summary} />
+                {Screen ? (
+                    <Screen />
+                ) : (
+                    <Placeholder destination={destination} phase={info.phase} summary={info.summary} />
+                )}
             </RequirePermission>
         )
     });

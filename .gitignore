@@ -35,3 +35,4 @@ venv/
 # New frontend (see frontend/README.md)
 node_modules/
 /src/wwwroot/newui
+*.tsbuildinfo
