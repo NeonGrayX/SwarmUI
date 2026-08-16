@@ -1,0 +1,110 @@
+/* Design tokens for the new SwarmUI frontend.
+ *
+ * These deliberately reuse the *exact* custom-property names the legacy UI uses, so that the 15
+ * existing theme files in src/wwwroot/css/themes/ can be loaded on top of this file unchanged.
+ * Legacy base values live in src/wwwroot/css/site.css :root; theme files override a subset.
+ *
+ * Anything genuinely new to this UI is namespaced --sw-* so it never collides with legacy names.
+ */
+
+:root {
+    /* --- Core palette (defaults match themes/modern_dark.css) --- */
+    --background: #161616;
+    --background-soft: #27272a;
+    --background-gray: #222226;
+    --background-gray-danger: #361f1f;
+    --background-panel: #202020;
+    --background-panel-subtle: rgba(255, 255, 255, 0.03);
+    --background-danger: #361f1f;
+
+    --text: #e4e4e4;
+    --text-soft: #aaaaaa;
+    --text-strong: #ffffff;
+
+    --emphasis: #7855e1;
+    --emphasis-soft: #665694;
+    --emphasis-text: var(--button-text);
+
+    --border-color: #4c4c4c;
+    --light-border: #3f3f46;
+    --shadow: #3f3f46;
+
+    --button-background: #4b4b4b;
+    --button-background-hover: #5a5a5a;
+    --button-background-disabled: #3a3a3a;
+    --button-text: #ffffff;
+    --button-border: var(--border-color);
+    --button-foreground-disabled: #aaaaaa;
+    --button-foreground-hover: var(--text-strong);
+
+    --danger-button-background: #7a2222;
+    --danger-button-background-hover: #932a2a;
+    --danger-button-border: #a33;
+    --danger-button-foreground: #fff;
+    --danger-button-foreground-hover: #fff;
+
+    --popup-front: #ffffff;
+    --popup-back: #202020;
+
+    /* --- Semantic status colors (defaults from site.css :root) --- */
+    --red: #ff0000;
+    --green: #00ff00;
+    --yellow: #ffff00;
+    --white: #ffffff;
+    --black: #000000;
+    --star: #ffff00;
+    --gray: #808080;
+    --darkgray: #505050;
+
+    --backend-errored: #ff0000;
+    --backend-disabled: #ffaa00;
+    --backend-running: #00aa33;
+    --backend-idle: #688772;
+    --backend-loading: #335500;
+    --backend-waiting: #335500;
+
+    --status-bar-text-color: #000000;
+    --status-bar-warn-color-start-end: #dddd55;
+    --status-bar-warn-color-middle: #888800;
+    --status-bar-error-color-start-end: #bb2020;
+    --status-bar-error-color-middle: #880000;
+    --status-bar-soft-color: #888800;
+
+    --toast-header: #303030;
+    --toast-body: #444444;
+
+    --scrollbar: #4b4b4b;
+    --font-monospace: 'Courier New', Courier, monospace;
+
+    /* --- New-UI-only tokens (namespaced to avoid collision with legacy) --- */
+
+    /* Derived surfaces. color-mix keeps these correct under any theme override. */
+    --sw-surface: var(--background-panel);
+    --sw-surface-raised: color-mix(in srgb, var(--background-panel) 88%, white);
+    --sw-surface-sunken: color-mix(in srgb, var(--background) 92%, black);
+    --sw-hover: color-mix(in srgb, var(--text) 8%, transparent);
+    --sw-active: color-mix(in srgb, var(--emphasis) 18%, transparent);
+    --sw-focus-ring: color-mix(in srgb, var(--emphasis) 65%, transparent);
+    --sw-modified: var(--emphasis);
+
+    /* Spacing scale — the legacy UI has no consistent rhythm; this establishes one. */
+    --sw-space-1: 0.25rem;
+    --sw-space-2: 0.5rem;
+    --sw-space-3: 0.75rem;
+    --sw-space-4: 1rem;
+    --sw-space-6: 1.5rem;
+    --sw-space-8: 2rem;
+
+    --sw-radius-sm: 4px;
+    --sw-radius: 6px;
+    --sw-radius-lg: 10px;
+
+    /* Form layout: the fixed label column that makes fields actually align. */
+    --sw-field-label-width: 11rem;
+    --sw-field-gap: 0.75rem;
+    --sw-field-row-height: 2rem;
+
+    /* Chrome dimensions. */
+    --sw-rail-width: 4.5rem;
+    --sw-header-height: 3rem;
+}

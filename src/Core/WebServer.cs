@@ -85,6 +85,9 @@ public class WebServer
     /// <summary>Extra content for the Text2Image page's tab bodies. Automatically set based on extensions.</summary>
     public static HtmlString T2ITabBody = new("");
 
+    /// <summary>Path (relative to process root) of the new frontend's build output, served at "/ui".</summary>
+    public const string NewUIPath = "src/wwwroot/newui";
+
     /// <summary>Set of registered Theme IDs.</summary>
     public Dictionary<string, ThemeData> RegisteredThemes = [];
 
@@ -226,6 +229,16 @@ public class WebServer
         WebApp.Lifetime.ApplicationStopping.Register(() => Program.Shutdown());
         timer.Check("[Web] StartStop handler");
         WebApp.UseStaticFiles(new StaticFileOptions());
+        // The new frontend (see 'frontend/' at repo root) builds to src/wwwroot/newui/ and is served at /ui/.
+        // Absent when the frontend hasn't been built, which is fine - only /ui is unavailable then.
+        if (Directory.Exists(NewUIPath))
+        {
+            WebApp.UseStaticFiles(new StaticFileOptions()
+            {
+                FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(Path.GetFullPath(NewUIPath)),
+                RequestPath = "/ui"
+            });
+        }
         timer.Check("[Web] static files");
         static string fixRoute(HttpRequest request)
         {
@@ -280,6 +293,10 @@ public class WebServer
         WebApp.MapRazorPages().DisableAntiforgery();
         timer.Check("[Web] core use calls");
         WebApp.MapGet("/", () => Results.Redirect("Text2Image"));
+        // SPA history fallback for the new frontend - any /ui/... path that isn't a real file serves the app shell.
+        WebApp.MapGet("/ui/{*path}", () => File.Exists($"{NewUIPath}/index.html")
+            ? Results.File(Path.GetFullPath($"{NewUIPath}/index.html"), "text/html")
+            : Results.NotFound("The new UI has not been built. Run 'npm install && npm run build' in the 'frontend' directory."));
         WebApp.Map("/API/{*Call}", API.HandleAsyncRequest);
         WebApp.MapGet("/Output/{*Path}", ViewOutput);
         WebApp.MapGet("/View/{*Path}", ViewOutput);

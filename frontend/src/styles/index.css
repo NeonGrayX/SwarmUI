@@ -1,0 +1,69 @@
+@import './tokens.css';
+@import 'tailwindcss';
+
+/* Map the CSS-variable token contract into Tailwind's theme so utilities like `bg-surface`,
+ * `text-soft`, `border-default` resolve to the same variables the themes override. */
+@theme inline {
+    --color-background: var(--background);
+    --color-surface: var(--sw-surface);
+    --color-surface-raised: var(--sw-surface-raised);
+    --color-surface-sunken: var(--sw-surface-sunken);
+    --color-soft: var(--background-soft);
+
+    --color-fg: var(--text);
+    --color-fg-soft: var(--text-soft);
+    --color-fg-strong: var(--text-strong);
+
+    --color-accent: var(--emphasis);
+    --color-accent-soft: var(--emphasis-soft);
+    --color-accent-fg: var(--emphasis-text);
+
+    --color-default: var(--border-color);
+    --color-subtle: var(--light-border);
+
+    --color-danger: var(--danger-button-background);
+    --color-warn: var(--status-bar-warn-color-middle);
+    --color-ok: var(--backend-running);
+
+    --radius-sm: var(--sw-radius-sm);
+    --radius-DEFAULT: var(--sw-radius);
+    --radius-lg: var(--sw-radius-lg);
+
+    --font-mono: var(--font-monospace);
+}
+
+html,
+body,
+#root {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--background);
+    color: var(--text);
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* A single visible focus treatment everywhere. The legacy UI has none on most controls. */
+:focus-visible {
+    outline: 2px solid var(--sw-focus-ring);
+    outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
