@@ -10,6 +10,7 @@ import { Splitter } from '@/components/generate/Splitter';
 import { ComfyWorkflow } from '@/components/generate/ComfyWorkflow';
 import { PRESETS, useLayoutStore, type LayoutPreset } from '@/generate/layout';
 import { useGenerateStore } from '@/generate/store';
+import { useGenInput } from '@/generate/input';
 import { useParamStore } from '@/params/store';
 
 /** The Generate workspace: parameters, canvas, batch rail, and the prompt composer beneath. */
@@ -27,16 +28,17 @@ export function GeneratePage() {
     const running = useGenerateStore(s => s.running);
     const start = useGenerateStore(s => s.start);
     const values = useParamStore(s => s.values);
+    const buildInput = useGenInput();
 
     // "Generate forever" re-fires as soon as the previous run finishes.
     useEffect(() => {
         if (forever && !running) {
             const timer = setTimeout(() => {
-                start(Number(values.images ?? 1), values as Record<string, unknown>);
+                start(Number(values.images ?? 1), buildInput());
             }, 100);
             return () => clearTimeout(timer);
         }
-    }, [forever, running, start, values]);
+    }, [forever, running, start, values, buildInput]);
 
     return (
         <div className="flex h-full min-h-0 flex-col">

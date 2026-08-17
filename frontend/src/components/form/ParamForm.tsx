@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { useCurrentStatus, useSession, useT2IParams } from '@/api/hooks';
-import { normalizeSchema } from '@/params/schema';
+import { useParamSchema } from '@/params/schema';
 import { computeVisibility, type FilterMode } from '@/params/visibility';
 import { useParamStore } from '@/params/store';
 import { ParamField, ParamGroup } from './ParamGroup';
@@ -28,7 +28,7 @@ export function ParamForm() {
     const groupToggles = useParamStore(s => s.groupToggles);
     const resetAll = useParamStore(s => s.resetAll);
 
-    const schema = useMemo(() => (params.data ? normalizeSchema(params.data) : null), [params.data]);
+    const schema = useParamSchema();
 
     const visibility = useMemo(() => {
         if (!schema) {

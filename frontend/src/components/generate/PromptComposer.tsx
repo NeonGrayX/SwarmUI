@@ -4,6 +4,8 @@ import * as Popover from '@radix-ui/react-popover';
 import { api } from '@/api/client';
 import { useParamStore } from '@/params/store';
 import { useGenerateStore } from '@/generate/store';
+import { useGenInput } from '@/generate/input';
+import { PromptAttachments } from './PromptAttachments';
 
 /** Debounced CLIP token count for a prompt box, via the CountTokens API. */
 function useTokenCount(text: string): number | null {
@@ -58,10 +60,10 @@ export function PromptComposer() {
     const interrupt = useGenerateStore(s => s.interrupt);
 
     const promptRef = useRef<HTMLTextAreaElement>(null);
+    const buildInput = useGenInput();
 
     function doGenerate() {
-        const images = Number(values.images ?? 1);
-        start(images, values as Record<string, unknown>);
+        start(Number(values.images ?? 1), buildInput());
     }
 
     return (
@@ -107,7 +109,8 @@ export function PromptComposer() {
                 )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-end gap-2">
+                <PromptAttachments />
                 <div className="flex-1" />
                 {running && (
                     <button

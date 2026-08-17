@@ -6,6 +6,7 @@
 
 import { create } from 'zustand';
 import type { ParamSchema } from '@/api/types';
+import type { MediaMeta } from './media';
 
 export type ParamValue = string | number | boolean | string[] | null;
 
@@ -17,8 +18,12 @@ interface ParamStore {
     groupToggles: Record<string, boolean>;
     /** Expanded state per group. Absent means "use the group's `open` default". */
     openGroups: Record<string, boolean>;
+    /** Per media param, one entry per value entry: file name, resolution, duration.
+     *  Display only - and the source of the `_filename`/`_resolution` generation metadata. */
+    media: Record<string, MediaMeta[]>;
 
     setValue: (id: string, value: ParamValue) => void;
+    setMedia: (id: string, metas: MediaMeta[]) => void;
     setToggle: (id: string, on: boolean) => void;
     setGroupToggle: (id: string, on: boolean) => void;
     setGroupOpen: (id: string, open: boolean) => void;
@@ -33,8 +38,10 @@ export const useParamStore = create<ParamStore>(set => ({
     toggles: {},
     groupToggles: {},
     openGroups: {},
+    media: {},
 
     setValue: (id, value) => set(s => ({ values: { ...s.values, [id]: value } })),
+    setMedia: (id, metas) => set(s => ({ media: { ...s.media, [id]: metas } })),
     setToggle: (id, on) => set(s => ({ toggles: { ...s.toggles, [id]: on } })),
     setGroupToggle: (id, on) => set(s => ({ groupToggles: { ...s.groupToggles, [id]: on } })),
     setGroupOpen: (id, open) => set(s => ({ openGroups: { ...s.openGroups, [id]: open } })),
@@ -43,12 +50,14 @@ export const useParamStore = create<ParamStore>(set => ({
         set(s => {
             const values = { ...s.values };
             const toggles = { ...s.toggles };
+            const media = { ...s.media };
             delete values[id];
             delete toggles[id];
-            return { values, toggles };
+            delete media[id];
+            return { values, toggles, media };
         }),
 
-    resetAll: () => set({ values: {}, toggles: {}, groupToggles: {} })
+    resetAll: () => set({ values: {}, toggles: {}, groupToggles: {}, media: {} })
 }));
 
 /** The schema default coerced to the shape the control expects. */

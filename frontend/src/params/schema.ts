@@ -6,6 +6,8 @@
  *   2. Turn the flat group list + `parent` ids into an actual tree, ordered by priority.
  */
 
+import { useMemo } from 'react';
+import { useSession, useT2IParams } from '@/api/hooks';
 import type { ListT2IParamsResponse, ParamGroupSchema, ParamSchema } from '@/api/types';
 
 /** User overrides of param/group metadata, as stored by SetParamEdits. */
@@ -123,6 +125,14 @@ export function normalizeSchema(data: ListT2IParamsResponse): NormalizedSchema {
     }
 
     return { params, byId, groupsById, tree, ungrouped, models };
+}
+
+/** The normalized schema for the current session, or null until it has loaded. Shared by the
+ *  param panel and by everything that needs to look a param up by id. */
+export function useParamSchema(): NormalizedSchema | null {
+    const session = useSession();
+    const params = useT2IParams(session.isSuccess);
+    return useMemo(() => (params.data ? normalizeSchema(params.data) : null), [params.data]);
 }
 
 /** True if the param's default is a meaningful "on" value, used for toggle initial state. */

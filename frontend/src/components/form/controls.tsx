@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { Dices, RotateCw } from 'lucide-react';
 import type { ParamSchema } from '@/api/types';
 import type { ParamValue } from '@/params/store';
+import { MediaField } from './MediaField';
 
 export interface ControlProps {
     param: ParamSchema;
@@ -286,24 +287,6 @@ export function ListField(props: ControlProps) {
             }
             className={`${INPUT_CLASS} w-full`}
         />
-    );
-}
-
-/** Media inputs are placeholders until the Generate workspace lands in Phase 3, which brings the
- *  drag/drop and paste handling these need. */
-export function MediaField(props: ControlProps) {
-    const kind = props.param.type.replace('_list', '');
-    return (
-        <div className="flex items-center gap-2">
-            <input
-                id={props.inputId}
-                type="text"
-                value={String(props.value ?? '')}
-                disabled
-                placeholder={`${kind} input arrives in Phase 3`}
-                className={`${INPUT_CLASS} w-full cursor-not-allowed`}
-            />
-        </div>
     );
 }
 
