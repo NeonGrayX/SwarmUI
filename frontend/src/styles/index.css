@@ -11,7 +11,7 @@
     --color-soft: var(--background-soft);
 
     --color-fg: var(--text);
-    --color-fg-soft: var(--text-soft);
+    --color-fg-soft: var(--sw-fg-soft);
     --color-fg-strong: var(--text-strong);
 
     --color-accent: var(--emphasis);

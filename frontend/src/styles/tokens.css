@@ -87,6 +87,13 @@
     --sw-focus-ring: color-mix(in srgb, var(--emphasis) 65%, transparent);
     --sw-modified: var(--emphasis);
 
+    /* Secondary text. Derived from --text rather than using the themes' own --text-soft, because
+     * several themes set that too close to their background: modern_light lands at 3.4:1 and
+     * ctp_latte at 3.9:1, both under WCAG AA. Mixing 12% toward the background keeps a visible
+     * hierarchy while clearing 4.5:1 in all 14 shipped themes (worst case ctp_latte at 4.65:1,
+     * which is the floor because its own --text is only 6.0:1 to begin with). */
+    --sw-fg-soft: color-mix(in srgb, var(--text) 88%, var(--background) 12%);
+
     /* Spacing scale — the legacy UI has no consistent rhythm; this establishes one. */
     --sw-space-1: 0.25rem;
     --sw-space-2: 0.5rem;

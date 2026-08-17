@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearch } from '@tanstack/react-router';
 import { Pause, Play } from 'lucide-react';
 import { api } from '@/api/client';
 
@@ -29,7 +30,12 @@ interface LogsResponse {
  * The legacy Logs tab renders a single pre block with a type dropdown; this keeps the type set as
  * toggleable chips so several streams can be watched at once, and colours each line by its type. */
 export function LogsPage() {
-    const [selected, setSelected] = useState<string[]>(['Info', 'Warning', 'Error']);
+    // ?types=<name> deep-links a single tracker, which is how a backend card opens its own process
+    // log. The default set is the built-in severity levels (Logs.cs:216 keys those by level name).
+    const search = useSearch({ strict: false }) as { types?: string };
+    const [selected, setSelected] = useState<string[]>(
+        search.types ? search.types.split(',') : ['Info', 'Warning', 'Error']
+    );
     const [paused, setPaused] = useState(false);
     const [filter, setFilter] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -47,6 +53,14 @@ export function LogsPage() {
             }),
         refetchInterval: paused ? false : 3000
     });
+
+    // Follow later deep links too: clicking a second backend's log button while already here
+    // changes the search param but would otherwise leave the first backend's selection in place.
+    useEffect(() => {
+        if (search.types) {
+            setSelected(search.types.split(','));
+        }
+    }, [search.types]);
 
     const types = logs.data?.types_available ?? [];
 

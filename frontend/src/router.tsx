@@ -20,6 +20,12 @@ import { LogsPage } from './pages/server/Logs';
 import { AccountPage } from './pages/settings/Account';
 import { PreferencesPage } from './pages/settings/Preferences';
 import { ParameterConfigPage } from './pages/settings/ParameterConfig';
+import { TokenizerPage } from './pages/tools/Tokenizer';
+import { DownloaderPage } from './pages/tools/Downloader';
+import { PickleToSafetensorsPage } from './pages/tools/PickleToSafetensors';
+import { LoraExtractorPage } from './pages/tools/LoraExtractor';
+import { MetadataUtilitiesPage } from './pages/tools/MetadataUtilities';
+import { AppearancePage } from './pages/settings/Appearance';
 import { DESTINATIONS, type Destination } from './nav/destinations';
 
 /** Destinations that have a real screen. Anything not listed renders an honest placeholder. */
@@ -41,7 +47,14 @@ const IMPLEMENTED: Record<string, ComponentType> = {
     // Settings
     account: AccountPage,
     preferences: PreferencesPage,
-    parameters: ParameterConfigPage
+    parameters: ParameterConfigPage,
+    // Tools
+    tokenizer: TokenizerPage,
+    downloader: DownloaderPage,
+    pickle2safetensors: PickleToSafetensorsPage,
+    'lora-extractor': LoraExtractorPage,
+    metadata: MetadataUtilitiesPage,
+    appearance: AppearancePage
 };
 
 /** Which phase of the build delivers each screen, and a one-line summary of what it will do.
@@ -76,6 +89,13 @@ const PHASE_INFO: Record<string, { phase: string; summary: string }> = {
     appearance: { phase: 'Phase 7', summary: 'Theme and layout density for this interface.' }
 };
 
+/** Search-parameter contracts, for the few screens that are deep-linked into.
+ *  Keyed by destination id so routeFor stays generic. */
+const SEARCH_VALIDATORS: Record<string, (search: Record<string, unknown>) => Record<string, unknown>> = {
+    // A backend card links here with the log tracker name to preselect, eg ?types=ComfyUI-0.
+    logs: search => (typeof search.types === 'string' ? { types: search.types } : {})
+};
+
 const rootRoute = createRootRoute({ component: AppShell });
 
 const indexRoute = createRoute({
@@ -92,6 +112,7 @@ function routeFor(destination: Destination): AnyRoute {
     return createRoute({
         getParentRoute: () => rootRoute,
         path: destination.path,
+        validateSearch: SEARCH_VALIDATORS[destination.id],
         component: () => (
             <RequirePermission perm={destination.permission}>
                 {Screen ? (

@@ -9,7 +9,9 @@
 
     --text: #4c4f69;
     --text-soft: color-mix(in srgb, var(--text) 80%, var(--background) 20%);
-    --text-strong: #eff1f5;
+    /* Higher-contrast text, pushed away from --background. Was set to a surface colour,
+       which made it near-invisible against its own background. */
+    --text-strong: color-mix(in srgb, var(--text) 75%, #000000 25%);
 
     --button-text: #4c4f69;
     --button-foreground-hover: #eff1f5;

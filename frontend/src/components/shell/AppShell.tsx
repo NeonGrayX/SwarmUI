@@ -5,13 +5,17 @@ import { SectionNav } from './SectionNav';
 import { Breadcrumbs } from './Breadcrumbs';
 import { GenerationCounters, StatusAlert } from './StatusAlert';
 import { CommandPalette, CommandPaletteHint } from '../CommandPalette';
+import { ShortcutsDialog } from './ShortcutsDialog';
 import { useSession } from '@/api/hooks';
+import { useThemes } from '@/theme/useTheme';
 
 /** The whole-app chrome: rail (level 1) + section nav (level 2) + content.
  *  Nothing nests deeper than this. */
 export function AppShell() {
     const session = useSession();
     const section = useActiveSection();
+    // Applied at the shell so the theme is reconciled on every screen, not only in Appearance.
+    useThemes();
 
     if (session.isPending) {
         return <Splash>Connecting to SwarmUI…</Splash>;
@@ -47,6 +51,7 @@ export function AppShell() {
                 </main>
             </div>
             <CommandPalette />
+            <ShortcutsDialog />
         </div>
     );
 }
