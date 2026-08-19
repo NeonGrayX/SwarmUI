@@ -3,6 +3,7 @@ import { ImageIcon, Info } from 'lucide-react';
 import { imageUrl, useGenerateStore } from '@/generate/store';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
 import { MetadataView } from '../ui/MetadataView';
+import { ZoomableImage } from './ZoomableImage';
 
 /** The main image view, plus a collapsible metadata panel. */
 export function Canvas() {
@@ -40,7 +41,7 @@ export function Canvas() {
 
     return (
         <div className="flex flex-1 min-h-0 min-w-0">
-            <div className="relative flex flex-1 min-w-0 items-center justify-center overflow-auto p-4">
+            <div className="relative flex flex-1 min-w-0 items-center justify-center overflow-hidden p-4">
                 {error && (
                     <div
                         className="absolute inset-x-4 top-4 rounded border p-3 text-sm"
@@ -54,11 +55,11 @@ export function Canvas() {
                 )}
 
                 {src ? (
-                    <img
+                    <ZoomableImage
                         src={src}
                         alt={current?.isPreview ? 'Generation preview' : 'Generated image'}
-                        className="max-h-full max-w-full object-contain"
-                        style={current?.isPreview ? { filter: 'saturate(0.9)' } : undefined}
+                        isPreview={current?.isPreview}
+                        resetKey={current?.id}
                     />
                 ) : (
                     <div className="text-center text-fg-soft">
