@@ -6,7 +6,7 @@ import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { BackendCard, type BackendSaveInput } from '@/components/server/BackendCard';
-import { backendLogName, type Backend, type BackendType } from '@/server/backends';
+import { backendLogName, isLive, type Backend, type BackendType } from '@/server/backends';
 
 export function BackendsPage() {
     const queryClient = useQueryClient();
@@ -58,9 +58,24 @@ export function BackendsPage() {
         return invalidate();
     };
 
+    // One click, one outcome: a live backend goes off, anything else comes up.
+    //
+    // The awkward case is a backend that reports enabled while sitting in 'disabled' — where a
+    // freshly added, not-yet-configured one lands. Asking for enabled=true there does nothing at
+    // all: ToggleBackend answers "No change." whenever IsEnabled already matches
+    // (src/WebAPI/BackendAPI.cs:122), and only the enabling branch re-queues the backend for init.
+    // Off-and-on is what actually starts it, so send that pair here rather than making the user
+    // press the button twice to no visible purpose.
     const toggle = useMutation({
-        mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
-            api.post('ToggleBackend', { backend_id: id, enabled }),
+        mutationFn: async (backend: Backend) => {
+            if (isLive(backend)) {
+                return api.post('ToggleBackend', { backend_id: backend.id, enabled: false });
+            }
+            if (backend.enabled) {
+                await api.post('ToggleBackend', { backend_id: backend.id, enabled: false });
+            }
+            return api.post('ToggleBackend', { backend_id: backend.id, enabled: true });
+        },
         onSuccess: succeed,
         onError: failWith('Could not toggle backend')
     });
@@ -224,7 +239,7 @@ export function BackendsPage() {
                                 saving={edit.isPending && edit.variables?.backend_id === backend.id}
                                 saveError={saveErrors[backend.id] ?? null}
                                 onSave={input => edit.mutate(input)}
-                                onToggle={enabled => toggle.mutate({ id: backend.id, enabled })}
+                                onToggle={() => toggle.mutate(backend)}
                                 onRestart={() => setPendingRestart(backend.id)}
                                 onDelete={() => setPendingDelete(backend.id)}
                             />
@@ -245,7 +260,10 @@ export function BackendsPage() {
                                 you probably want ComfyUI Self-Starting instead.
                             </p>
                         )}
-                        <p className="mt-2">It will be created disabled-until-configured and started up.</p>
+                        <p className="mt-2">
+                            It starts up right away if its defaults are enough, and otherwise stays disabled
+                            until you fill in its settings and save.
+                        </p>
                     </>
                 }
                 confirmLabel="Add backend"

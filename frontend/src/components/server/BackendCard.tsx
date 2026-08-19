@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router';
 import { Field } from '../form/Field';
 import {
     canRestart,
+    isLive,
     isMultilineText,
     SECRET_SENTINEL,
     settingsPayload,
@@ -51,7 +52,8 @@ export function BackendCard(props: {
     saving: boolean;
     saveError: string | null;
     onSave: (input: BackendSaveInput) => void;
-    onToggle: (enabled: boolean) => void;
+    /** Flips the backend between live and off; the page works out which way from the backend. */
+    onToggle: () => void;
     onRestart: () => void;
     onDelete: () => void;
 }) {
@@ -67,8 +69,10 @@ export function BackendCard(props: {
     const [title, setTitle] = useState(backend.title);
     const [idText, setIdText] = useState(String(backend.id));
     const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+    const [featuresOpen, setFeaturesOpen] = useState(false);
 
     const schema = type?.settings ?? [];
+    const live = isLive(backend);
 
     function startEdit() {
         setBaseline({ ...backend.settings });
@@ -184,10 +188,10 @@ export function BackendCard(props: {
                 )}
                 {perms.toggle && (
                     <IconButton
-                        label={backend.enabled ? 'Disable backend' : 'Enable backend'}
-                        hint={backend.enabled ? 'Disable' : 'Enable'}
-                        onClick={() => props.onToggle(!backend.enabled)}
-                        color={backend.enabled ? 'var(--backend-running)' : undefined}
+                        label={live ? 'Disable backend' : 'Enable backend'}
+                        hint={live ? 'Disable' : 'Enable'}
+                        onClick={props.onToggle}
+                        color={live ? 'var(--backend-running)' : undefined}
                     >
                         <Power size={14} aria-hidden />
                     </IconButton>
@@ -260,21 +264,39 @@ export function BackendCard(props: {
                         />
                     ))}
 
+                    {/* Collapsed by default: these are the feature-IDs T2IEngine matches a request's
+                      * RequiredFlags against (src/Text2Image/T2IEngine.cs:103), so they explain a
+                      * refusal, but ComfyUI backends all read from one static set
+                      * (src/BuiltinExtensions/ComfyUIBackend/ComfyUIBackendExtension.cs:38) and so
+                      * print the same dozen-plus chips on every card. Only a remote Swarm or an LLM
+                      * backend reports anything of its own. */}
                     {backend.features.length > 0 && (
                         <div className="mt-3 border-t border-subtle pt-2">
-                            <p className="mb-1 text-[10px] uppercase tracking-wide text-fg-soft">
+                            <button
+                                type="button"
+                                onClick={() => setFeaturesOpen(o => !o)}
+                                aria-expanded={featuresOpen}
+                                className="flex items-center gap-1 rounded text-[10px] uppercase tracking-wide text-fg-soft hover:text-fg"
+                            >
+                                <ChevronDown
+                                    size={12}
+                                    aria-hidden
+                                    className={`transition-transform ${featuresOpen ? '' : '-rotate-90'}`}
+                                />
                                 Supported features ({backend.features.length})
-                            </p>
-                            <div className="flex flex-wrap gap-1">
-                                {backend.features.map(feature => (
-                                    <span
-                                        key={feature}
-                                        className="rounded-full border border-subtle px-1.5 py-0.5 font-mono text-[10px] text-fg-soft"
-                                    >
-                                        {feature}
-                                    </span>
-                                ))}
-                            </div>
+                            </button>
+                            {featuresOpen && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                    {backend.features.map(feature => (
+                                        <span
+                                            key={feature}
+                                            className="rounded-full border border-subtle px-1.5 py-0.5 font-mono text-[10px] text-fg-soft"
+                                        >
+                                            {feature}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 

@@ -59,6 +59,17 @@ export const STATUS_COLOR: Record<string, string> = {
     errored: 'var(--backend-errored)'
 };
 
+/** Whether the backend is switched on *and* actually up.
+ *
+ * `enabled` alone is not enough. AddNewBackend leaves IsEnabled true (src/Backends/AbstractBackend.cs:87)
+ * while an unconfigured backend parks itself in DISABLED for want of a start script or address
+ * (src/Backends/ComfyUISelfStartBackend.cs:391), so a freshly added backend reports enabled with a
+ * 'disabled' status. Both the power button's colour and what it does on click follow this rather
+ * than `enabled`, so the two never disagree. */
+export function isLive(backend: Backend): boolean {
+    return backend.enabled && backend.status !== 'disabled';
+}
+
 /** Restart only does something from these two states — matches the legacy button's disabled rule
  *  (src/wwwroot/js/genpage/server/backends.js:212). */
 export function canRestart(status: string): boolean {
