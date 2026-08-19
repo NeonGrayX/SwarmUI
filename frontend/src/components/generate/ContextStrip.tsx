@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useSession, useT2IParams } from '@/api/hooks';
+import { useParamSchema } from '@/params/schema';
 import { useParamStore } from '@/params/store';
 
 /** Id of the model dropdown, so the composer's "no model selected" notice can jump to it. */
@@ -10,12 +10,13 @@ export const MODEL_SELECT_ID = 'context-model';
  * Replaces #bottom_info_bar, which renders a run-on line of "<b>Label</b>: value" spans with no
  * affordance to clear any of them. */
 export function ContextStrip() {
-    const session = useSession();
-    const params = useT2IParams(session.isSuccess);
+    const schema = useParamSchema();
     const values = useParamStore(s => s.values);
     const setValue = useParamStore(s => s.setValue);
 
-    const modelOptions = params.data?.models?.['Stable-Diffusion']?.map(entry => entry[0]) ?? [];
+    // The normalized lists, so an option reads (and compares) the same way a reused image's
+    // metadata spells the model.
+    const modelOptions = schema?.models['Stable-Diffusion'] ?? [];
     const model = String(values.model ?? '');
     const loras = Array.isArray(values.loras) ? values.loras : [];
 

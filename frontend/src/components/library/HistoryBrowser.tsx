@@ -1,12 +1,32 @@
-import { useMemo, useState } from 'react';
-import { Star, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Download, Star, Trash2, X } from 'lucide-react';
+import { useNavigate } from '@tanstack/react-router';
 import { useDeleteImage, useImages, useToggleImageStar } from '@/library/hooks';
 import { imageOutPrefix, type ImageEntry, type ViewMode } from '@/library/types';
 import { usePermission } from '@/api/permissions';
 import { useSession } from '@/api/hooks';
+import { useReuseParameters } from '@/params/reuse';
+import { useMediaParamAction } from '@/params/useMediaParamAction';
 import { BrowserToolbar, EmptyState, FolderPane } from './BrowserChrome';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { MetadataView } from '../ui/MetadataView';
+import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
+
+/** Joins the browsed folder with a path-relative src from ListImages. */
+function joinPath(folder: string, src: string): string {
+    return folder ? `${folder}/${src}` : src;
+}
+
+/** Saves an image to disk. The view route is same-origin, so `download` is honored and the tab
+ *  stays where it is rather than navigating to the image. */
+function downloadImage(url: string, src: string): void {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = src.slice(src.lastIndexOf('/') + 1);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+}
 
 /** Output history browser.
  *
@@ -14,11 +34,6 @@ import { MetadataView } from '../ui/MetadataView';
  * user-aware prefix from imageOutPrefix - `/View/<user_id>/...` or `/Output/...` depending on the
  * server's AppendUserNameToOutputPath setting. A bare `/View/<src>` 404s.
  * (Note this differs from the generation websocket, which already sends fully-prefixed paths.) */
-/** Joins the browsed folder with a path-relative src from ListImages. */
-function joinPath(folder: string, src: string): string {
-    return folder ? `${folder}/${src}` : src;
-}
-
 export function HistoryBrowser() {
     const [path, setPath] = useState('');
     const [search, setSearch] = useState('');
@@ -27,11 +42,17 @@ export function HistoryBrowser() {
     const [selected, setSelected] = useState<ImageEntry | null>(null);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
+    const [flash, setFlash] = useState<string | null>(null);
+
     const images = useImages(path, 'Date', reverse, 3);
     const toggleStar = useToggleImageStar();
     const deleteImage = useDeleteImage();
     const canDelete = usePermission('user_delete_image');
     const session = useSession();
+    const navigate = useNavigate();
+    const reuseParameters = useReuseParameters();
+    const mediaParam = useMediaParamAction();
+    const contextMenu = useContextMenu();
     const prefix = imageOutPrefix(session.data?.user_id, session.data?.output_append_user);
     // ListImages returns `src` relative to the *requested path*, not to the output root, so the
     // current folder has to be joined back on. At root this is a no-op, which is what hid the bug.
@@ -43,8 +64,74 @@ export function HistoryBrowser() {
         return query ? files.filter(f => f.src.toLowerCase().includes(query)) : files;
     }, [files, search]);
 
+    // Failures are worth saying out loud; successes leave for the Generate screen and speak for
+    // themselves there.
+    useEffect(() => {
+        if (flash) {
+            const timer = setTimeout(() => setFlash(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [flash]);
+
+    /** Loads an image's parameters into the generation form and switches to it. */
+    function reuse(entry: ImageEntry): void {
+        try {
+            reuseParameters(entry.metadata);
+            navigate({ to: '/generate' });
+        }
+        catch (error: unknown) {
+            setFlash(error instanceof Error ? error.message : 'Could not reuse these parameters.');
+        }
+    }
+
+    /** Same, plus the image itself as the init image, for generating a variation of it. */
+    async function useAsInit(entry: ImageEntry): Promise<void> {
+        try {
+            reuseParameters(entry.metadata);
+        }
+        catch {
+            // An image with no readable parameters is still perfectly good as an init image, and
+            // the Generate screen shows plainly that only the image came across.
+        }
+        try {
+            await mediaParam.set('initimage', urlFor(entry.src));
+        }
+        catch (error: unknown) {
+            setFlash(error instanceof Error ? error.message : 'Could not set the init image.');
+            return;
+        }
+        navigate({ to: '/generate' });
+    }
+
+    /** Everything one image can do, for its right-click menu. */
+    function actionsFor(entry: ImageEntry): MenuAction[] {
+        const full = joinPath(path, entry.src);
+        const actions: MenuAction[] = [
+            { label: 'Details', onSelect: () => setSelected(entry) },
+            // Starring moves the file into `Starred/`, so the path itself is the state.
+            {
+                label: full.startsWith('Starred/') ? 'Unstar' : 'Star',
+                onSelect: () => toggleStar.mutate({ path: full })
+            },
+            { label: 'Download', onSelect: () => downloadImage(urlFor(entry.src), entry.src) },
+            { label: 'Reuse parameters', separated: true, onSelect: () => reuse(entry) }
+        ];
+        if (mediaParam.available('initimage')) {
+            actions.push({ label: 'Use as init', onSelect: () => void useAsInit(entry) });
+        }
+        if (canDelete) {
+            actions.push({
+                label: 'Delete…',
+                destructive: true,
+                separated: true,
+                onSelect: () => setPendingDelete(full)
+            });
+        }
+        return actions;
+    }
+
     return (
-        <div className="flex h-full min-h-0">
+        <div className="relative flex h-full min-h-0">
             <FolderPane folders={images.data?.folders} path={path} onNavigate={setPath} />
 
             <div className="flex min-w-0 flex-1 flex-col">
@@ -79,7 +166,8 @@ export function HistoryBrowser() {
                                     key={file.src}
                                     type="button"
                                     onClick={() => setSelected(file)}
-                                    title={file.src}
+                                    onContextMenu={event => contextMenu.open(event, actionsFor(file))}
+                                    title={`${file.src}\nRight-click for actions`}
                                     className="group relative aspect-square overflow-hidden rounded border border-default bg-surface-sunken"
                                 >
                                     <img
@@ -101,6 +189,8 @@ export function HistoryBrowser() {
                                     <button
                                         type="button"
                                         onClick={() => setSelected(file)}
+                                        onContextMenu={event => contextMenu.open(event, actionsFor(file))}
+                                        title={`${file.src}\nRight-click for actions`}
                                         className="flex w-full items-center gap-3 py-1.5 text-left"
                                     >
                                         <span className="size-9 shrink-0 overflow-hidden rounded bg-surface-sunken">
@@ -124,8 +214,13 @@ export function HistoryBrowser() {
                 <ImageSheet
                     entry={selected}
                     url={urlFor(selected.src)}
+                    starred={joinPath(path, selected.src).startsWith('Starred/')}
                     canDelete={canDelete}
+                    canUseAsInit={mediaParam.available('initimage')}
                     onStar={() => toggleStar.mutate({ path: joinPath(path, selected.src) })}
+                    onDownload={() => downloadImage(urlFor(selected.src), selected.src)}
+                    onReuse={() => reuse(selected)}
+                    onUseAsInit={() => void useAsInit(selected)}
                     onDelete={() => setPendingDelete(joinPath(path, selected.src))}
                     onClose={() => setSelected(null)}
                 />
@@ -152,6 +247,17 @@ export function HistoryBrowser() {
                 }}
                 onCancel={() => setPendingDelete(null)}
             />
+
+            {flash && (
+                <p
+                    role="status"
+                    className="absolute bottom-3 right-3 z-40 max-w-96 rounded border border-default bg-surface px-2 py-1 text-xs text-fg-soft shadow-lg"
+                >
+                    {flash}
+                </p>
+            )}
+
+            {contextMenu.menu}
         </div>
     );
 }
@@ -159,8 +265,13 @@ export function HistoryBrowser() {
 function ImageSheet(props: {
     entry: ImageEntry;
     url: string;
+    starred: boolean;
     canDelete: boolean;
+    canUseAsInit: boolean;
     onStar: () => void;
+    onDownload: () => void;
+    onReuse: () => void;
+    onUseAsInit: () => void;
     onDelete: () => void;
     onClose: () => void;
 }) {
@@ -173,35 +284,31 @@ function ImageSheet(props: {
                 <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-fg-strong" title={props.entry.src}>
                     {props.entry.src.split('/').pop()}
                 </h2>
-                <button
-                    type="button"
+                <SheetIcon
+                    label={props.starred ? 'Unstar' : 'Star'}
                     onClick={props.onStar}
-                    aria-label="Toggle star"
-                    title="Toggle star"
-                    className="rounded p-1 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
+                    color={props.starred ? 'var(--star)' : undefined}
                 >
-                    <Star size={15} aria-hidden />
-                </button>
+                    <Star size={15} fill={props.starred ? 'currentColor' : 'none'} aria-hidden />
+                </SheetIcon>
+                <SheetIcon label="Download" onClick={props.onDownload}>
+                    <Download size={15} aria-hidden />
+                </SheetIcon>
                 {props.canDelete && (
-                    <button
-                        type="button"
-                        onClick={props.onDelete}
-                        aria-label="Delete image"
-                        title="Delete image"
-                        className="rounded p-1 hover:bg-[var(--sw-hover)]"
-                        style={{ color: 'var(--backend-errored)' }}
-                    >
+                    <SheetIcon label="Delete image" onClick={props.onDelete} color="var(--backend-errored)">
                         <Trash2 size={15} aria-hidden />
-                    </button>
+                    </SheetIcon>
                 )}
-                <button
-                    type="button"
-                    onClick={props.onClose}
-                    aria-label="Close details"
-                    className="rounded p-1 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
-                >
+                <SheetIcon label="Close details" onClick={props.onClose}>
                     <X size={15} aria-hidden />
-                </button>
+                </SheetIcon>
+            </div>
+
+            {/* Spelled out rather than iconified: which button reuses what is exactly the thing an
+                icon strip makes you hover to find out. Same wording as the canvas buttons. */}
+            <div className="flex shrink-0 gap-2 border-b border-subtle px-3 py-2">
+                <SheetButton label="Reuse parameters" onClick={props.onReuse} />
+                {props.canUseAsInit && <SheetButton label="Use as init" onClick={props.onUseAsInit} />}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -213,5 +320,37 @@ function ImageSheet(props: {
                 <MetadataView metadata={props.entry.metadata} empty="No metadata recorded." />
             </div>
         </aside>
+    );
+}
+
+function SheetIcon(props: {
+    label: string;
+    onClick: () => void;
+    color?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={props.onClick}
+            aria-label={props.label}
+            title={props.label}
+            className="rounded p-1 hover:bg-[var(--sw-hover)]"
+            style={{ color: props.color ?? 'var(--sw-fg-soft)' }}
+        >
+            {props.children}
+        </button>
+    );
+}
+
+function SheetButton(props: { label: string; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={props.onClick}
+            className="rounded border border-default px-2 py-1 text-xs text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
+        >
+            {props.label}
+        </button>
     );
 }

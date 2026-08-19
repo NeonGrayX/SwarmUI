@@ -3,11 +3,12 @@ import { Copy, ImageOff, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { libraryKeys, useMyUserData } from '@/library/hooks';
-import { previewUrl, type ViewMode } from '@/library/types';
+import { previewUrl, type PresetEntry, type ViewMode } from '@/library/types';
 import { usePermission } from '@/api/permissions';
 import { useParamStore } from '@/params/store';
 import { BrowserToolbar, EmptyState } from './BrowserChrome';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
 
 /** Saved parameter sets. These come down with GetMyUserData rather than a list endpoint. */
 export function PresetsBrowser() {
@@ -20,6 +21,7 @@ export function PresetsBrowser() {
     const queryClient = useQueryClient();
     const canManage = usePermission('manage_presets');
     const setValue = useParamStore(s => s.setValue);
+    const contextMenu = useContextMenu();
 
     const presets = userData.data?.presets ?? [];
     const shown = useMemo(() => {
@@ -40,6 +42,29 @@ export function PresetsBrowser() {
         for (const [key, value] of Object.entries(paramMap ?? {})) {
             setValue(key, value as never);
         }
+    }
+
+    /** Everything one preset can do, for its right-click menu. */
+    function actionsFor(preset: PresetEntry): MenuAction[] {
+        const actions: MenuAction[] = [
+            { label: 'Apply parameters', onSelect: () => apply(preset.param_map) }
+        ];
+        if (canManage) {
+            actions.push({
+                label: 'Duplicate',
+                separated: true,
+                onSelect: async () => {
+                    await api.post('DuplicatePreset', { preset: preset.title });
+                    await refresh();
+                }
+            });
+            actions.push({
+                label: 'Delete…',
+                destructive: true,
+                onSelect: () => setPendingDelete(preset.title)
+            });
+        }
+        return actions;
     }
 
     return (
@@ -73,11 +98,12 @@ export function PresetsBrowser() {
                             <div
                                 key={preset.title}
                                 className="group overflow-hidden rounded-lg border border-default bg-surface"
+                                onContextMenu={event => contextMenu.open(event, actionsFor(preset))}
                             >
                                 <button
                                     type="button"
                                     onClick={() => apply(preset.param_map)}
-                                    title={`Apply "${preset.title}"`}
+                                    title={`Apply "${preset.title}"\nRight-click for actions`}
                                     className="block w-full text-left"
                                 >
                                     <div className="flex aspect-video items-center justify-center bg-surface-sunken">
@@ -128,10 +154,15 @@ export function PresetsBrowser() {
                 ) : (
                     <ul className="divide-y divide-[var(--light-border)]">
                         {shown.map(preset => (
-                            <li key={preset.title} className="flex items-center gap-3 py-2">
+                            <li
+                                key={preset.title}
+                                className="flex items-center gap-3 py-2"
+                                onContextMenu={event => contextMenu.open(event, actionsFor(preset))}
+                            >
                                 <button
                                     type="button"
                                     onClick={() => apply(preset.param_map)}
+                                    title={`Apply "${preset.title}"\nRight-click for actions`}
                                     className="min-w-0 flex-1 text-left"
                                 >
                                     <p className="truncate text-sm text-fg">{preset.title}</p>
@@ -168,6 +199,8 @@ export function PresetsBrowser() {
                 }}
                 onCancel={() => setPendingDelete(null)}
             />
+
+            {contextMenu.menu}
         </div>
     );
 }

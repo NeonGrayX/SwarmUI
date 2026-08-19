@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, ImageOff, MoreVertical, Star } from 'lucide-react';
-import * as Popover from '@radix-ui/react-popover';
+import { CheckCircle2, ImageOff, Star } from 'lucide-react';
 import {
     useDeleteModel,
     useModels,
@@ -23,6 +22,7 @@ import { BrowserToolbar, EmptyState, FolderPane } from './BrowserChrome';
 import { ModelDetailSheet } from './ModelDetailSheet';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { PromptDialog } from '../ui/PromptDialog';
+import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
 
 /** Unified browser for every model-family asset plus wildcards.
  *
@@ -44,6 +44,8 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
     const toggleStar = useToggleStar();
     const deleteModel = useDeleteModel();
     const renameModel = useRenameModel();
+    const selectModel = useSelectModel();
+    const contextMenu = useContextMenu();
 
     const canDelete = usePermission('delete_models');
     const canEdit = usePermission('edit_model_metadata');
@@ -68,6 +70,35 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
         const starSet = new Set(starred);
         return [...filtered].sort((a, b) => Number(starSet.has(b.name)) - Number(starSet.has(a.name)));
     }, [filtered, starred]);
+
+    /** Everything one entry can do, for its right-click menu. */
+    function actionsFor(file: ModelCard | WildcardCard): MenuAction[] {
+        const actions: MenuAction[] = [
+            { label: 'Details', onSelect: () => setSelected(file) },
+            {
+                label: starred.includes(file.name) ? 'Unstar' : 'Star',
+                onSelect: () => toggleStar.mutate({ subtype: props.subtype, name: file.name })
+            }
+        ];
+        if (isModelCard(file)) {
+            actions.push({
+                label: 'Load on backends',
+                onSelect: () => selectModel.mutate({ name: file.name })
+            });
+        }
+        if (canEdit) {
+            actions.push({ label: 'Rename…', separated: true, onSelect: () => setPendingRename(file.name) });
+        }
+        if (canDelete) {
+            actions.push({
+                label: 'Delete…',
+                destructive: true,
+                separated: !canEdit,
+                onSelect: () => setPendingDelete(file.name)
+            });
+        }
+        return actions;
+    }
 
     return (
         <div className="flex h-full min-h-0">
@@ -113,9 +144,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                                     starred={starred.includes(file.name)}
                                     onStar={() => toggleStar.mutate({ subtype: props.subtype, name: file.name })}
                                     onOpen={() => setSelected(file)}
-                                    onDelete={canDelete ? () => setPendingDelete(file.name) : undefined}
-                                    onRename={canEdit ? () => setPendingRename(file.name) : undefined}
-                                    canEdit={canEdit}
+                                    onMenu={event => contextMenu.open(event, actionsFor(file))}
                                 />
                             ))}
                         </div>
@@ -128,6 +157,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                                     starred={starred.includes(file.name)}
                                     onStar={() => toggleStar.mutate({ subtype: props.subtype, name: file.name })}
                                     onOpen={() => setSelected(file)}
+                                    onMenu={event => contextMenu.open(event, actionsFor(file))}
                                 />
                             ))}
                         </ul>
@@ -179,6 +209,8 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                 }}
                 onCancel={() => setPendingRename(null)}
             />
+
+            {contextMenu.menu}
         </div>
     );
 }
@@ -188,22 +220,22 @@ function Card(props: {
     starred: boolean;
     onStar: () => void;
     onOpen: () => void;
-    onDelete?: () => void;
-    onRename?: () => void;
-    canEdit: boolean;
+    onMenu: (event: React.MouseEvent) => void;
 }) {
     const { file } = props;
     const card = isModelCard(file) ? file : null;
     const image = previewUrl(card ? card.preview_image : (file as WildcardCard).image);
-    const selectModel = useSelectModel();
 
     return (
-        <div className="group relative overflow-hidden rounded-lg border border-default bg-surface">
+        <div
+            className="group relative overflow-hidden rounded-lg border border-default bg-surface"
+            onContextMenu={props.onMenu}
+        >
             <button
                 type="button"
                 onClick={props.onOpen}
                 className="block w-full text-left"
-                title={file.name}
+                title={`${file.name}\nRight-click for actions`}
             >
                 <div className="flex aspect-square items-center justify-center bg-surface-sunken">
                     {image ? (
@@ -236,37 +268,6 @@ function Card(props: {
                 >
                     <Star size={13} fill={props.starred ? 'currentColor' : 'none'} aria-hidden />
                 </IconChip>
-                <Popover.Root>
-                    <Popover.Trigger asChild>
-                        <button
-                            type="button"
-                            aria-label="More actions"
-                            className="rounded-full bg-black/60 p-1 text-white/80 hover:text-white"
-                        >
-                            <MoreVertical size={13} aria-hidden />
-                        </button>
-                    </Popover.Trigger>
-                    <Popover.Portal>
-                        <Popover.Content
-                            side="bottom"
-                            align="end"
-                            sideOffset={4}
-                            className="z-50 min-w-40 rounded-lg border border-default bg-surface-raised p-1 shadow-xl"
-                        >
-                            <MenuItem label="Details" onClick={props.onOpen} />
-                            {card && (
-                                <MenuItem
-                                    label="Load on backends"
-                                    onClick={() => selectModel.mutate({ name: file.name })}
-                                />
-                            )}
-                            {props.onRename && <MenuItem label="Rename…" onClick={props.onRename} />}
-                            {props.onDelete && (
-                                <MenuItem label="Delete…" destructive onClick={props.onDelete} />
-                            )}
-                        </Popover.Content>
-                    </Popover.Portal>
-                </Popover.Root>
             </div>
         </div>
     );
@@ -277,16 +278,22 @@ function Row(props: {
     starred: boolean;
     onStar: () => void;
     onOpen: () => void;
+    onMenu: (event: React.MouseEvent) => void;
 }) {
     const card = isModelCard(props.file) ? props.file : null;
     const image = previewUrl(card ? card.preview_image : (props.file as WildcardCard).image);
 
     return (
-        <li className="flex items-center gap-3 py-1.5">
+        <li className="flex items-center gap-3 py-1.5" onContextMenu={props.onMenu}>
             <IconChip label={props.starred ? 'Unstar' : 'Star'} onClick={props.onStar} active={props.starred} plain>
                 <Star size={14} fill={props.starred ? 'currentColor' : 'none'} aria-hidden />
             </IconChip>
-            <button type="button" onClick={props.onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+            <button
+                type="button"
+                onClick={props.onOpen}
+                title={`${props.file.name}\nRight-click for actions`}
+                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            >
                 <span className="size-8 shrink-0 overflow-hidden rounded bg-surface-sunken">
                     {image && <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />}
                 </span>
@@ -324,20 +331,5 @@ function IconChip(props: {
         >
             {props.children}
         </button>
-    );
-}
-
-function MenuItem(props: { label: string; onClick: () => void; destructive?: boolean }) {
-    return (
-        <Popover.Close asChild>
-            <button
-                type="button"
-                onClick={props.onClick}
-                className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--sw-hover)]"
-                style={{ color: props.destructive ? 'var(--backend-errored)' : 'var(--text)' }}
-            >
-                {props.label}
-            </button>
-        </Popover.Close>
     );
 }

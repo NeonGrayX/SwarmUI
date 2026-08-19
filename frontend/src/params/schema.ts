@@ -121,7 +121,7 @@ export function normalizeSchema(data: ListT2IParamsResponse): NormalizedSchema {
     // Model dropdowns want plain name lists; the API sends [name, modelClass] pairs.
     const models: Record<string, string[]> = {};
     for (const [type, entries] of Object.entries(data.models)) {
-        models[type] = entries.map(entry => entry[0]);
+        models[type] = entries.map(entry => cleanModelName(entry[0]));
     }
 
     return { params, byId, groupsById, tree, ungrouped, models };
@@ -133,6 +133,17 @@ export function useParamSchema(): NormalizedSchema | null {
     const session = useSession();
     const params = useT2IParams(session.isSuccess);
     return useMemo(() => (params.data ? normalizeSchema(params.data) : null), [params.data]);
+}
+
+/** A model's name as everything except the raw file list spells it: without `.safetensors`.
+ *
+ * The server hands `models` down as bare file names, but writes the cleaned form into image
+ * metadata (CleanModelName, src/Text2Image/T2IParamTypes.cs:304) and into the `values` of the model
+ * params that carry their own list (CleanModelList, :378). Cleaning here is what lets a reused
+ * image's `model` match an entry in the dropdown; the server resolves either form (T2IModelHandler
+ * .GetModel, :242). */
+export function cleanModelName(name: string): string {
+    return name.endsWith('.safetensors') ? name.slice(0, -'.safetensors'.length) : name;
 }
 
 /** True if the param's default is a meaningful "on" value, used for toggle initial state. */
