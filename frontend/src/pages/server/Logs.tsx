@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
-import { Pause, Play } from 'lucide-react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { Check, Copy, Pause, Play, Upload, X } from 'lucide-react';
 import { api } from '@/api/client';
 
 interface LogType {
@@ -37,6 +38,7 @@ export function LogsPage() {
         search.types ? search.types.split(',') : ['Info', 'Warning', 'Error']
     );
     const [paused, setPaused] = useState(false);
+    const [pastebinOpen, setPastebinOpen] = useState(false);
     const [filter, setFilter] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stickToBottom = useRef(true);
@@ -127,6 +129,14 @@ export function LogsPage() {
                 <span className="text-xs text-fg-soft tabular-nums">{lines.length} lines</span>
                 <button
                     type="button"
+                    onClick={() => setPastebinOpen(true)}
+                    className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
+                >
+                    <Upload size={12} aria-hidden />
+                    Pastebin
+                </button>
+                <button
+                    type="button"
                     onClick={() => setPaused(p => !p)}
                     aria-pressed={paused}
                     className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
@@ -164,6 +174,182 @@ export function LogsPage() {
                     ))
                 )}
             </div>
+
+            {/* Mounted only while open so a second visit starts from the warnings, not the
+                previous run's result. */}
+            {pastebinOpen && <PastebinDialog onOpenChange={setPastebinOpen} />}
         </div>
+    );
+}
+
+/** Minimum levels the pastebin API accepts. Everything at or above the chosen level is included
+ *  (AdminAPI.LogSubmitToPastebin walks Logs.Trackers from the level index upward). */
+const PASTEBIN_LEVELS = ['verbose', 'debug', 'info'];
+
+const PASTE_SERVICE = 'https://paste.denizenscript.com/New/Swarm';
+
+/** One-click upload of the server log to the public Swarm pastebin, for sharing when asking for
+ *  support. Mirrors the legacy "Pastebin" modal (ServerTab.cshtml:185), warnings included - the
+ *  paste is public and not easily deletable, so the user has to read that before submitting. */
+function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
+    const [level, setLevel] = useState('debug');
+    const [copied, setCopied] = useState(false);
+
+    const submit = useMutation({
+        mutationFn: (type: string) => api.post<{ url: string }>('LogSubmitToPastebin', { type })
+    });
+
+    const url = submit.data?.url;
+
+    return (
+        <Dialog.Root open onOpenChange={props.onOpenChange}>
+            <Dialog.Portal>
+                <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+                <Dialog.Content className="fixed left-1/2 top-1/4 z-50 w-[min(34rem,90vw)] -translate-x-1/2 rounded-lg border border-default bg-surface-raised p-4 shadow-2xl">
+                    <div className="mb-3 flex items-center gap-2">
+                        <Upload size={16} className="text-fg-soft" aria-hidden />
+                        <Dialog.Title className="flex-1 text-base font-medium text-fg-strong">
+                            Submit logs to pastebin
+                        </Dialog.Title>
+                        <Dialog.Close asChild>
+                            <button
+                                type="button"
+                                aria-label="Close"
+                                className="rounded p-1 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
+                            >
+                                <X size={15} aria-hidden />
+                            </button>
+                        </Dialog.Close>
+                    </div>
+
+                    <Dialog.Description asChild>
+                        <div className="mb-3 space-y-2 text-sm text-fg-soft">
+                            <p>
+                                This uploads the text of your server logs to a{' '}
+                                <a
+                                    href={PASTE_SERVICE}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="underline"
+                                    style={{ color: 'var(--emphasis)' }}
+                                >
+                                    public pastebin service
+                                </a>
+                                , to make sharing debug logs easy when getting support on the{' '}
+                                <a
+                                    href="https://discord.gg/q2y38cqjNw"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="underline"
+                                    style={{ color: 'var(--emphasis)' }}
+                                >
+                                    SwarmUI Discord
+                                </a>
+                                .
+                            </p>
+                            <p className="text-fg">
+                                Once submitted the logs are public and not easily deletable. Check that they
+                                hold no private information (eg personal prompts) first - if they do, restart,
+                                reproduce the problem, and submit those logs instead.
+                            </p>
+                            <p>
+                                You can also{' '}
+                                <a
+                                    href={PASTE_SERVICE}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="underline"
+                                    style={{ color: 'var(--emphasis)' }}
+                                >
+                                    paste manually
+                                </a>{' '}
+                                to edit the content first, just don't delete anything important.
+                            </p>
+                        </div>
+                    </Dialog.Description>
+
+                    <label className="mb-4 flex items-center gap-2 text-sm text-fg">
+                        Minimum log level
+                        <select
+                            value={level}
+                            disabled={submit.isPending || Boolean(url)}
+                            onChange={e => setLevel(e.target.value)}
+                            className="rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)] disabled:opacity-50"
+                        >
+                            {PASTEBIN_LEVELS.map(option => (
+                                <option key={option} value={option}>
+                                    {option}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
+                    {url && (
+                        <div className="mb-4 rounded border border-subtle bg-surface-sunken p-2 text-sm">
+                            <div className="flex items-center gap-2">
+                                <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="min-w-0 flex-1 break-all underline"
+                                    style={{ color: 'var(--emphasis)' }}
+                                >
+                                    {url}
+                                </a>
+                                <button
+                                    type="button"
+                                    aria-label="Copy paste URL"
+                                    title="Copy paste URL"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(url).then(
+                                            () => {
+                                                setCopied(true);
+                                                setTimeout(() => setCopied(false), 1500);
+                                            },
+                                            () => setCopied(false)
+                                        );
+                                    }}
+                                    className="shrink-0 rounded p-1 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
+                                >
+                                    {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
+                                </button>
+                            </div>
+                            <p className="mt-1 text-xs text-fg-soft">
+                                Share this link in the Discord help forum, alongside a description of your
+                                problem and any screenshots.
+                            </p>
+                        </div>
+                    )}
+
+                    {submit.error && (
+                        <p className="mb-4 text-sm" style={{ color: 'var(--danger-button-background)' }}>
+                            Failed to submit: {submit.error.message}
+                        </p>
+                    )}
+
+                    <div className="flex justify-end gap-2">
+                        <Dialog.Close asChild>
+                            <button
+                                type="button"
+                                className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
+                            >
+                                {url ? 'Close' : 'Cancel'}
+                            </button>
+                        </Dialog.Close>
+                        {!url && (
+                            <button
+                                type="button"
+                                disabled={submit.isPending}
+                                onClick={() => submit.mutate(level)}
+                                className="rounded px-3 py-1.5 text-sm disabled:opacity-60"
+                                style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
+                            >
+                                {submit.isPending ? 'Submitting…' : 'Submit'}
+                            </button>
+                        )}
+                    </div>
+                </Dialog.Content>
+            </Dialog.Portal>
+        </Dialog.Root>
     );
 }
