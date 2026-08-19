@@ -71,7 +71,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
 
     return (
         <div className="flex h-full min-h-0">
-            <FolderPane folders={models.data?.folders ?? []} path={path} onNavigate={setPath} />
+            <FolderPane folders={models.data?.folders} path={path} onNavigate={setPath} />
 
             <div className="flex min-w-0 flex-1 flex-col">
                 <BrowserToolbar

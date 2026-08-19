@@ -1,16 +1,110 @@
+import { useEffect, useState } from 'react';
 import { ChevronRight, Folder, Grid3x3, List, Search, X } from 'lucide-react';
 import type { SortMode, ViewMode } from '@/library/types';
 
-/** Breadcrumb + folder list for the current path.
+/** Child folder names keyed by their absolute parent path ('' is the root). */
+type FolderTree = ReadonlyMap<string, string[]>;
+
+/** Joins a folder path with a path relative to it. */
+function joinFolder(base: string, relative: string): string {
+    if (!relative) {
+        return base;
+    }
+    return base ? `${base}/${relative}` : relative;
+}
+
+/** Folds one list response into the known tree.
+ *
+ * The list endpoints only describe the levels below the requested path that they walked (three,
+ * here), so a tree that survives navigation has to be stitched together from every response seen
+ * so far: group the returned relative paths by parent and replace exactly those entries, leaving
+ * branches and deeper levels the server did not mention as previously discovered. Mirrors
+ * refillTree in the legacy browser (src/wwwroot/js/genpage/helpers/browsers.js). */
+function mergeFolders(known: FolderTree, path: string, folders: string[]): FolderTree {
+    const fetched = new Map<string, string[]>([[path, []]]);
+    for (const folder of folders) {
+        const parts = folder.split('/').filter(Boolean);
+        const name = parts.pop();
+        if (name === undefined) {
+            continue;
+        }
+        const parent = joinFolder(path, parts.join('/'));
+        const siblings = fetched.get(parent);
+        if (!siblings) {
+            fetched.set(parent, [name]);
+        }
+        else if (!siblings.includes(name)) {
+            siblings.push(name);
+        }
+    }
+    let changed = false;
+    const next = new Map(known);
+    for (const [parent, children] of fetched) {
+        const previous = next.get(parent);
+        if (!previous || previous.length !== children.length || previous.some((c, i) => c !== children[i])) {
+            next.set(parent, children);
+            changed = true;
+        }
+    }
+    // Returning the original when nothing moved keeps the merge effect from looping.
+    return changed ? next : known;
+}
+
+/** The path itself plus every folder above it. */
+function ancestorsOf(path: string): string[] {
+    const segments = path.split('/').filter(Boolean);
+    return segments.map((_, i) => segments.slice(0, i + 1).join('/'));
+}
+
+/** Breadcrumb + expandable folder tree for the current path.
  *
  * The legacy browsers render a bare nested tree of links with no indication of where you are;
- * this pairs an explicit breadcrumb with the child folders of the current level. */
+ * this pairs an explicit breadcrumb with a tree whose parents expand in place. `folders` is
+ * undefined while a folder's contents are still loading, which leaves the tree untouched rather
+ * than momentarily collapsing the branch being opened. */
 export function FolderPane(props: {
-    folders: string[];
+    folders: string[] | undefined;
     path: string;
     onNavigate: (path: string) => void;
 }) {
     const segments = props.path.split('/').filter(Boolean);
+    const [tree, setTree] = useState<FolderTree>(() => new Map());
+    const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>());
+
+    const { folders, path } = props;
+    useEffect(() => {
+        if (folders) {
+            setTree(known => mergeFolders(known, path, folders));
+        }
+    }, [folders, path]);
+
+    // A folder can only be shown as current if everything above it is open.
+    useEffect(() => {
+        setExpanded(open => {
+            const ancestors = ancestorsOf(path).filter(a => !open.has(a));
+            return ancestors.length === 0 ? open : new Set([...open, ...ancestors]);
+        });
+    }, [path]);
+
+    function toggle(folder: string, children: string[] | undefined) {
+        const opening = !expanded.has(folder);
+        setExpanded(open => {
+            const next = new Set(open);
+            if (opening) {
+                next.add(folder);
+            }
+            else {
+                next.delete(folder);
+            }
+            return next;
+        });
+        // Below the fetched depth the children are unknown, so opening has to go get them.
+        if (opening && children === undefined) {
+            props.onNavigate(folder);
+        }
+    }
+
+    const roots = tree.get('') ?? [];
 
     return (
         <nav aria-label="Folders" className="w-56 shrink-0 overflow-y-auto border-r border-subtle p-2">
@@ -38,27 +132,105 @@ export function FolderPane(props: {
                 ))}
             </ol>
 
-            {props.folders.length === 0 ? (
+            {roots.length === 0 ? (
                 <p className="px-1 text-xs text-fg-soft">No subfolders.</p>
             ) : (
                 <ul className="space-y-0.5">
-                    {props.folders.map(folder => (
-                        <li key={folder}>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    props.onNavigate(props.path ? `${props.path}/${folder}` : folder)
-                                }
-                                className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-sm text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
-                            >
-                                <Folder size={14} className="shrink-0" aria-hidden />
-                                <span className="truncate">{folder}</span>
-                            </button>
-                        </li>
+                    {roots.map(folder => (
+                        <FolderNode
+                            key={folder}
+                            name={folder}
+                            path={folder}
+                            level={0}
+                            tree={tree}
+                            expanded={expanded}
+                            onToggle={toggle}
+                            current={props.path}
+                            onNavigate={props.onNavigate}
+                        />
                     ))}
                 </ul>
             )}
         </nav>
+    );
+}
+
+function FolderNode(props: {
+    name: string;
+    /** Absolute path of this folder, ie what navigating to it selects. */
+    path: string;
+    level: number;
+    tree: FolderTree;
+    expanded: ReadonlySet<string>;
+    onToggle: (path: string, children: string[] | undefined) => void;
+    current: string;
+    onNavigate: (path: string) => void;
+}) {
+    const children = props.tree.get(props.path);
+    const isOpen = props.expanded.has(props.path);
+    const isCurrent = props.current === props.path;
+    // Unknown children (below the fetched depth) still get a toggle - opening one loads that level,
+    // and the toggle disappears afterwards if the folder turns out to be empty.
+    const canExpand = children === undefined || children.length > 0;
+
+    return (
+        <li>
+            <div
+                style={{ paddingLeft: `${props.level * 12}px` }}
+                className={[
+                    'flex items-center rounded',
+                    isCurrent
+                        ? 'bg-[var(--sw-active)] text-fg-strong'
+                        : 'text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg'
+                ].join(' ')}
+            >
+                {canExpand ? (
+                    <button
+                        type="button"
+                        onClick={() => props.onToggle(props.path, children)}
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${props.name}`}
+                        className="shrink-0 rounded p-0.5 hover:bg-[var(--sw-hover)]"
+                    >
+                        <ChevronRight
+                            size={12}
+                            aria-hidden
+                            className={['transition-transform', isOpen ? 'rotate-90' : ''].join(' ')}
+                        />
+                    </button>
+                ) : (
+                    <span className="w-[18px] shrink-0" aria-hidden />
+                )}
+                <button
+                    type="button"
+                    onClick={() => props.onNavigate(props.path)}
+                    aria-current={isCurrent ? 'true' : undefined}
+                    title={props.name}
+                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded py-1 pr-1.5 text-left text-sm"
+                >
+                    <Folder size={14} className="shrink-0" aria-hidden />
+                    <span className="truncate">{props.name}</span>
+                </button>
+            </div>
+
+            {isOpen && children && children.length > 0 && (
+                <ul className="space-y-0.5">
+                    {children.map(child => (
+                        <FolderNode
+                            key={child}
+                            name={child}
+                            path={joinFolder(props.path, child)}
+                            level={props.level + 1}
+                            tree={props.tree}
+                            expanded={props.expanded}
+                            onToggle={props.onToggle}
+                            current={props.current}
+                            onNavigate={props.onNavigate}
+                        />
+                    ))}
+                </ul>
+            )}
+        </li>
     );
 }
 

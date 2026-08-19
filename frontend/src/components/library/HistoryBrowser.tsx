@@ -44,7 +44,7 @@ export function HistoryBrowser() {
 
     return (
         <div className="flex h-full min-h-0">
-            <FolderPane folders={images.data?.folders ?? []} path={path} onNavigate={setPath} />
+            <FolderPane folders={images.data?.folders} path={path} onNavigate={setPath} />
 
             <div className="flex min-w-0 flex-1 flex-col">
                 <BrowserToolbar
