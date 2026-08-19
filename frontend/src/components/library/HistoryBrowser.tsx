@@ -6,6 +6,7 @@ import { usePermission } from '@/api/permissions';
 import { useSession } from '@/api/hooks';
 import { BrowserToolbar, EmptyState, FolderPane } from './BrowserChrome';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { MetadataView } from '../ui/MetadataView';
 
 /** Output history browser.
  *
@@ -163,18 +164,6 @@ function ImageSheet(props: {
     onDelete: () => void;
     onClose: () => void;
 }) {
-    const metadata = useMemo(() => {
-        if (!props.entry.metadata) {
-            return null;
-        }
-        try {
-            return JSON.stringify(JSON.parse(props.entry.metadata), null, 2);
-        }
-        catch {
-            return props.entry.metadata;
-        }
-    }, [props.entry.metadata]);
-
     return (
         <aside
             aria-label="Image details"
@@ -221,14 +210,7 @@ function ImageSheet(props: {
                     alt=""
                     className="mb-3 w-full rounded border border-subtle"
                 />
-                <h3 className="mb-1 text-xs uppercase tracking-wide text-fg-soft">Metadata</h3>
-                {metadata ? (
-                    <pre className="whitespace-pre-wrap break-words rounded border border-subtle bg-surface-sunken p-2 font-mono text-[11px] text-fg-soft">
-                        {metadata}
-                    </pre>
-                ) : (
-                    <p className="text-sm text-fg-soft">No metadata recorded.</p>
-                )}
+                <MetadataView metadata={props.entry.metadata} empty="No metadata recorded." />
             </div>
         </aside>
     );

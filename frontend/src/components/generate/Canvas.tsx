@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ImageIcon, Info } from 'lucide-react';
 import { imageUrl, useGenerateStore } from '@/generate/store';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
+import { MetadataView } from '../ui/MetadataView';
 
 /** The main image view, plus a collapsible metadata panel. */
 export function Canvas() {
@@ -36,19 +37,6 @@ export function Canvas() {
             return () => clearTimeout(timer);
         }
     }, [reuse]);
-
-    const metadata = useMemo(() => {
-        if (!current?.metadata) {
-            return null;
-        }
-        try {
-            return JSON.stringify(JSON.parse(current.metadata), null, 2);
-        }
-        catch {
-            // The API explicitly does not guarantee JSON here; show it raw when it isn't.
-            return current.metadata;
-        }
-    }, [current?.metadata]);
 
     return (
         <div className="flex flex-1 min-h-0 min-w-0">
@@ -111,15 +99,9 @@ export function Canvas() {
             </div>
 
             {showMetadata && current && (
-                <aside className="w-72 shrink-0 overflow-auto border-l border-subtle bg-surface p-3">
+                <aside className="w-80 shrink-0 overflow-auto border-l border-subtle bg-surface p-3">
                     <h2 className="mb-2 text-sm font-medium text-fg-strong">Metadata</h2>
-                    {metadata ? (
-                        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-fg-soft">
-                            {metadata}
-                        </pre>
-                    ) : (
-                        <p className="text-sm text-fg-soft">No metadata for this image.</p>
-                    )}
+                    <MetadataView metadata={current.metadata} empty="No metadata for this image." />
                 </aside>
             )}
         </div>
