@@ -30,6 +30,10 @@ export type GenMessage = Partial<GenProgressMessage & GenImageMessage & GenDisca
 
 /** One slot in the batch rail. */
 export interface BatchItem {
+    /** Unique across runs: `batch_index` restarts at 0 for every run, so it alone cannot key a slot. */
+    id: string;
+    /** Which run produced this slot. */
+    runId: number;
     batchIndex: string;
     status: 'pending' | 'running' | 'done' | 'discarded' | 'failed';
     /** Final image URL once done, or the latest preview while running. */

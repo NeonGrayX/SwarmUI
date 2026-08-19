@@ -12,7 +12,7 @@ export function Canvas() {
     const [reuse, setReuse] = useState<string | null>(null);
     const mediaParam = useMediaParamAction();
 
-    const current = batch.find(item => item.batchIndex === selected);
+    const current = batch.find(item => item.id === selected);
     const src = imageUrl(current?.src);
     // Previews are half-finished renders; feeding one back in as an input is never what was meant.
     const canReuse = Boolean(src) && !current?.isPreview;

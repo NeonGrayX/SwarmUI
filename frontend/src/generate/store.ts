@@ -10,9 +10,9 @@ import type { BatchItem, GenMessage } from './types';
 import type { GenIssue } from './validate';
 
 interface GenerateStore {
-    /** Batch slots keyed by batch_index, in arrival order. */
+    /** Batch slots for every run kept in the rail, in arrival order. */
     batch: BatchItem[];
-    /** batch_index of the image shown on the canvas, or null for none. */
+    /** `id` of the slot shown on the canvas, or null for none. */
     selected: string | null;
     running: boolean;
     error: string | null;
@@ -20,6 +20,8 @@ interface GenerateStore {
     inputError: GenIssue | null;
     /** Set while "Generate Forever" is on. */
     forever: boolean;
+    /** Handed to the next run, to keep its slots distinct from earlier runs'. */
+    nextRunId: number;
     autoSwapToImages: boolean;
     autoClearBatch: boolean;
 
@@ -30,17 +32,28 @@ interface GenerateStore {
     fail: (issue: GenIssue) => void;
     clearInputError: () => void;
     interrupt: (all?: boolean) => void;
-    select: (batchIndex: string | null) => void;
+    select: (id: string | null) => void;
     clearBatch: () => void;
     setForever: (on: boolean) => void;
     setAutoSwapToImages: (on: boolean) => void;
     setAutoClearBatch: (on: boolean) => void;
 }
 
-function upsert(batch: BatchItem[], batchIndex: string, patch: Partial<BatchItem>): BatchItem[] {
-    const existing = batch.findIndex(b => b.batchIndex === batchIndex);
+/** Slot ids must be unique across runs, since the server restarts batch_index at 0 each run. */
+function slotId(runId: number, batchIndex: string): string {
+    return `${runId}:${batchIndex}`;
+}
+
+function upsert(
+    batch: BatchItem[],
+    runId: number,
+    batchIndex: string,
+    patch: Partial<BatchItem>
+): BatchItem[] {
+    const id = slotId(runId, batchIndex);
+    const existing = batch.findIndex(b => b.id === id);
     if (existing === -1) {
-        return [...batch, { batchIndex, status: 'running', ...patch }];
+        return [...batch, { id, runId, batchIndex, status: 'running', ...patch }];
     }
     const next = [...batch];
     next[existing] = { ...next[existing], ...patch };
@@ -54,6 +67,7 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
     error: null,
     inputError: null,
     forever: false,
+    nextRunId: 0,
     autoSwapToImages: true,
     autoClearBatch: false,
     close: null,
@@ -62,18 +76,20 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
         const state = get();
         state.close?.();
 
+        const runId = state.nextRunId;
         if (state.autoClearBatch) {
             set({ batch: [], selected: null });
         }
-        set({ running: true, error: null, inputError: null });
+        set({ running: true, error: null, inputError: null, nextRunId: runId + 1 });
 
         // Seed placeholder slots so the rail shows the shape of the run immediately.
-        const offset = state.autoClearBatch ? 0 : get().batch.length;
         set(s => ({
             batch: [
                 ...s.batch,
                 ...Array.from({ length: images }, (_, i) => ({
-                    batchIndex: String(offset + i),
+                    id: slotId(runId, String(i)),
+                    runId,
+                    batchIndex: String(i),
                     status: 'pending' as const
                 }))
             ]
@@ -87,7 +103,7 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
                     if (message.gen_progress) {
                         const p = message.gen_progress;
                         set(s => ({
-                            batch: upsert(s.batch, p.batch_index, {
+                            batch: upsert(s.batch, runId, p.batch_index, {
                                 status: 'running',
                                 overallPercent: p.overall_percent,
                                 currentPercent: p.current_percent,
@@ -98,8 +114,9 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
                     }
                     if (message.image && message.batch_index !== undefined) {
                         const index = message.batch_index;
+                        const id = slotId(runId, index);
                         set(s => {
-                            const batch = upsert(s.batch, index, {
+                            const batch = upsert(s.batch, runId, index, {
                                 status: 'done',
                                 src: message.image,
                                 isPreview: false,
@@ -108,16 +125,16 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
                             });
                             return {
                                 batch,
-                                selected: s.autoSwapToImages || s.selected === null ? index : s.selected
+                                selected: s.autoSwapToImages || s.selected === null ? id : s.selected
                             };
                         });
                         return;
                     }
                     if (message.discard_indices) {
-                        const discard = new Set(message.discard_indices.map(String));
+                        const discard = new Set(message.discard_indices.map(i => slotId(runId, String(i))));
                         set(s => ({
                             batch: s.batch.map(item =>
-                                discard.has(item.batchIndex) ? { ...item, status: 'discarded' as const } : item
+                                discard.has(item.id) ? { ...item, status: 'discarded' as const } : item
                             )
                         }));
                     }
@@ -128,7 +145,8 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
                         running: false,
                         forever: false,
                         batch: s.batch.map(item =>
-                            item.status === 'pending' || item.status === 'running'
+                            item.runId === runId &&
+                            (item.status === 'pending' || item.status === 'running')
                                 ? { ...item, status: 'failed' as const, error: error.message }
                                 : item
                         )
@@ -139,7 +157,8 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
                         running: false,
                         close: null,
                         batch: s.batch.map(item =>
-                            item.status === 'pending' || item.status === 'running'
+                            item.runId === runId &&
+                            (item.status === 'pending' || item.status === 'running')
                                 ? { ...item, status: 'failed' as const }
                                 : item
                         )
@@ -165,7 +184,7 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
         });
     },
 
-    select: batchIndex => set({ selected: batchIndex }),
+    select: id => set({ selected: id }),
     clearBatch: () => set({ batch: [], selected: null }),
     setForever: on => set({ forever: on }),
     setAutoSwapToImages: on => set({ autoSwapToImages: on }),

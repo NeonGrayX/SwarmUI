@@ -75,10 +75,10 @@ export function BatchRail() {
                     <div className="grid grid-cols-2 gap-1.5">
                         {visible.map(item => (
                             <BatchTile
-                                key={item.batchIndex}
+                                key={item.id}
                                 item={item}
-                                active={item.batchIndex === selected}
-                                onSelect={() => select(item.batchIndex)}
+                                active={item.id === selected}
+                                onSelect={() => select(item.id)}
                             />
                         ))}
                     </div>
