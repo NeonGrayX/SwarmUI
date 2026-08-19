@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import { api, SwarmApiError } from '@/api/client';
 import type { BatchItem, GenMessage } from './types';
+import type { GenIssue } from './validate';
 
 interface GenerateStore {
     /** Batch slots keyed by batch_index, in arrival order. */
@@ -15,6 +16,8 @@ interface GenerateStore {
     selected: string | null;
     running: boolean;
     error: string | null;
+    /** Why the last generate attempt was refused before it was sent. Cleared by the next attempt. */
+    inputError: GenIssue | null;
     /** Set while "Generate Forever" is on. */
     forever: boolean;
     autoSwapToImages: boolean;
@@ -23,6 +26,9 @@ interface GenerateStore {
     close: (() => void) | null;
 
     start: (images: number, params: Record<string, unknown>) => void;
+    /** Refuses a run that failed pre-flight validation, without touching the socket. */
+    fail: (issue: GenIssue) => void;
+    clearInputError: () => void;
     interrupt: (all?: boolean) => void;
     select: (batchIndex: string | null) => void;
     clearBatch: () => void;
@@ -46,6 +52,7 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
     selected: null,
     running: false,
     error: null,
+    inputError: null,
     forever: false,
     autoSwapToImages: true,
     autoClearBatch: false,
@@ -58,7 +65,7 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
         if (state.autoClearBatch) {
             set({ batch: [], selected: null });
         }
-        set({ running: true, error: null });
+        set({ running: true, error: null, inputError: null });
 
         // Seed placeholder slots so the rail shows the shape of the run immediately.
         const offset = state.autoClearBatch ? 0 : get().batch.length;
@@ -143,6 +150,10 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
 
         set({ close });
     },
+
+    /** Stops "generate forever" too, so a bad request cannot re-fire on a loop. */
+    fail: issue => set({ inputError: issue, running: false, forever: false }),
+    clearInputError: () => set({ inputError: null }),
 
     /** `all` interrupts every session this user has open, not just this tab
      *  (InterruptAll's `other_sessions`, src/WebAPI/BasicAPIFeatures.cs). */

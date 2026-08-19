@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2, Square } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Square } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { api } from '@/api/client';
 import { useParamStore } from '@/params/store';
 import { useGenerateStore } from '@/generate/store';
-import { useGenInput } from '@/generate/input';
+import { useStartGenerate } from '@/generate/start';
+import type { GenIssue } from '@/generate/validate';
+import { MODEL_SELECT_ID } from './ContextStrip';
 import { PromptAttachments } from './PromptAttachments';
 
 /** Debounced CLIP token count for a prompt box, via the CountTokens API. */
@@ -56,15 +58,27 @@ export function PromptComposer() {
 
     const running = useGenerateStore(s => s.running);
     const forever = useGenerateStore(s => s.forever);
-    const start = useGenerateStore(s => s.start);
     const interrupt = useGenerateStore(s => s.interrupt);
+    const inputError = useGenerateStore(s => s.inputError);
+    const clearInputError = useGenerateStore(s => s.clearInputError);
 
     const promptRef = useRef<HTMLTextAreaElement>(null);
-    const buildInput = useGenInput();
+    const doGenerate = useStartGenerate();
 
-    function doGenerate() {
-        start(Number(values.images ?? 1), buildInput());
-    }
+    // Drop the notice as soon as the user touches the param it complained about, so it never
+    // lingers over an input that has already been fixed.
+    useEffect(() => {
+        const paramId = inputError?.paramId;
+        if (!paramId) {
+            return;
+        }
+        const before = useParamStore.getState().values[paramId];
+        return useParamStore.subscribe(state => {
+            if (state.values[paramId] !== before) {
+                clearInputError();
+            }
+        });
+    }, [inputError, clearInputError]);
 
     return (
         <div className="border-t border-subtle bg-surface p-3 space-y-2">
@@ -109,6 +123,8 @@ export function PromptComposer() {
                 )}
             </div>
 
+            {inputError && <InputErrorNotice issue={inputError} />}
+
             <div className="flex items-end gap-2">
                 <PromptAttachments />
                 <div className="flex-1" />
@@ -129,6 +145,35 @@ export function PromptComposer() {
                 )}
                 <GenerateSplitButton running={running} forever={forever} onGenerate={doGenerate} />
             </div>
+        </div>
+    );
+}
+
+/** Why the last Generate press did not send anything.
+ *
+ * Sits by the button that was pressed rather than in the canvas banner (which is for errors the
+ * server reported), since the fix is always in the controls around it. */
+function InputErrorNotice(props: { issue: GenIssue }) {
+    return (
+        <div
+            role="alert"
+            className="flex items-center gap-2 rounded border px-2.5 py-1.5 text-sm text-fg"
+            style={{
+                borderColor: 'color-mix(in srgb, var(--backend-errored) 40%, transparent)',
+                background: 'color-mix(in srgb, var(--backend-errored) 12%, transparent)'
+            }}
+        >
+            <AlertTriangle size={14} className="shrink-0" aria-hidden />
+            <span className="flex-1">{props.issue.message}</span>
+            {props.issue.paramId === 'model' && (
+                <button
+                    type="button"
+                    onClick={() => document.getElementById(MODEL_SELECT_ID)?.focus()}
+                    className="rounded border border-default px-2 py-0.5 text-xs hover:bg-[var(--sw-hover)]"
+                >
+                    Choose model
+                </button>
+            )}
         </div>
     );
 }

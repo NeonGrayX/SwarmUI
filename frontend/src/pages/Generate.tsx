@@ -10,8 +10,7 @@ import { Splitter } from '@/components/generate/Splitter';
 import { ComfyWorkflow } from '@/components/generate/ComfyWorkflow';
 import { PRESETS, useLayoutStore, type LayoutPreset } from '@/generate/layout';
 import { useGenerateStore } from '@/generate/store';
-import { useGenInput } from '@/generate/input';
-import { useParamStore } from '@/params/store';
+import { useStartGenerate } from '@/generate/start';
 
 /** The Generate workspace: parameters, canvas, batch rail, and the prompt composer beneath. */
 /** Comfy Workflow was a sibling top-level tab in the legacy UI; here it is a mode of the Generate
@@ -26,19 +25,16 @@ export function GeneratePage() {
 
     const forever = useGenerateStore(s => s.forever);
     const running = useGenerateStore(s => s.running);
-    const start = useGenerateStore(s => s.start);
-    const values = useParamStore(s => s.values);
-    const buildInput = useGenInput();
+    const startGenerate = useStartGenerate();
 
-    // "Generate forever" re-fires as soon as the previous run finishes.
+    // "Generate forever" re-fires as soon as the previous run finishes. A refused run clears
+    // `forever` (useGenerateStore.fail), so a bad request stops the loop rather than spinning it.
     useEffect(() => {
         if (forever && !running) {
-            const timer = setTimeout(() => {
-                start(Number(values.images ?? 1), buildInput());
-            }, 100);
+            const timer = setTimeout(startGenerate, 100);
             return () => clearTimeout(timer);
         }
-    }, [forever, running, start, values, buildInput]);
+    }, [forever, running, startGenerate]);
 
     return (
         <div className="flex h-full min-h-0 flex-col">

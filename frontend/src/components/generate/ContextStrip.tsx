@@ -2,6 +2,9 @@ import { X } from 'lucide-react';
 import { useSession, useT2IParams } from '@/api/hooks';
 import { useParamStore } from '@/params/store';
 
+/** Id of the model dropdown, so the composer's "no model selected" notice can jump to it. */
+export const MODEL_SELECT_ID = 'context-model';
+
 /** Model / LoRA / preset context, as removable chips.
  *
  * Replaces #bottom_info_bar, which renders a run-on line of "<b>Label</b>: value" spans with no
@@ -18,9 +21,10 @@ export function ContextStrip() {
 
     return (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-subtle bg-surface px-3 py-1.5 text-xs">
-            <label className="flex items-center gap-1.5">
+            <label className="flex items-center gap-1.5" htmlFor={MODEL_SELECT_ID}>
                 <span className="text-fg-soft">Model</span>
                 <select
+                    id={MODEL_SELECT_ID}
                     value={model}
                     onChange={e => setValue('model', e.target.value)}
                     className="max-w-64 rounded border border-default bg-surface-sunken px-1.5 py-0.5 text-xs text-fg outline-none focus:border-[var(--emphasis)]"
