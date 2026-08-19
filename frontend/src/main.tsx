@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { router } from './router';
 import { applyThemeCss, applyThemePolarity, storedIsDark, storedThemeId } from './theme/useTheme';
 import './styles/index.css';
@@ -35,7 +36,10 @@ if (!container) {
 createRoot(container).render(
     <StrictMode>
         <QueryClientProvider client={queryClient}>
-            <RouterProvider router={router} />
+            {/* Field help and other hover hints open on hover alone, so one provider covers the app. */}
+            <Tooltip.Provider delayDuration={200} skipDelayDuration={300}>
+                <RouterProvider router={router} />
+            </Tooltip.Provider>
         </QueryClientProvider>
     </StrictMode>
 );

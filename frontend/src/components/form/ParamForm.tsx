@@ -7,7 +7,7 @@ import { useParamStore } from '@/params/store';
 import { ParamField, ParamGroup } from './ParamGroup';
 
 const MODES: { id: FilterMode; label: string }[] = [
-    { id: 'all', label: 'All' },
+    { id: 'basic', label: 'Basic' },
     { id: 'modified', label: 'Modified' },
     { id: 'advanced', label: 'Advanced' }
 ];
@@ -21,7 +21,7 @@ export function ParamForm() {
     const params = useT2IParams(session.isSuccess);
     const status = useCurrentStatus(session.isSuccess);
     const [search, setSearch] = useState('');
-    const [mode, setMode] = useState<FilterMode>('all');
+    const [mode, setMode] = useState<FilterMode>('basic');
 
     const values = useParamStore(s => s.values);
     const toggles = useParamStore(s => s.toggles);

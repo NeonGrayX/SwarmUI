@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import * as Popover from '@radix-ui/react-popover';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { Info, RotateCcw } from 'lucide-react';
 
 export type FieldDensity = 'comfortable' | 'compact' | 'inline';
@@ -7,7 +7,7 @@ export type FieldDensity = 'comfortable' | 'compact' | 'inline';
 export interface FieldProps {
     id: string;
     label: string;
-    /** Long-form help. Rendered in a popover behind the info affordance. */
+    /** Long-form help. Rendered in a tooltip behind the info affordance. */
     description?: string;
     /** Example values, shown under the description. */
     examples?: string[] | null;
@@ -17,6 +17,9 @@ export interface FieldProps {
     onReset?: () => void;
     /** Renders a switch beside the label for `toggleable` params. */
     toggle?: { on: boolean; onChange: (on: boolean) => void };
+    /** The row is off for a reason its own toggle cannot fix — an unsupported feature flag, or a
+     *  group switched off at the block header — so the toggle dims and locks with the rest. */
+    toggleBlocked?: boolean;
     /** Greys the row out and blocks input; used for unsupported feature flags. */
     disabled?: boolean;
     disabledReason?: string;
@@ -30,18 +33,20 @@ export interface FieldProps {
  * control as inline siblings, which is why User Settings and Server Configuration render as ragged
  * text with controls at arbitrary x-positions.
  *
- * The legacy `?` glyph becomes a real info popover, so descriptions are readable rather than
+ * The legacy `?` glyph becomes a real info tooltip, so descriptions are readable rather than
  * hover-only tooltips on a 9px character. */
 export function Field(props: FieldProps) {
     const density = props.density ?? 'comfortable';
     const hasHelp = Boolean(props.description || props.examples?.length);
+    // The toggle is what switches a row back on, so it never dims with the row it controls — but it
+    // does dim when the whole block is off, since flipping it then changes nothing.
+    const dim = props.disabled ? 'opacity-45' : '';
 
     return (
         <div
             className={[
                 'group/field grid items-start gap-x-[var(--sw-field-gap)]',
-                density === 'comfortable' ? 'py-1.5' : density === 'compact' ? 'py-1' : 'py-0.5',
-                props.disabled ? 'opacity-45' : ''
+                density === 'comfortable' ? 'py-1.5' : density === 'compact' ? 'py-1' : 'py-0.5'
             ].join(' ')}
             style={{ gridTemplateColumns: 'var(--sw-field-label-width) minmax(0, 1fr)' }}
             title={props.disabled ? props.disabledReason : undefined}
@@ -52,57 +57,63 @@ export function Field(props: FieldProps) {
                         type="checkbox"
                         checked={props.toggle.on}
                         onChange={e => props.toggle?.onChange(e.target.checked)}
+                        disabled={props.toggleBlocked}
                         aria-label={`Enable ${props.label}`}
-                        className="shrink-0 accent-[var(--emphasis)]"
+                        className={['shrink-0 accent-[var(--emphasis)]', props.toggleBlocked ? dim : ''].join(' ')}
                     />
                 )}
-                <label
-                    htmlFor={props.id}
-                    className="truncate text-sm text-fg-soft group-hover/field:text-fg cursor-default"
-                    title={props.label}
-                >
-                    {props.label}
-                </label>
-                {hasHelp && <HelpPopover label={props.label} description={props.description} examples={props.examples} />}
-                {props.modified && (
-                    <span
-                        aria-label="Modified"
-                        title="Changed from default"
-                        className="shrink-0 size-1.5 rounded-full"
-                        style={{ background: 'var(--sw-modified)' }}
-                    />
-                )}
-                {props.modified && props.onReset && (
-                    <button
-                        type="button"
-                        onClick={props.onReset}
-                        title="Reset to default"
-                        aria-label={`Reset ${props.label} to default`}
-                        className="shrink-0 rounded p-0.5 text-fg-soft opacity-0 group-hover/field:opacity-100 focus-visible:opacity-100 hover:text-fg hover:bg-[var(--sw-hover)]"
+                <div className={['flex items-center gap-1 min-w-0', dim].join(' ')}>
+                    <label
+                        htmlFor={props.id}
+                        className="truncate text-sm text-fg-soft group-hover/field:text-fg cursor-default"
+                        title={props.label}
                     >
-                        <RotateCcw size={12} aria-hidden />
-                    </button>
-                )}
+                        {props.label}
+                    </label>
+                    {hasHelp && <HelpTip label={props.label} description={props.description} examples={props.examples} />}
+                    {props.modified && (
+                        <span
+                            aria-label="Modified"
+                            title="Changed from default"
+                            className="shrink-0 size-1.5 rounded-full"
+                            style={{ background: 'var(--sw-modified)' }}
+                        />
+                    )}
+                    {props.modified && props.onReset && (
+                        <button
+                            type="button"
+                            onClick={props.onReset}
+                            title="Reset to default"
+                            aria-label={`Reset ${props.label} to default`}
+                            className="shrink-0 rounded p-0.5 text-fg-soft opacity-0 group-hover/field:opacity-100 focus-visible:opacity-100 hover:text-fg hover:bg-[var(--sw-hover)]"
+                        >
+                            <RotateCcw size={12} aria-hidden />
+                        </button>
+                    )}
+                </div>
             </div>
-            <div className="min-w-0">{props.children}</div>
+            <div className={['min-w-0', dim].join(' ')}>{props.children}</div>
         </div>
     );
 }
 
-function HelpPopover(props: { label: string; description?: string; examples?: string[] | null }) {
+/** Help shown on hover (and on keyboard focus), never needing a click. The content stays hoverable
+ * so long descriptions and examples can be read and copied. */
+function HelpTip(props: { label: string; description?: string; examples?: string[] | null }) {
     return (
-        <Popover.Root>
-            <Popover.Trigger asChild>
+        <Tooltip.Root>
+            <Tooltip.Trigger asChild>
                 <button
                     type="button"
                     aria-label={`About ${props.label}`}
+                    onClick={e => e.preventDefault()}
                     className="shrink-0 rounded p-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                 >
                     <Info size={12} aria-hidden />
                 </button>
-            </Popover.Trigger>
-            <Popover.Portal>
-                <Popover.Content
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+                <Tooltip.Content
                     side="right"
                     align="start"
                     sideOffset={6}
@@ -125,9 +136,9 @@ function HelpPopover(props: { label: string; description?: string; examples?: st
                             </ul>
                         </div>
                     )}
-                    <Popover.Arrow className="fill-[var(--border-color)]" />
-                </Popover.Content>
-            </Popover.Portal>
-        </Popover.Root>
+                    <Tooltip.Arrow className="fill-[var(--border-color)]" />
+                </Tooltip.Content>
+            </Tooltip.Portal>
+        </Tooltip.Root>
     );
 }

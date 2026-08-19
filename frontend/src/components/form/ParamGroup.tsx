@@ -116,7 +116,9 @@ export function ParamField(props: {
 
     const unsupported = visibility.unsupported.has(param.id);
     const toggledOff = param.toggleable && toggles[param.id] !== true;
-    const disabled = unsupported || props.groupDisabled || toggledOff;
+    // Off for a reason the row's own toggle cannot undo, so that toggle dims with the rest of it.
+    const blocked = unsupported || props.groupDisabled === true;
+    const disabled = blocked || toggledOff;
 
     return (
         <Field
@@ -128,6 +130,7 @@ export function ParamField(props: {
             modified={visibility.altered.has(param.id)}
             onReset={() => reset(param.id)}
             disabled={disabled}
+            toggleBlocked={blocked}
             disabledReason={
                 unsupported
                     ? `Requires backend feature: ${param.feature_flag}`

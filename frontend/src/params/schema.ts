@@ -37,6 +37,16 @@ export interface NormalizedSchema {
     models: Record<string, string[]>;
 }
 
+/** Params the server hides from the panel because the legacy UI gives them a bespoke home, but
+ *  which this UI renders as ordinary rows.
+ *
+ * `model` is registered ungrouped and `VisibleNormally: false` (T2IParamTypes.cs:689). Leaving it
+ * out here means it counts towards the Modified filter without ever appearing in it, so it lands in
+ * Core Parameters, above Images (priority -50). User `param_edits` still win over this. */
+const PANEL_PLACEMENT: Record<string, Partial<ParamSchema>> = {
+    model: { visible: true, group: 'coreparameters', priority: -60 }
+};
+
 function applyEdits<T extends object>(base: T, edits: Partial<T> | undefined): T {
     if (!edits) {
         return base;
@@ -55,7 +65,8 @@ export function normalizeSchema(data: ListT2IParamsResponse): NormalizedSchema {
     const params = data.list
         .map(param => {
             const paramEdits = edits.params?.[param.id];
-            const merged = applyEdits(param, paramEdits as Partial<ParamSchema>);
+            const placed = applyEdits(param, PANEL_PLACEMENT[param.id]);
+            const merged = applyEdits(placed, paramEdits as Partial<ParamSchema>);
             // `examples` is stored as a '||'-separated string in edits but is an array in the schema.
             if (paramEdits && typeof paramEdits.examples === 'string') {
                 merged.examples = paramEdits.examples

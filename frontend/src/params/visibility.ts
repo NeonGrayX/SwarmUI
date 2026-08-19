@@ -13,7 +13,7 @@ import type { ParamSchema } from '@/api/types';
 import type { GroupNode, NormalizedSchema } from './schema';
 import { isAltered, type ParamValue } from './store';
 
-export type FilterMode = 'all' | 'modified' | 'advanced';
+export type FilterMode = 'basic' | 'modified' | 'advanced';
 
 export interface VisibilityInput {
     schema: NormalizedSchema;
