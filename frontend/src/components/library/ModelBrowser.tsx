@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, ImageOff, Star } from 'lucide-react';
+import { CheckCircle2, ImageOff, Star, Trash2 } from 'lucide-react';
 import {
     useDeleteModel,
     useModels,
@@ -19,6 +19,7 @@ import {
 } from '@/library/types';
 import { usePermission } from '@/api/permissions';
 import { BrowserToolbar, EmptyState, FolderPane } from './BrowserChrome';
+import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ModelDetailSheet } from './ModelDetailSheet';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { PromptDialog } from '../ui/PromptDialog';
@@ -38,6 +39,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
     const [selected, setSelected] = useState<ModelCard | WildcardCard | null>(null);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
     const [pendingRename, setPendingRename] = useState<string | null>(null);
+    const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
 
     const models = useModels(props.subtype, path, sort, reverse, 3);
     const userData = useMyUserData();
@@ -70,6 +72,21 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
         const starSet = new Set(starred);
         return [...filtered].sort((a, b) => Number(starSet.has(b.name)) - Number(starSet.has(a.name)));
     }, [filtered, starred]);
+
+    const ids = useMemo(() => ordered.map(file => file.name), [ordered]);
+    const selection = useSelection(ids);
+
+    /** Deletes every selected entry. One request per file - the API has no batch form. */
+    async function deleteSelected(): Promise<void> {
+        const targets = selection.ids;
+        if (selected && targets.includes(selected.name)) {
+            setSelected(null);
+        }
+        selection.clear();
+        for (const name of targets) {
+            await deleteModel.mutateAsync({ subtype: props.subtype, name });
+        }
+    }
 
     /** Everything one entry can do, for its right-click menu. */
     function actionsFor(file: ModelCard | WildcardCard): MenuAction[] {
@@ -118,6 +135,25 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                     total={files.length}
                 />
 
+                {selection.count > 0 && (
+                    <SelectionBar
+                        count={selection.count}
+                        total={ordered.length}
+                        onSelectAll={selection.selectAll}
+                        onClear={selection.clear}
+                    >
+                        {canDelete && (
+                            <SelectionButton
+                                label="Delete"
+                                destructive
+                                onClick={() => setPendingBulkDelete(true)}
+                            >
+                                <Trash2 size={13} aria-hidden />
+                            </SelectionButton>
+                        )}
+                    </SelectionBar>
+                )}
+
                 <div className="min-h-0 flex-1 overflow-y-auto p-3">
                     {models.isPending ? (
                         <EmptyState title={`Loading ${props.label}…`} />
@@ -142,8 +178,10 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                                     key={file.name}
                                     file={file}
                                     starred={starred.includes(file.name)}
+                                    checked={selection.isSelected(file.name)}
+                                    onCheck={() => selection.toggle(file.name)}
                                     onStar={() => toggleStar.mutate({ subtype: props.subtype, name: file.name })}
-                                    onOpen={() => setSelected(file)}
+                                    onOpen={event => selection.click(event, file.name, () => setSelected(file))}
                                     onMenu={event => contextMenu.open(event, actionsFor(file))}
                                 />
                             ))}
@@ -155,8 +193,10 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                                     key={file.name}
                                     file={file}
                                     starred={starred.includes(file.name)}
+                                    checked={selection.isSelected(file.name)}
+                                    onCheck={() => selection.toggle(file.name)}
                                     onStar={() => toggleStar.mutate({ subtype: props.subtype, name: file.name })}
-                                    onOpen={() => setSelected(file)}
+                                    onOpen={event => selection.click(event, file.name, () => setSelected(file))}
                                     onMenu={event => contextMenu.open(event, actionsFor(file))}
                                 />
                             ))}
@@ -194,6 +234,24 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                 onCancel={() => setPendingDelete(null)}
             />
 
+            <ConfirmDialog
+                open={pendingBulkDelete}
+                title={`Delete ${selection.count} ${props.label}?`}
+                body={
+                    <>
+                        All <strong className="text-fg">{selection.count}</strong> selected entries will
+                        be deleted from disk. Depending on server settings this may be permanent.
+                    </>
+                }
+                confirmLabel="Delete"
+                destructive
+                onConfirm={() => {
+                    setPendingBulkDelete(false);
+                    void deleteSelected();
+                }}
+                onCancel={() => setPendingBulkDelete(false)}
+            />
+
             <PromptDialog
                 open={pendingRename !== null}
                 title="Rename model"
@@ -218,8 +276,10 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
 function Card(props: {
     file: ModelCard | WildcardCard;
     starred: boolean;
+    checked: boolean;
+    onCheck: () => void;
     onStar: () => void;
-    onOpen: () => void;
+    onOpen: (event: React.MouseEvent) => void;
     onMenu: (event: React.MouseEvent) => void;
 }) {
     const { file } = props;
@@ -228,7 +288,10 @@ function Card(props: {
 
     return (
         <div
-            className="group relative overflow-hidden rounded-lg border border-default bg-surface"
+            className={[
+                'group relative overflow-hidden rounded-lg border bg-surface',
+                props.checked ? 'border-[var(--emphasis)]' : 'border-default'
+            ].join(' ')}
             onContextMenu={props.onMenu}
         >
             <button
@@ -250,15 +313,24 @@ function Card(props: {
                 </div>
             </button>
 
-            {card?.loaded && (
-                <span
-                    title="Loaded on a backend"
-                    className="absolute left-1.5 top-1.5 rounded-full bg-black/60 p-1"
-                    style={{ color: 'var(--backend-running)' }}
-                >
-                    <CheckCircle2 size={13} aria-hidden />
-                </span>
-            )}
+            {/* One row so the checkbox fading in never lands on top of the loaded badge. */}
+            <div className="absolute left-1.5 top-1.5 flex items-center gap-1">
+                <SelectionCheckbox
+                    overlay
+                    checked={props.checked}
+                    onToggle={props.onCheck}
+                    label={`Select ${file.name}`}
+                />
+                {card?.loaded && (
+                    <span
+                        title="Loaded on a backend"
+                        className="rounded-full bg-black/60 p-1"
+                        style={{ color: 'var(--backend-running)' }}
+                    >
+                        <CheckCircle2 size={13} aria-hidden />
+                    </span>
+                )}
+            </div>
 
             <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <IconChip
@@ -276,15 +348,22 @@ function Card(props: {
 function Row(props: {
     file: ModelCard | WildcardCard;
     starred: boolean;
+    checked: boolean;
+    onCheck: () => void;
     onStar: () => void;
-    onOpen: () => void;
+    onOpen: (event: React.MouseEvent) => void;
     onMenu: (event: React.MouseEvent) => void;
 }) {
     const card = isModelCard(props.file) ? props.file : null;
     const image = previewUrl(card ? card.preview_image : (props.file as WildcardCard).image);
 
     return (
-        <li className="flex items-center gap-3 py-1.5" onContextMenu={props.onMenu}>
+        <li className="group flex items-center gap-3 py-1.5" onContextMenu={props.onMenu}>
+            <SelectionCheckbox
+                checked={props.checked}
+                onToggle={props.onCheck}
+                label={`Select ${props.file.name}`}
+            />
             <IconChip label={props.starred ? 'Unstar' : 'Star'} onClick={props.onStar} active={props.starred} plain>
                 <Star size={14} fill={props.starred ? 'currentColor' : 'none'} aria-hidden />
             </IconChip>

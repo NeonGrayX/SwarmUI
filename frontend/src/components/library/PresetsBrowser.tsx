@@ -7,6 +7,7 @@ import { previewUrl, type PresetEntry, type ViewMode } from '@/library/types';
 import { usePermission } from '@/api/permissions';
 import { useParamStore } from '@/params/store';
 import { BrowserToolbar, EmptyState } from './BrowserChrome';
+import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
 
@@ -16,6 +17,7 @@ export function PresetsBrowser() {
     const [view, setView] = useState<ViewMode>('grid');
     const [reverse, setReverse] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+    const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
 
     const userData = useMyUserData();
     const queryClient = useQueryClient();
@@ -33,6 +35,9 @@ export function PresetsBrowser() {
         return reverse ? sorted.reverse() : sorted;
     }, [presets, search, reverse]);
 
+    const ids = useMemo(() => shown.map(preset => preset.title), [shown]);
+    const selection = useSelection(ids);
+
     async function refresh() {
         await queryClient.invalidateQueries({ queryKey: libraryKeys.userData });
     }
@@ -42,6 +47,16 @@ export function PresetsBrowser() {
         for (const [key, value] of Object.entries(paramMap ?? {})) {
             setValue(key, value as never);
         }
+    }
+
+    /** Deletes every selected preset. One request each - the API has no batch form. */
+    async function deleteSelected(): Promise<void> {
+        const targets = selection.ids;
+        selection.clear();
+        for (const title of targets) {
+            await api.post('DeletePreset', { preset: title });
+        }
+        await refresh();
     }
 
     /** Everything one preset can do, for its right-click menu. */
@@ -80,6 +95,25 @@ export function PresetsBrowser() {
                 total={presets.length}
             />
 
+            {selection.count > 0 && (
+                <SelectionBar
+                    count={selection.count}
+                    total={shown.length}
+                    onSelectAll={selection.selectAll}
+                    onClear={selection.clear}
+                >
+                    {canManage && (
+                        <SelectionButton
+                            label="Delete"
+                            destructive
+                            onClick={() => setPendingBulkDelete(true)}
+                        >
+                            <Trash2 size={13} aria-hidden />
+                        </SelectionButton>
+                    )}
+                </SelectionBar>
+            )}
+
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 {userData.isPending ? (
                     <EmptyState title="Loading presets…" />
@@ -97,12 +131,27 @@ export function PresetsBrowser() {
                         {shown.map(preset => (
                             <div
                                 key={preset.title}
-                                className="group overflow-hidden rounded-lg border border-default bg-surface"
+                                className={[
+                                    'group relative overflow-hidden rounded-lg border bg-surface',
+                                    selection.isSelected(preset.title)
+                                        ? 'border-[var(--emphasis)]'
+                                        : 'border-default'
+                                ].join(' ')}
                                 onContextMenu={event => contextMenu.open(event, actionsFor(preset))}
                             >
+                                <span className="absolute left-1.5 top-1.5 z-10">
+                                    <SelectionCheckbox
+                                        overlay
+                                        checked={selection.isSelected(preset.title)}
+                                        onToggle={() => selection.toggle(preset.title)}
+                                        label={`Select ${preset.title}`}
+                                    />
+                                </span>
                                 <button
                                     type="button"
-                                    onClick={() => apply(preset.param_map)}
+                                    onClick={event =>
+                                        selection.click(event, preset.title, () => apply(preset.param_map))
+                                    }
                                     title={`Apply "${preset.title}"\nRight-click for actions`}
                                     className="block w-full text-left"
                                 >
@@ -156,12 +205,19 @@ export function PresetsBrowser() {
                         {shown.map(preset => (
                             <li
                                 key={preset.title}
-                                className="flex items-center gap-3 py-2"
+                                className="group flex items-center gap-3 py-2"
                                 onContextMenu={event => contextMenu.open(event, actionsFor(preset))}
                             >
+                                <SelectionCheckbox
+                                    checked={selection.isSelected(preset.title)}
+                                    onToggle={() => selection.toggle(preset.title)}
+                                    label={`Select ${preset.title}`}
+                                />
                                 <button
                                     type="button"
-                                    onClick={() => apply(preset.param_map)}
+                                    onClick={event =>
+                                        selection.click(event, preset.title, () => apply(preset.param_map))
+                                    }
                                     title={`Apply "${preset.title}"\nRight-click for actions`}
                                     className="min-w-0 flex-1 text-left"
                                 >
@@ -198,6 +254,24 @@ export function PresetsBrowser() {
                     setPendingDelete(null);
                 }}
                 onCancel={() => setPendingDelete(null)}
+            />
+
+            <ConfirmDialog
+                open={pendingBulkDelete}
+                title={`Delete ${selection.count} presets?`}
+                body={
+                    <>
+                        All <strong className="text-fg">{selection.count}</strong> selected presets will
+                        be removed. This cannot be undone.
+                    </>
+                }
+                confirmLabel="Delete"
+                destructive
+                onConfirm={() => {
+                    setPendingBulkDelete(false);
+                    void deleteSelected();
+                }}
+                onCancel={() => setPendingBulkDelete(false)}
             />
 
             {contextMenu.menu}

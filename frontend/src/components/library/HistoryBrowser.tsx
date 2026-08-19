@@ -8,6 +8,7 @@ import { useSession } from '@/api/hooks';
 import { useReuseParameters } from '@/params/reuse';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
 import { BrowserToolbar, EmptyState, FolderPane } from './BrowserChrome';
+import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { MetadataView } from '../ui/MetadataView';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
@@ -28,6 +29,11 @@ function downloadImage(url: string, src: string): void {
     link.remove();
 }
 
+/** Browsers drop downloads fired in one burst, so a bulk save has to pace itself. */
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /** Output history browser.
  *
  * ListImages returns `src` paths relative to the *user's* output directory, so they need the
@@ -41,6 +47,7 @@ export function HistoryBrowser() {
     const [reverse, setReverse] = useState(true);
     const [selected, setSelected] = useState<ImageEntry | null>(null);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+    const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
 
     const [flash, setFlash] = useState<string | null>(null);
 
@@ -63,6 +70,9 @@ export function HistoryBrowser() {
         const query = search.trim().toLowerCase();
         return query ? files.filter(f => f.src.toLowerCase().includes(query)) : files;
     }, [files, search]);
+
+    const ids = useMemo(() => filtered.map(file => file.src), [filtered]);
+    const selection = useSelection(ids);
 
     // Failures are worth saying out loud; successes leave for the Generate screen and speak for
     // themselves there.
@@ -101,6 +111,32 @@ export function HistoryBrowser() {
             return;
         }
         navigate({ to: '/generate' });
+    }
+
+    /** Saves every selected image, oldest-listed first. */
+    async function downloadSelected(): Promise<void> {
+        for (const src of selection.ids) {
+            downloadImage(urlFor(src), src);
+            await delay(200);
+        }
+    }
+
+    /** Deletes every selected image. One request per file - the API has no batch form - so a
+     *  failure part-way leaves the earlier deletions done, which the refreshed list shows. */
+    async function deleteSelected(): Promise<void> {
+        const targets = selection.ids;
+        if (selected && targets.includes(selected.src)) {
+            setSelected(null);
+        }
+        selection.clear();
+        try {
+            for (const src of targets) {
+                await deleteImage.mutateAsync({ path: joinPath(path, src) });
+            }
+        }
+        catch (error: unknown) {
+            setFlash(error instanceof Error ? error.message : 'Could not delete every selected image.');
+        }
     }
 
     /** Everything one image can do, for its right-click menu. */
@@ -146,6 +182,28 @@ export function HistoryBrowser() {
                     total={files.length}
                 />
 
+                {selection.count > 0 && (
+                    <SelectionBar
+                        count={selection.count}
+                        total={filtered.length}
+                        onSelectAll={selection.selectAll}
+                        onClear={selection.clear}
+                    >
+                        <SelectionButton label="Download" onClick={() => void downloadSelected()}>
+                            <Download size={13} aria-hidden />
+                        </SelectionButton>
+                        {canDelete && (
+                            <SelectionButton
+                                label="Delete"
+                                destructive
+                                onClick={() => setPendingBulkDelete(true)}
+                            >
+                                <Trash2 size={13} aria-hidden />
+                            </SelectionButton>
+                        )}
+                    </SelectionBar>
+                )}
+
                 <div className="min-h-0 flex-1 overflow-y-auto p-3">
                     {images.isPending ? (
                         <EmptyState title="Loading history…" />
@@ -162,36 +220,61 @@ export function HistoryBrowser() {
                     ) : view === 'grid' ? (
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
                             {filtered.map(file => (
-                                <button
+                                <div
                                     key={file.src}
-                                    type="button"
-                                    onClick={() => setSelected(file)}
                                     onContextMenu={event => contextMenu.open(event, actionsFor(file))}
-                                    title={`${file.src}\nRight-click for actions`}
-                                    className="group relative aspect-square overflow-hidden rounded border border-default bg-surface-sunken"
+                                    className={[
+                                        'group relative aspect-square overflow-hidden rounded border bg-surface-sunken',
+                                        selection.isSelected(file.src)
+                                            ? 'border-[var(--emphasis)]'
+                                            : 'border-default'
+                                    ].join(' ')}
                                 >
-                                    <img
-                                        src={urlFor(file.src)}
-                                        alt=""
-                                        loading="lazy"
-                                        className="h-full w-full object-cover"
-                                    />
-                                    <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-left text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-                                        {file.src.split('/').pop()}
+                                    <button
+                                        type="button"
+                                        onClick={event => selection.click(event, file.src, () => setSelected(file))}
+                                        title={`${file.src}\nRight-click for actions`}
+                                        className="block h-full w-full"
+                                    >
+                                        <img
+                                            src={urlFor(file.src)}
+                                            alt=""
+                                            loading="lazy"
+                                            className="h-full w-full object-cover"
+                                        />
+                                        <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-left text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                                            {file.src.split('/').pop()}
+                                        </span>
+                                    </button>
+                                    <span className="absolute left-1.5 top-1.5">
+                                        <SelectionCheckbox
+                                            overlay
+                                            checked={selection.isSelected(file.src)}
+                                            onToggle={() => selection.toggle(file.src)}
+                                            label={`Select ${file.src}`}
+                                        />
                                     </span>
-                                </button>
+                                </div>
                             ))}
                         </div>
                     ) : (
                         <ul className="divide-y divide-[var(--light-border)]">
                             {filtered.map(file => (
-                                <li key={file.src}>
+                                <li
+                                    key={file.src}
+                                    onContextMenu={event => contextMenu.open(event, actionsFor(file))}
+                                    className="group flex items-center gap-3"
+                                >
+                                    <SelectionCheckbox
+                                        checked={selection.isSelected(file.src)}
+                                        onToggle={() => selection.toggle(file.src)}
+                                        label={`Select ${file.src}`}
+                                    />
                                     <button
                                         type="button"
-                                        onClick={() => setSelected(file)}
-                                        onContextMenu={event => contextMenu.open(event, actionsFor(file))}
+                                        onClick={event => selection.click(event, file.src, () => setSelected(file))}
                                         title={`${file.src}\nRight-click for actions`}
-                                        className="flex w-full items-center gap-3 py-1.5 text-left"
+                                        className="flex min-w-0 flex-1 items-center gap-3 py-1.5 text-left"
                                     >
                                         <span className="size-9 shrink-0 overflow-hidden rounded bg-surface-sunken">
                                             <img
@@ -246,6 +329,25 @@ export function HistoryBrowser() {
                     setPendingDelete(null);
                 }}
                 onCancel={() => setPendingDelete(null)}
+            />
+
+            <ConfirmDialog
+                open={pendingBulkDelete}
+                title={`Delete ${selection.count} images?`}
+                body={
+                    <>
+                        All <strong className="text-fg">{selection.count}</strong> selected images will
+                        be deleted. Depending on server settings they may go to a recycle folder rather
+                        than being removed permanently.
+                    </>
+                }
+                confirmLabel="Delete"
+                destructive
+                onConfirm={() => {
+                    setPendingBulkDelete(false);
+                    void deleteSelected();
+                }}
+                onCancel={() => setPendingBulkDelete(false)}
             />
 
             {flash && (
