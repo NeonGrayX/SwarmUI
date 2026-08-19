@@ -112,7 +112,7 @@ export function ParamForm() {
                                 className={[
                                     'rounded-full border px-2 py-0.5 text-xs transition-colors',
                                     active
-                                        ? 'border-transparent bg-[var(--emphasis)] text-[var(--emphasis-text)]'
+                                        ? 'border-transparent bg-[var(--emphasis)] text-[var(--sw-accent-fg)]'
                                         : 'border-default text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]'
                                 ].join(' ')}
                             >

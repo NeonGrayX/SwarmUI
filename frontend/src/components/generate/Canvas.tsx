@@ -45,8 +45,8 @@ export function Canvas() {
                     <div
                         className="absolute inset-x-4 top-4 rounded border p-3 text-sm"
                         style={{
-                            borderColor: 'color-mix(in srgb, var(--backend-errored) 40%, transparent)',
-                            background: 'color-mix(in srgb, var(--backend-errored) 12%, transparent)'
+                            borderColor: 'var(--sw-error-border)',
+                            background: 'var(--sw-error-tint)'
                         }}
                     >
                         {error}

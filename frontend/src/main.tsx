@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { router } from './router';
-import { applyThemeCss, storedThemeId } from './theme/useTheme';
+import { applyThemeCss, applyThemePolarity, storedIsDark, storedThemeId } from './theme/useTheme';
 import './styles/index.css';
 
 // Paint the previously chosen theme immediately; useThemes reconciles with the server after load.
@@ -15,6 +15,7 @@ if (remembered) {
         ? ['css/themes/modern.css']
         : [];
     applyThemeCss([...base, `css/themes/${remembered}.css`]);
+    applyThemePolarity(storedIsDark());
 }
 
 const queryClient = new QueryClient({

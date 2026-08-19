@@ -16,13 +16,14 @@
 
     --color-accent: var(--emphasis);
     --color-accent-soft: var(--emphasis-soft);
-    --color-accent-fg: var(--emphasis-text);
+    --color-accent-fg: var(--sw-accent-fg);
 
     --color-default: var(--border-color);
     --color-subtle: var(--light-border);
 
     --color-danger: var(--danger-button-background);
-    --color-warn: var(--status-bar-warn-color-middle);
+    /* start-end is the pair member tuned for text; -middle is the banner fill/border tint. */
+    --color-warn: var(--status-bar-warn-color-start-end);
     --color-ok: var(--backend-running);
 
     --radius-sm: var(--sw-radius-sm);

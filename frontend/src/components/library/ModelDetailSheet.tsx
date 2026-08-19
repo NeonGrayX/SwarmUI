@@ -199,7 +199,7 @@ export function ModelDetailSheet(props: {
                             onClick={save}
                             disabled={!dirty || saving}
                             className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
-                            style={{ background: 'var(--emphasis)', color: 'var(--emphasis-text)' }}
+                            style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                         >
                             {saving ? 'Saving…' : 'Save'}
                         </button>

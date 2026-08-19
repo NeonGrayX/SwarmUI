@@ -17,7 +17,7 @@ const TOKEN_TINTS = [
     'color-mix(in srgb, var(--emphasis) 30%, transparent)',
     'color-mix(in srgb, var(--backend-running) 25%, transparent)',
     'color-mix(in srgb, var(--status-bar-warn-color-middle) 30%, transparent)',
-    'color-mix(in srgb, var(--emphasis-soft) 45%, transparent)'
+    'color-mix(in srgb, var(--emphasis) 30%, transparent)'
 ];
 
 export function TokenizerPage() {

@@ -126,7 +126,7 @@ function ChangePasswordPanel() {
                     disabled={!canSubmit}
                     onClick={() => change.mutate()}
                     className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
-                    style={{ background: 'var(--emphasis)', color: 'var(--emphasis-text)' }}
+                    style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                 >
                     {change.isPending ? 'Changing…' : 'Change password'}
                 </button>

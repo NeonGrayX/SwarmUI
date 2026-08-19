@@ -82,7 +82,7 @@ export function LogsPage() {
         }
     }, [lines]);
 
-    const colorFor = (name: string) => types.find(t => t.name === name)?.color ?? 'var(--text-soft)';
+    const colorFor = (name: string) => types.find(t => t.name === name)?.color ?? 'var(--sw-fg-soft)';
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -103,8 +103,8 @@ export function LogsPage() {
                                 className="rounded-full border px-2 py-0.5 text-xs transition-colors"
                                 style={
                                     active
-                                        ? { borderColor: 'transparent', background: 'var(--emphasis)', color: 'var(--emphasis-text)' }
-                                        : { borderColor: 'var(--border-color)', color: 'var(--text-soft)' }
+                                        ? { borderColor: 'transparent', background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }
+                                        : { borderColor: 'var(--border-color)', color: 'var(--sw-fg-soft)' }
                                 }
                             >
                                 {type.name}

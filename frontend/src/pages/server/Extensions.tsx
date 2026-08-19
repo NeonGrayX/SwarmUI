@@ -123,7 +123,7 @@ export function ExtensionsPage() {
                             style={
                                 tab === id
                                     ? { background: 'var(--sw-active)', color: 'var(--text-strong)' }
-                                    : { color: 'var(--text-soft)' }
+                                    : { color: 'var(--sw-fg-soft)' }
                             }
                         >
                             {id} ({id === 'installed' ? installed.length : available.length})
@@ -260,8 +260,8 @@ function Tag(props: { label: string; danger?: boolean }) {
             className="rounded-full px-1.5 py-0.5 text-[10px] leading-none"
             style={
                 props.danger
-                    ? { background: 'color-mix(in srgb, var(--backend-errored) 25%, transparent)', color: 'var(--text)' }
-                    : { background: 'var(--background-soft)', color: 'var(--text-soft)' }
+                    ? { background: 'var(--sw-danger-surface)', color: 'var(--text)' }
+                    : { background: 'var(--background-soft)', color: 'var(--sw-fg-soft)' }
             }
         >
             {props.label}
@@ -277,7 +277,7 @@ function ActionButton(props: { label: string; onClick: () => void; primary?: boo
             className="rounded border px-2.5 py-1 text-xs"
             style={
                 props.primary
-                    ? { background: 'var(--emphasis)', color: 'var(--emphasis-text)', borderColor: 'transparent' }
+                    ? { background: 'var(--emphasis)', color: 'var(--sw-accent-fg)', borderColor: 'transparent' }
                     : props.destructive
                       ? { color: 'var(--backend-errored)', borderColor: 'var(--border-color)' }
                       : { color: 'var(--text)', borderColor: 'var(--border-color)' }

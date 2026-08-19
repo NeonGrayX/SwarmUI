@@ -18,12 +18,28 @@ export interface ThemeInfo {
 }
 
 const STORAGE_KEY = 'swarm-ui-theme';
+const DARK_KEY = 'swarm-ui-theme-dark';
 const VARY_KEY = 'swarm-ui-theme-vary';
 const LINK_ATTR = 'data-swarm-theme';
 
 /** Locally remembered theme id, so the correct theme paints before the API responds. */
 export function storedThemeId(): string | null {
     return localStorage.getItem(STORAGE_KEY);
+}
+
+/** Last-known polarity of the remembered theme, so the pre-paint bootstrap picks the right one. */
+export function storedIsDark(): boolean {
+    return localStorage.getItem(DARK_KEY) !== 'false';
+}
+
+/** Records the theme's polarity on <html>.
+ *
+ * tokens.css keys its light-theme status palette off this: the semantic colours (--backend-errored,
+ * --star, --status-bar-warn-*) are the one group no theme file declares, so they would otherwise
+ * keep their dark-tuned values on Eyesear White, Solarized, Modern Light and Catppuccin Latte. */
+export function applyThemePolarity(isDark: boolean): void {
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+    localStorage.setItem(DARK_KEY, String(isDark));
 }
 
 /** Last-known server build id, used to bust the theme stylesheet cache. */
@@ -79,6 +95,7 @@ export function useThemes() {
             const theme = themes[id];
             if (theme) {
                 applyThemeCss(theme.css_paths, vary);
+                applyThemePolarity(theme.is_dark);
                 localStorage.setItem(STORAGE_KEY, id);
             }
             // Persist to the user profile so the legacy UI picks up the same choice.
@@ -93,6 +110,7 @@ export function useThemes() {
         const theme = themes[current];
         if (theme) {
             applyThemeCss(theme.css_paths, vary);
+            applyThemePolarity(theme.is_dark);
             localStorage.setItem(STORAGE_KEY, current);
         }
     }, [current, themes, vary]);

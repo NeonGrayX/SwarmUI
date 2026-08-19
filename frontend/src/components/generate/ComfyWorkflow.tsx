@@ -46,7 +46,7 @@ export function ComfyWorkflow() {
                 <a
                     href="/ui/server/backends"
                     className="mt-3 inline-block rounded px-3 py-1.5 text-sm"
-                    style={{ background: 'var(--emphasis)', color: 'var(--emphasis-text)' }}
+                    style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                 >
                     Go to Backends
                 </a>

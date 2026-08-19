@@ -56,7 +56,7 @@ export function ParamGroup(props: Props) {
                         <span
                             title={`${alteredCount} changed from default`}
                             className="shrink-0 rounded-full px-1.5 text-[10px] leading-4 text-fg-strong"
-                            style={{ background: 'var(--emphasis-soft)' }}
+                            style={{ background: 'var(--sw-chip-bg)' }}
                         >
                             {alteredCount}
                         </span>

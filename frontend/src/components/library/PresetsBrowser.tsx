@@ -185,7 +185,7 @@ function IconButton(props: {
             aria-label={props.label}
             title={props.label}
             className="rounded p-1 hover:bg-[var(--sw-hover)]"
-            style={{ color: props.destructive ? 'var(--backend-errored)' : 'var(--text-soft)' }}
+            style={{ color: props.destructive ? 'var(--backend-errored)' : 'var(--sw-fg-soft)' }}
         >
             {props.children}
         </button>

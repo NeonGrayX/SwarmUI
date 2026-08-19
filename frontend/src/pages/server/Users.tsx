@@ -53,7 +53,7 @@ export function UsersPage() {
                             style={
                                 tab === id
                                     ? { background: 'var(--sw-active)', color: 'var(--text-strong)' }
-                                    : { color: 'var(--text-soft)' }
+                                    : { color: 'var(--sw-fg-soft)' }
                             }
                         >
                             {id}

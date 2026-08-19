@@ -84,7 +84,7 @@ function WorkspaceHeader(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceM
                         style={
                             props.mode === id
                                 ? { background: 'var(--sw-active)', color: 'var(--text-strong)' }
-                                : { color: 'var(--text-soft)' }
+                                : { color: 'var(--sw-fg-soft)' }
                         }
                     >
                         {label}

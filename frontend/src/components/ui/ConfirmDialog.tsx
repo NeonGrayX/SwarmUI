@@ -44,7 +44,7 @@ export function ConfirmDialog(props: {
                                           background: 'var(--danger-button-background)',
                                           color: 'var(--danger-button-foreground)'
                                       }
-                                    : { background: 'var(--emphasis)', color: 'var(--emphasis-text)' }
+                                    : { background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }
                             }
                         >
                             {props.confirmLabel}

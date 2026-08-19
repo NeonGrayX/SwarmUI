@@ -117,7 +117,7 @@ const STATUS_COLOR: Record<Job['status'], string> = {
     running: 'var(--emphasis)',
     done: 'var(--backend-running)',
     failed: 'var(--backend-errored)',
-    cancelled: 'var(--text-soft)'
+    cancelled: 'var(--sw-fg-soft)'
 };
 
 function JobRow(props: { job: Job }) {

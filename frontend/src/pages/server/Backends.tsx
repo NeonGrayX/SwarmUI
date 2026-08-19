@@ -122,7 +122,7 @@ export function BackendsPage() {
                             <button
                                 type="button"
                                 className="flex items-center gap-1.5 rounded px-2.5 py-1 text-xs"
-                                style={{ background: 'var(--emphasis)', color: 'var(--emphasis-text)' }}
+                                style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                             >
                                 <Plus size={13} aria-hidden />
                                 Add backend
@@ -150,8 +150,8 @@ export function BackendsPage() {
                                                         <span
                                                             className="ml-1.5 rounded-full px-1.5 text-[10px]"
                                                             style={{
-                                                                background: 'var(--background-gray-danger)',
-                                                                color: 'var(--text-soft)'
+                                                                background: 'var(--sw-danger-surface)',
+                                                                color: 'var(--text)'
                                                             }}
                                                         >
                                                             advanced
@@ -182,7 +182,7 @@ export function BackendsPage() {
             {actionError && (
                 <div
                     className="flex shrink-0 items-start gap-2 border-b border-subtle px-4 py-2 text-sm"
-                    style={{ background: 'var(--background-danger)', color: 'var(--text)' }}
+                    style={{ background: 'var(--sw-danger-surface)', color: 'var(--text)' }}
                     role="alert"
                 >
                     <span className="min-w-0 flex-1">{actionError}</span>

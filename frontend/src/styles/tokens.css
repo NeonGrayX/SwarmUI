@@ -1,31 +1,36 @@
 /* Design tokens for the new SwarmUI frontend.
  *
- * These deliberately reuse the *exact* custom-property names the legacy UI uses, so that the 15
- * existing theme files in src/wwwroot/css/themes/ can be loaded on top of this file unchanged.
+ * These deliberately reuse the *exact* custom-property names the legacy UI uses, so that the 14
+ * themes registered in WebServer.cs can be loaded on top of this file unchanged.
  * Legacy base values live in src/wwwroot/css/site.css :root; theme files override a subset.
  *
  * Anything genuinely new to this UI is namespaced --sw-* so it never collides with legacy names.
+ *
+ * Two rules keep this working across all 14 themes:
+ *
+ *  1. Any property a theme file *might* set must be declared here as a derivation of properties
+ *     every theme does set - never as a literal. A literal here is a silent modern_dark default
+ *     for every theme that omits the property, which is how Eyesear White ended up drawing its
+ *     #101010 text on modern_dark's #202020 panel.
+ *  2. Properties no theme file ever sets (the semantic status palette, which the legacy UI takes
+ *     from site.css) are ours to own, and get a light-theme variant below keyed off [data-theme].
  */
 
 :root {
-    /* --- Core palette (defaults match themes/modern_dark.css) --- */
+    /* --- Core palette. Every theme file sets all of these. --- */
     --background: #161616;
     --background-soft: #27272a;
     --background-gray: #222226;
     --background-gray-danger: #361f1f;
-    --background-panel: #202020;
-    --background-panel-subtle: rgba(255, 255, 255, 0.03);
-    --background-danger: #361f1f;
+    --background-danger: #200b0b;
 
     --text: #e4e4e4;
     --text-soft: #aaaaaa;
     --text-strong: #ffffff;
 
     --emphasis: #7855e1;
-    --emphasis-soft: #665694;
     --emphasis-text: var(--button-text);
 
-    --border-color: #4c4c4c;
     --light-border: #3f3f46;
     --shadow: #3f3f46;
 
@@ -46,8 +51,33 @@
     --popup-front: #ffffff;
     --popup-back: #202020;
 
-    /* --- Semantic status colors (defaults from site.css :root) --- */
-    --red: #ff0000;
+    /* --- Properties only the modern.css-based themes declare. ---
+     *
+     * The five legacy themes (dark_dreams, gravity_blue, cyber_swarm, punked, eyesear_white)
+     * predate them, so these must derive from properties those themes do set. Themes that declare
+     * them win anyway: their stylesheet is appended after the bundle, so it overrides on equal
+     * specificity. */
+
+    /* The legacy UI's panel colour, which every theme sets and which is already correct relative
+     * to that theme's --background in both polarities. */
+    --background-panel: var(--background-gray);
+    /* Tints toward the text colour, so it lightens dark themes and darkens light ones. */
+    --background-panel-subtle: color-mix(in srgb, var(--text) 4%, transparent);
+    /* --light-border alone lands at 1.4-1.6:1 against the panel in the legacy themes, below the
+     * 3:1 WCAG 1.4.11 asks of a control boundary, so pull it toward the text colour. */
+    --border-color: color-mix(in srgb, var(--light-border) 70%, var(--text));
+    --emphasis-soft: color-mix(in srgb, var(--emphasis) 50%, var(--background));
+    --scrollbar: color-mix(in srgb, var(--text) 50%, transparent);
+    --toast-header: color-mix(in srgb, var(--background-gray) 88%, var(--text));
+    --toast-body: var(--background-gray);
+
+    /* --- Semantic status palette. ---
+     *
+     * No theme file overrides any of these; site.css hardcodes them for the legacy UI. The new UI
+     * uses them as *text* colours far more than the legacy UI does, so the light-theme block below
+     * restates them - values tuned for a dark background are unreadable on a light one (Solarized
+     * drew #dddd55 warning text at 1.2:1). */
+    --red: #ff5a5a;
     --green: #00ff00;
     --yellow: #ffff00;
     --white: #ffffff;
@@ -56,12 +86,14 @@
     --gray: #808080;
     --darkgray: #505050;
 
-    --backend-errored: #ff0000;
+    /* #ff0000 measured 4.07:1 on modern_dark's panel and 3.8:1 inside the 12%-tinted error
+     * banner, so error text got a lighter red - the usual dark-mode treatment. */
+    --backend-errored: #ff8585;
     --backend-disabled: #ffaa00;
-    --backend-running: #00aa33;
+    --backend-running: #2fc457;
     --backend-idle: #688772;
-    --backend-loading: #335500;
-    --backend-waiting: #335500;
+    --backend-loading: #6f9e2e;
+    --backend-waiting: #6f9e2e;
 
     --status-bar-text-color: #000000;
     --status-bar-warn-color-start-end: #dddd55;
@@ -70,28 +102,51 @@
     --status-bar-error-color-middle: #880000;
     --status-bar-soft-color: #888800;
 
-    --toast-header: #303030;
-    --toast-body: #444444;
-
-    --scrollbar: #4b4b4b;
     --font-monospace: 'Courier New', Courier, monospace;
 
     /* --- New-UI-only tokens (namespaced to avoid collision with legacy) --- */
 
-    /* Derived surfaces. color-mix keeps these correct under any theme override. */
+    /* Derived surfaces. color-mix keeps these correct under any theme override.
+     * "Sunken" derives from the surface rather than from --background, because some themes make
+     * the page darker than their panels and others lighter (Eyesear White's #f0f0f0 page sits
+     * above its #d0d0d0 panels), so only the surface is a reliable starting point. */
     --sw-surface: var(--background-panel);
-    --sw-surface-raised: color-mix(in srgb, var(--background-panel) 88%, white);
-    --sw-surface-sunken: color-mix(in srgb, var(--background) 92%, black);
+    --sw-surface-raised: color-mix(in srgb, var(--sw-surface) 88%, white);
+    --sw-surface-sunken: color-mix(in srgb, var(--sw-surface) 88%, black);
     --sw-hover: color-mix(in srgb, var(--text) 8%, transparent);
     --sw-active: color-mix(in srgb, var(--emphasis) 18%, transparent);
-    --sw-focus-ring: color-mix(in srgb, var(--emphasis) 65%, transparent);
-    --sw-modified: var(--emphasis);
+    /* Both of these pull the accent toward --text so they stay visible against light themes whose
+     * --emphasis is a pale tan (modern_light's ring measured 1.5:1 against its own panel). */
+    --sw-focus-ring: color-mix(in srgb, var(--emphasis) 70%, var(--text));
+    --sw-modified: color-mix(in srgb, var(--emphasis) 70%, var(--text));
+
+    /* Destructive surface. Themes set --background-danger to a near-black red even when they are
+     * light themes, which puts dark text on a dark fill; tinting the current surface instead
+     * follows whatever polarity the theme actually has. */
+    --sw-danger-surface: color-mix(in srgb, var(--backend-errored) 14%, var(--sw-surface));
+    /* Translucent variant, for the error banners that sit on the page background rather than on a
+     * panel. Kept at 8%: a stronger wash pulls the backdrop toward the error text sitting on it,
+     * and 12% dropped Catppuccin Frappe's error message to 4.3:1. */
+    --sw-error-tint: color-mix(in srgb, var(--backend-errored) 8%, transparent);
+    --sw-error-border: color-mix(in srgb, var(--backend-errored) 40%, transparent);
+    --sw-danger-border: color-mix(in srgb, var(--backend-errored) 70%, var(--sw-surface));
+
+    /* Accent chip fill. Themes own --emphasis-soft and several set it light enough that
+     * --text-strong on top lands at 2.0:1 (Catppuccin Mocha); tinting the surface by a fixed
+     * amount instead keeps --text readable whatever the accent is. */
+    --sw-chip-bg: color-mix(in srgb, var(--emphasis) 30%, var(--sw-surface));
+
+    /* Foreground for solid --emphasis fills (the primary buttons). Themes set --emphasis-text
+     * themselves but several pick the wrong end - Cyber Swarm puts white on #00bc8c at 2.5:1 and
+     * Swarm Punk white on magenta at 2.4:1 - so choose by the accent's own lightness instead. The
+     * @supports guard falls back to the theme's value where relative colour syntax is missing. */
+    --sw-accent-fg: var(--emphasis-text);
 
     /* Secondary text. Derived from --text rather than using the themes' own --text-soft, because
      * several themes set that too close to their background: modern_light lands at 3.4:1 and
      * ctp_latte at 3.9:1, both under WCAG AA. Mixing 12% toward the background keeps a visible
-     * hierarchy while clearing 4.5:1 in all 14 shipped themes (worst case ctp_latte at 4.65:1,
-     * which is the floor because its own --text is only 6.0:1 to begin with). */
+     * hierarchy while clearing 4.5:1 in all 14 shipped themes (worst case ctp_latte at 5.0:1,
+     * which is the floor because its own --text is only 6.6:1 to begin with). */
     --sw-fg-soft: color-mix(in srgb, var(--text) 88%, var(--background) 12%);
 
     /* Spacing scale — the legacy UI has no consistent rhythm; this establishes one. */
@@ -114,4 +169,35 @@
     /* Chrome dimensions. */
     --sw-rail-width: 4.5rem;
     --sw-header-height: 3rem;
+}
+
+/* Light-theme variant of the status palette.
+ *
+ * useTheme sets data-theme from the server's ThemeData.is_dark, so extension-registered themes get
+ * the right variant too. Only properties no theme file declares may live here - the attribute
+ * selector outranks a theme's own :root, so anything else would override the theme itself. */
+:root[data-theme='light'] {
+    --red: #850000;
+    --green: #004b00;
+    --yellow: #414100;
+    --star: #6b5700;
+    --gray: #595959;
+    --darkgray: #3a3a3a;
+
+    --backend-errored: #6b0000;
+    --backend-disabled: #563900;
+    --backend-running: #004a16;
+    --backend-idle: #495e50;
+    --backend-loading: #3d630f;
+    --backend-waiting: #3d630f;
+
+    --status-bar-warn-color-start-end: #454000;
+    --status-bar-warn-color-middle: #454000;
+    --status-bar-soft-color: #454000;
+}
+
+@supports (color: oklch(from red l c h)) {
+    :root {
+        --sw-accent-fg: oklch(from var(--emphasis) clamp(0, (l - 0.62) * -1000, 1) 0 h);
+    }
 }

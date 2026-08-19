@@ -29,10 +29,10 @@ export function StatusAlert() {
             className="flex items-start gap-2 px-4 py-2 border-b text-sm"
             style={{
                 background: isError
-                    ? 'color-mix(in srgb, var(--backend-errored) 12%, transparent)'
+                    ? 'var(--sw-error-tint)'
                     : 'color-mix(in srgb, var(--status-bar-warn-color-middle) 18%, transparent)',
                 borderColor: isError
-                    ? 'color-mix(in srgb, var(--backend-errored) 35%, transparent)'
+                    ? 'var(--sw-error-border)'
                     : 'color-mix(in srgb, var(--status-bar-warn-color-middle) 40%, transparent)'
             }}
         >

@@ -61,7 +61,7 @@ function Splash(props: { children: ReactNode; tone?: 'error' }) {
         <div className="flex h-full items-center justify-center p-8">
             <div
                 className="text-center"
-                style={{ color: props.tone === 'error' ? 'var(--backend-errored)' : 'var(--text-soft)' }}
+                style={{ color: props.tone === 'error' ? 'var(--backend-errored)' : 'var(--sw-fg-soft)' }}
             >
                 {props.children}
             </div>

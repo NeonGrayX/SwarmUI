@@ -57,7 +57,7 @@ export function LoraExtractorPage() {
                         })
                     }
                     className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
-                    style={{ background: 'var(--emphasis)', color: 'var(--emphasis-text)' }}
+                    style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                 >
                     Extract LoRA
                 </button>

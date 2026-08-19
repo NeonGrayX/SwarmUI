@@ -62,7 +62,7 @@ export function PromptDialog(props: {
                             disabled={!value.trim() || unchanged}
                             onClick={() => props.onConfirm(value.trim())}
                             className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
-                            style={{ background: 'var(--emphasis)', color: 'var(--emphasis-text)' }}
+                            style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                         >
                             {props.confirmLabel}
                         </button>

@@ -103,7 +103,7 @@ export function PromptComposer() {
                     {showNegative ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
                     Negative prompt
                     {!showNegative && negative.trim() && (
-                        <span className="rounded-full px-1.5 text-[10px]" style={{ background: 'var(--emphasis-soft)' }}>
+                        <span className="rounded-full px-1.5 text-[10px]" style={{ background: 'var(--sw-chip-bg)' }}>
                             set
                         </span>
                     )}
@@ -159,8 +159,8 @@ function InputErrorNotice(props: { issue: GenIssue }) {
             role="alert"
             className="flex items-center gap-2 rounded border px-2.5 py-1.5 text-sm text-fg"
             style={{
-                borderColor: 'color-mix(in srgb, var(--backend-errored) 40%, transparent)',
-                background: 'color-mix(in srgb, var(--backend-errored) 12%, transparent)'
+                borderColor: 'var(--sw-error-border)',
+                background: 'var(--sw-error-tint)'
             }}
         >
             <AlertTriangle size={14} className="shrink-0" aria-hidden />
@@ -191,7 +191,7 @@ function GenerateSplitButton(props: { running: boolean; forever: boolean; onGene
                 onClick={props.onGenerate}
                 disabled={props.running}
                 className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium disabled:opacity-60"
-                style={{ background: 'var(--emphasis)', color: 'var(--emphasis-text)' }}
+                style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
             >
                 {props.running && <Loader2 size={14} className="animate-spin" aria-hidden />}
                 {props.running ? 'Generating' : 'Generate'}
@@ -204,7 +204,7 @@ function GenerateSplitButton(props: { running: boolean; forever: boolean; onGene
                         className="px-1.5 border-l"
                         style={{
                             background: 'var(--emphasis)',
-                            color: 'var(--emphasis-text)',
+                            color: 'var(--sw-accent-fg)',
                             borderColor: 'color-mix(in srgb, black 20%, transparent)'
                         }}
                     >

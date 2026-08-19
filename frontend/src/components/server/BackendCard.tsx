@@ -295,7 +295,7 @@ export function BackendCard(props: {
                                 onClick={save}
                                 disabled={props.saving}
                                 className="rounded px-3 py-1 text-sm disabled:opacity-50"
-                                style={{ background: 'var(--emphasis)', color: 'var(--emphasis-text)' }}
+                                style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                             >
                                 {props.saving ? 'Saving…' : 'Save changes'}
                             </button>
