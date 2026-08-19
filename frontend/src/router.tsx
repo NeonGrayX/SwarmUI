@@ -93,8 +93,16 @@ const PHASE_INFO: Record<string, { phase: string; summary: string }> = {
  *  Keyed by destination id so routeFor stays generic. */
 const SEARCH_VALIDATORS: Record<string, (search: Record<string, unknown>) => Record<string, unknown>> = {
     // A backend card links here with the log tracker name to preselect, eg ?types=ComfyUI-0.
-    logs: search => (typeof search.types === 'string' ? { types: search.types } : {})
+    logs: search => (typeof search.types === 'string' ? { types: search.types } : {}),
+    // The command palette links to a single setting or parameter by id, eg ?focus=Paths.ModelRoot.
+    workspace: focusSearch,
+    configuration: focusSearch,
+    preferences: focusSearch
 };
+
+function focusSearch(search: Record<string, unknown>): { focus?: string } {
+    return typeof search.focus === 'string' ? { focus: search.focus } : {};
+}
 
 const rootRoute = createRootRoute({ component: AppShell });
 

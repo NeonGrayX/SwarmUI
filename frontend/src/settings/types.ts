@@ -30,6 +30,8 @@ export interface FlatSetting {
     node: SettingNode;
     /** Dotted path of the owning group, or '' at the root. */
     groupKey: string;
+    /** Display names of the owning groups, eg 'Paths › Model Roots'. Empty at the root. */
+    groupPath: string;
 }
 
 export interface SettingsGroup {
@@ -48,13 +50,21 @@ export function organizeSettings(tree: SettingsTree): {
 } {
     const all: FlatSetting[] = [];
 
-    function walk(node: SettingsTree, prefix: string): { settings: FlatSetting[]; groups: SettingsGroup[] } {
+    function walk(
+        node: SettingsTree,
+        prefix: string,
+        path: string
+    ): { settings: FlatSetting[]; groups: SettingsGroup[] } {
         const settings: FlatSetting[] = [];
         const groups: SettingsGroup[] = [];
         for (const [key, entry] of Object.entries(node)) {
             const fullKey = prefix ? `${prefix}.${key}` : key;
             if (entry.type === 'group') {
-                const inner = walk((entry.value ?? {}) as SettingsTree, fullKey);
+                const inner = walk(
+                    (entry.value ?? {}) as SettingsTree,
+                    fullKey,
+                    path ? `${path} › ${entry.name}` : entry.name
+                );
                 groups.push({
                     key: fullKey,
                     name: entry.name,
@@ -64,7 +74,7 @@ export function organizeSettings(tree: SettingsTree): {
                 });
             }
             else {
-                const flat: FlatSetting = { key: fullKey, node: entry, groupKey: prefix };
+                const flat: FlatSetting = { key: fullKey, node: entry, groupKey: prefix, groupPath: path };
                 settings.push(flat);
                 all.push(flat);
             }
@@ -72,7 +82,7 @@ export function organizeSettings(tree: SettingsTree): {
         return { settings, groups };
     }
 
-    const result = walk(tree, '');
+    const result = walk(tree, '', '');
     return { rootSettings: result.settings, groups: result.groups, all };
 }
 

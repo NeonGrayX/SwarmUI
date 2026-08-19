@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, EyeOff, Search, X } from 'lucide-react';
 import { Field } from '../form/Field';
 import {
@@ -25,6 +25,8 @@ export function SettingsForm(props: {
     onSave: (changes: Record<string, unknown>) => Promise<void>;
     saving?: boolean;
     readOnly?: boolean;
+    /** Dotted key of a setting to jump to, as sent by the command palette's ?focus= link. */
+    focusKey?: string;
 }) {
     const { rootSettings, groups, all } = useMemo(() => organizeSettings(props.tree), [props.tree]);
     const [edits, setEdits] = useState<Record<string, unknown>>({});
@@ -32,6 +34,35 @@ export function SettingsForm(props: {
     const [activeGroup, setActiveGroup] = useState<string>('');
     const [revealed, setRevealed] = useState<Record<string, boolean>>({});
     const [error, setError] = useState<string | null>(null);
+    const [highlighted, setHighlighted] = useState<string | null>(null);
+
+    // Arriving from the command palette: open the owning group and mark the row. Applied once per
+    // key, so saving a change (which reloads the tree) does not yank the view back here.
+    const appliedFocus = useRef<string | null>(null);
+    useEffect(() => {
+        if (props.focusKey === appliedFocus.current) {
+            return;
+        }
+        const target = props.focusKey ? all.find(s => s.key === props.focusKey) : undefined;
+        if (!target) {
+            return;
+        }
+        appliedFocus.current = target.key;
+        setSearch('');
+        setActiveGroup(target.groupKey);
+        setHighlighted(target.key);
+    }, [props.focusKey, all]);
+
+    // Runs after the group above has rendered, so the row exists to scroll to.
+    useEffect(() => {
+        if (!highlighted) {
+            return;
+        }
+        document.getElementById(`setting-row-${highlighted}`)?.scrollIntoView({ block: 'center' });
+        document.getElementById(`setting-${highlighted}`)?.focus();
+        const timer = setTimeout(() => setHighlighted(null), 3000);
+        return () => clearTimeout(timer);
+    }, [highlighted]);
 
     const query = search.trim().toLowerCase();
     const dirtyKeys = Object.keys(edits);
@@ -89,26 +120,34 @@ export function SettingsForm(props: {
         const changed = dirty || isChangedFromDefault(node, value);
 
         return (
-            <Field
+            <div
                 key={key}
-                id={`setting-${key}`}
-                label={node.name}
-                description={
-                    node.description
-                        ? `${node.description}\n\nKey: ${key}`
-                        : `Key: ${key}`
-                }
-                density="compact"
-                modified={changed}
-                disabled={props.readOnly}
-                onReset={
-                    node.default_value !== undefined && !node.is_secret
-                        ? () => setEdits(e => ({ ...e, [key]: node.default_value }))
-                        : undefined
-                }
+                id={`setting-row-${key}`}
+                className={[
+                    '-mx-1 rounded px-1 transition-colors',
+                    highlighted === key ? 'bg-[var(--sw-active)] ring-1 ring-[var(--emphasis)]' : ''
+                ].join(' ')}
             >
-                {renderControl(setting, value)}
-            </Field>
+                <Field
+                    id={`setting-${key}`}
+                    label={node.name}
+                    description={
+                        node.description
+                            ? `${node.description}\n\nKey: ${key}`
+                            : `Key: ${key}`
+                    }
+                    density="compact"
+                    modified={changed}
+                    disabled={props.readOnly}
+                    onReset={
+                        node.default_value !== undefined && !node.is_secret
+                            ? () => setEdits(e => ({ ...e, [key]: node.default_value }))
+                            : undefined
+                    }
+                >
+                    {renderControl(setting, value)}
+                </Field>
+            </div>
         );
     }
 

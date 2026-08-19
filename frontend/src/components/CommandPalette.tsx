@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Command } from 'cmdk';
-import { Search } from 'lucide-react';
-import { usePermitted } from '@/api/permissions';
-import { useSession, useT2IParams } from '@/api/hooks';
+import { Search, SlidersHorizontal } from 'lucide-react';
+import { usePermission, usePermitted } from '@/api/permissions';
+import { useServerSettings, useSession, useT2IParams, useUserSettings } from '@/api/hooks';
 import { DESTINATIONS, findSection } from '@/nav/destinations';
+import { organizeSettings, type SettingsTree } from '@/settings/types';
 
 /** Item values are "<label><TAB><extra search terms>". Splitting on tab rather than a space keeps
  *  multi-word labels intact for scoring. */
 const VALUE_SEP = '\t';
 
 function itemValue(label: string, ...extras: (string | null | undefined)[]): string {
-    return `${label}${VALUE_SEP}${extras.filter(Boolean).join(' ')}`;
+    // Setting descriptions are multi-line and may themselves contain tabs, which would otherwise
+    // split the value in the wrong place.
+    const terms = extras.filter(Boolean).join(' ').replace(/\s+/g, ' ');
+    return `${label}${VALUE_SEP}${terms}`;
 }
 
 /** Substring-based ranking, replacing cmdk's default subsequence scoring.
@@ -46,11 +50,65 @@ function scoreItem(value: string, search: string): number {
     return 0;
 }
 
+interface SettingEntry {
+    /** Dotted key, eg 'Paths.ModelRoot'. */
+    key: string;
+    name: string;
+    description: string;
+    /** Group display path within its tree, eg 'Paths'. Empty for root-level settings. */
+    groupPath: string;
+    /** Which screen owns it, for the trailing label. */
+    scope: 'Preferences' | 'Server';
+    /** Route of that screen. */
+    path: string;
+}
+
+function collect(
+    into: SettingEntry[],
+    tree: SettingsTree,
+    scope: SettingEntry['scope'],
+    path: string
+): void {
+    for (const setting of organizeSettings(tree).all) {
+        into.push({
+            key: setting.key,
+            name: setting.node.name,
+            description: setting.node.description,
+            groupPath: setting.groupPath,
+            scope,
+            path
+        });
+    }
+}
+
+/** Same tiering as scoreItem, but over the fields a setting actually has. Ranked here rather than
+ *  left to cmdk so the 8-entry cap keeps the best hits instead of the first eight in tree order. */
+function rankSetting(entry: SettingEntry, query: string): number {
+    const name = entry.name.toLowerCase();
+    if (name === query) {
+        return 5;
+    }
+    if (name.startsWith(query)) {
+        return 4;
+    }
+    if (name.includes(query)) {
+        return 3;
+    }
+    if (entry.key.toLowerCase().includes(query)) {
+        return 2;
+    }
+    if (entry.description.toLowerCase().includes(query)) {
+        return 1;
+    }
+    return 0;
+}
+
 /** Ctrl-K / Cmd-K palette.
  *
- * This is what actually solves navigation depth: with every destination and every generation
- * parameter reachable by name, nobody needs to remember that (for example) "Pickle To Safetensors"
- * lives under Utilities. The legacy UI offered no search of any kind across its ~25 screens. */
+ * This is what actually solves navigation depth: with every destination, every generation
+ * parameter and every user/server setting reachable by name, nobody needs to remember that (for
+ * example) "Pickle To Safetensors" lives under Utilities, or which of the two settings screens owns
+ * "Model Root". The legacy UI offered no search of any kind across its ~25 screens. */
 export function CommandPalette() {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -58,6 +116,12 @@ export function CommandPalette() {
     const destinations = usePermitted(DESTINATIONS);
     const session = useSession();
     const params = useT2IParams(session.isSuccess);
+    const canReadUserSettings = usePermission('read_user_settings');
+    const canReadServerSettings = usePermission('read_server_settings');
+    // Both settings trees are fetched lazily on first open — the palette is mounted for the whole
+    // session, and neither tree is worth two extra requests on every page load.
+    const userSettings = useUserSettings(session.isSuccess && open && canReadUserSettings);
+    const serverSettings = useServerSettings(session.isSuccess && open && canReadServerSettings);
 
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
@@ -86,10 +150,36 @@ export function CommandPalette() {
             .slice(0, 8);
     }, [search, params.data]);
 
-    function go(path: string) {
+    // Every setting from both screens, flattened once per tree, so a legacy setting name typed from
+    // memory ("Model Root", "OutPath Builder") lands on the exact row that owns it.
+    const settingsIndex = useMemo<SettingEntry[]>(() => {
+        const entries: SettingEntry[] = [];
+        if (userSettings.data) {
+            collect(entries, userSettings.data.settings, 'Preferences', '/settings/preferences');
+        }
+        if (serverSettings.data) {
+            collect(entries, serverSettings.data.settings, 'Server', '/server/configuration');
+        }
+        return entries;
+    }, [userSettings.data, serverSettings.data]);
+
+    const settingMatches = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        if (query.length < 2) {
+            return [];
+        }
+        return settingsIndex
+            .map(entry => ({ entry, rank: rankSetting(entry, query) }))
+            .filter(hit => hit.rank > 0)
+            .sort((a, b) => b.rank - a.rank)
+            .slice(0, 8)
+            .map(hit => hit.entry);
+    }, [search, settingsIndex]);
+
+    function go(path: string, searchParams?: Record<string, string>) {
         setOpen(false);
         setSearch('');
-        navigate({ to: path });
+        navigate({ to: path, search: searchParams });
     }
 
     return (
@@ -106,7 +196,7 @@ export function CommandPalette() {
                     <Command.Input
                         value={search}
                         onValueChange={setSearch}
-                        placeholder="Search screens and parameters..."
+                        placeholder="Search screens, parameters and settings..."
                         className="flex-1 bg-transparent py-3 text-sm text-fg outline-none placeholder:text-fg-soft"
                     />
                 </div>
@@ -146,12 +236,34 @@ export function CommandPalette() {
                                 <Command.Item
                                     key={param.id}
                                     value={itemValue(param.name, param.id, param.group)}
-                                    onSelect={() => go(`/generate?focus=${encodeURIComponent(param.id)}`)}
+                                    onSelect={() => go('/generate', { focus: param.id })}
                                     className="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-fg cursor-pointer data-[selected=true]:bg-[var(--sw-active)]"
                                 >
                                     <span className="truncate">{param.name}</span>
                                     <span className="ml-auto shrink-0 font-mono text-xs text-fg-soft">
                                         {param.group ?? 'ungrouped'}
+                                    </span>
+                                </Command.Item>
+                            ))}
+                        </Command.Group>
+                    )}
+
+                    {settingMatches.length > 0 && (
+                        <Command.Group
+                            heading="Settings"
+                            className="mt-1 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-fg-soft"
+                        >
+                            {settingMatches.map(entry => (
+                                <Command.Item
+                                    key={`${entry.path}:${entry.key}`}
+                                    value={itemValue(entry.name, entry.scope, entry.key, entry.groupPath, entry.description)}
+                                    onSelect={() => go(entry.path, { focus: entry.key })}
+                                    className="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-fg cursor-pointer data-[selected=true]:bg-[var(--sw-active)]"
+                                >
+                                    <SlidersHorizontal size={15} className="text-fg-soft shrink-0" aria-hidden />
+                                    <span className="truncate">{entry.name}</span>
+                                    <span className="ml-auto shrink-0 truncate text-xs text-fg-soft">
+                                        {entry.groupPath ? `${entry.scope} › ${entry.groupPath}` : entry.scope}
                                     </span>
                                 </Command.Item>
                             ))}
