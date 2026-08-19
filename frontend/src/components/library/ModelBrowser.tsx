@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, ImageOff, Star, Trash2 } from 'lucide-react';
+import { CheckCircle2, ImageOff, Trash2 } from 'lucide-react';
 import {
     useDeleteModel,
     useModels,
@@ -18,7 +18,7 @@ import {
     type WildcardCard
 } from '@/library/types';
 import { usePermission } from '@/api/permissions';
-import { BrowserToolbar, EmptyState, FolderPane } from './BrowserChrome';
+import { BrowserToolbar, EmptyState, FolderPane, StarButton } from './BrowserChrome';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ModelDetailSheet } from './ModelDetailSheet';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -332,14 +332,8 @@ function Card(props: {
                 )}
             </div>
 
-            <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                <IconChip
-                    label={props.starred ? 'Unstar' : 'Star'}
-                    onClick={props.onStar}
-                    active={props.starred}
-                >
-                    <Star size={13} fill={props.starred ? 'currentColor' : 'none'} aria-hidden />
-                </IconChip>
+            <div className="absolute right-1.5 top-1.5 flex gap-1">
+                <StarButton starred={props.starred} variant="overlay" onClick={props.onStar} />
             </div>
         </div>
     );
@@ -364,9 +358,7 @@ function Row(props: {
                 onToggle={props.onCheck}
                 label={`Select ${props.file.name}`}
             />
-            <IconChip label={props.starred ? 'Unstar' : 'Star'} onClick={props.onStar} active={props.starred} plain>
-                <Star size={14} fill={props.starred ? 'currentColor' : 'none'} aria-hidden />
-            </IconChip>
+            <StarButton starred={props.starred} variant="plain" onClick={props.onStar} />
             <button
                 type="button"
                 onClick={props.onOpen}
@@ -385,30 +377,5 @@ function Row(props: {
                 )}
             </button>
         </li>
-    );
-}
-
-function IconChip(props: {
-    label: string;
-    onClick: () => void;
-    active?: boolean;
-    plain?: boolean;
-    children: React.ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={props.onClick}
-            aria-label={props.label}
-            title={props.label}
-            className={[
-                'rounded-full p-1 transition-colors',
-                props.plain ? 'hover:bg-[var(--sw-hover)]' : 'bg-black/60',
-                props.active ? '' : props.plain ? 'text-fg-soft hover:text-fg' : 'text-white/80 hover:text-white'
-            ].join(' ')}
-            style={props.active ? { color: 'var(--star)' } : undefined}
-        >
-            {props.children}
-        </button>
     );
 }

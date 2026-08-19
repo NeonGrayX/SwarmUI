@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronRight, Folder, Grid3x3, List, Search, X } from 'lucide-react';
+import { ChevronRight, Folder, Grid3x3, List, Search, Star, X } from 'lucide-react';
 import type { SortMode, ViewMode } from '@/library/types';
 
 /** Child folder names keyed by their absolute parent path ('' is the root). */
@@ -356,6 +356,41 @@ function ViewButton(props: {
             ].join(' ')}
         >
             {props.children}
+        </button>
+    );
+}
+
+/** Star toggle for one browsed entry, shared by every browser that has starring.
+ *
+ * `overlay` rides on top of a preview image and stays out of the way until the entry is hovered;
+ * `plain` sits inline in a list row. Either way a starred entry keeps the star lit and on screen,
+ * because starred is the state worth seeing without hunting for it. */
+export function StarButton(props: {
+    starred: boolean;
+    variant: 'overlay' | 'plain';
+    onClick: () => void;
+}) {
+    const label = props.starred ? 'Unstar' : 'Star';
+    const overlay = props.variant === 'overlay';
+    return (
+        <button
+            type="button"
+            onClick={props.onClick}
+            aria-label={label}
+            aria-pressed={props.starred}
+            title={label}
+            className={[
+                'rounded-full p-1 transition-[color,opacity]',
+                overlay ? 'bg-black/60' : 'hover:bg-[var(--sw-hover)]',
+                props.starred
+                    ? ''
+                    : overlay
+                        ? 'text-white/80 hover:text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+                        : 'text-fg-soft hover:text-fg'
+            ].join(' ')}
+            style={props.starred ? { color: 'var(--star)' } : undefined}
+        >
+            <Star size={overlay ? 13 : 14} fill={props.starred ? 'currentColor' : 'none'} aria-hidden />
         </button>
     );
 }

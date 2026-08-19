@@ -2,16 +2,28 @@ import { useEffect, useMemo, useState } from 'react';
 import { Download, Star, Trash2, X } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { useDeleteImage, useImages, useToggleImageStar } from '@/library/hooks';
-import { imageOutPrefix, type ImageEntry, type ViewMode } from '@/library/types';
+import { imageOutPrefix, isImageStarred, type ImageEntry, type ViewMode } from '@/library/types';
 import { usePermission } from '@/api/permissions';
 import { useSession } from '@/api/hooks';
 import { useReuseParameters } from '@/params/reuse';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
-import { BrowserToolbar, EmptyState, FolderPane } from './BrowserChrome';
+import { BrowserToolbar, EmptyState, FolderPane, StarButton } from './BrowserChrome';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { MetadataView } from '../ui/MetadataView';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
+
+/** One image, pinned to the folder it was listed in.
+ *
+ * `src` only means anything relative to the folder it came back from, so anything that outlives
+ * the current folder - the detail sheet, a pending delete - has to carry the joined path with it
+ * rather than re-deriving it from wherever the browser has since navigated. */
+interface PinnedImage {
+    entry: ImageEntry;
+    /** Path relative to the output root: what the star and delete calls take. */
+    full: string;
+    starred: boolean;
+}
 
 /** Joins the browsed folder with a path-relative src from ListImages. */
 function joinPath(folder: string, src: string): string {
@@ -45,7 +57,7 @@ export function HistoryBrowser() {
     const [search, setSearch] = useState('');
     const [view, setView] = useState<ViewMode>('grid');
     const [reverse, setReverse] = useState(true);
-    const [selected, setSelected] = useState<ImageEntry | null>(null);
+    const [selected, setSelected] = useState<PinnedImage | null>(null);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
     const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
 
@@ -61,9 +73,10 @@ export function HistoryBrowser() {
     const mediaParam = useMediaParamAction();
     const contextMenu = useContextMenu();
     const prefix = imageOutPrefix(session.data?.user_id, session.data?.output_append_user);
+    const urlForPath = (full: string) => `/${prefix}/${full}`;
     // ListImages returns `src` relative to the *requested path*, not to the output root, so the
     // current folder has to be joined back on. At root this is a no-op, which is what hid the bug.
-    const urlFor = (src: string) => `/${prefix}/${path ? `${path}/` : ''}${src}`;
+    const urlFor = (src: string) => urlForPath(joinPath(path, src));
 
     const files = images.data?.files ?? [];
     const filtered = useMemo(() => {
@@ -74,6 +87,19 @@ export function HistoryBrowser() {
     const ids = useMemo(() => filtered.map(file => file.src), [filtered]);
     const selection = useSelection(ids);
 
+    // The sheet shows the image that was last clicked, whatever folder the tree has moved on to
+    // since. While that image is still listed the live entry wins, so a star or a metadata refresh
+    // shows up there too; once it isn't, the snapshot taken at click time is all there is.
+    const detail = useMemo(() => {
+        if (!selected) {
+            return null;
+        }
+        const fresh = files.find(file => joinPath(path, file.src) === selected.full);
+        return fresh
+            ? { ...selected, entry: fresh, starred: isImageStarred(fresh.metadata) }
+            : selected;
+    }, [selected, files, path]);
+
     // Failures are worth saying out loud; successes leave for the Generate screen and speak for
     // themselves there.
     useEffect(() => {
@@ -82,6 +108,24 @@ export function HistoryBrowser() {
             return () => clearTimeout(timer);
         }
     }, [flash]);
+
+    /** Pairs an entry with the folder it was listed in, for anything that outlives the listing. */
+    function pin(entry: ImageEntry): PinnedImage {
+        return {
+            entry,
+            full: joinPath(path, entry.src),
+            starred: isImageStarred(entry.metadata)
+        };
+    }
+
+    /** Stars or unstars one image. The refreshed list answers for anything still on screen; the
+     *  pinned sheet has to be told directly, since it may be showing another folder's image. */
+    function star(full: string): void {
+        toggleStar.mutate({ path: full }, {
+            onSuccess: () => setSelected(current =>
+                current && current.full === full ? { ...current, starred: !current.starred } : current)
+        });
+    }
 
     /** Loads an image's parameters into the generation form and switches to it. */
     function reuse(entry: ImageEntry): void {
@@ -95,16 +139,16 @@ export function HistoryBrowser() {
     }
 
     /** Same, plus the image itself as the init image, for generating a variation of it. */
-    async function useAsInit(entry: ImageEntry): Promise<void> {
+    async function useAsInit(image: PinnedImage): Promise<void> {
         try {
-            reuseParameters(entry.metadata);
+            reuseParameters(image.entry.metadata);
         }
         catch {
             // An image with no readable parameters is still perfectly good as an init image, and
             // the Generate screen shows plainly that only the image came across.
         }
         try {
-            await mediaParam.set('initimage', urlFor(entry.src));
+            await mediaParam.set('initimage', urlForPath(image.full));
         }
         catch (error: unknown) {
             setFlash(error instanceof Error ? error.message : 'Could not set the init image.');
@@ -124,14 +168,14 @@ export function HistoryBrowser() {
     /** Deletes every selected image. One request per file - the API has no batch form - so a
      *  failure part-way leaves the earlier deletions done, which the refreshed list shows. */
     async function deleteSelected(): Promise<void> {
-        const targets = selection.ids;
-        if (selected && targets.includes(selected.src)) {
+        const targets = selection.ids.map(src => joinPath(path, src));
+        if (selected && targets.includes(selected.full)) {
             setSelected(null);
         }
         selection.clear();
         try {
-            for (const src of targets) {
-                await deleteImage.mutateAsync({ path: joinPath(path, src) });
+            for (const full of targets) {
+                await deleteImage.mutateAsync({ path: full });
             }
         }
         catch (error: unknown) {
@@ -141,26 +185,25 @@ export function HistoryBrowser() {
 
     /** Everything one image can do, for its right-click menu. */
     function actionsFor(entry: ImageEntry): MenuAction[] {
-        const full = joinPath(path, entry.src);
+        const image = pin(entry);
         const actions: MenuAction[] = [
-            { label: 'Details', onSelect: () => setSelected(entry) },
-            // Starring moves the file into `Starred/`, so the path itself is the state.
+            { label: 'Details', onSelect: () => setSelected(image) },
             {
-                label: full.startsWith('Starred/') ? 'Unstar' : 'Star',
-                onSelect: () => toggleStar.mutate({ path: full })
+                label: image.starred ? 'Unstar' : 'Star',
+                onSelect: () => star(image.full)
             },
             { label: 'Download', onSelect: () => downloadImage(urlFor(entry.src), entry.src) },
             { label: 'Reuse parameters', separated: true, onSelect: () => reuse(entry) }
         ];
         if (mediaParam.available('initimage')) {
-            actions.push({ label: 'Use as init', onSelect: () => void useAsInit(entry) });
+            actions.push({ label: 'Use as init', onSelect: () => void useAsInit(image) });
         }
         if (canDelete) {
             actions.push({
                 label: 'Delete…',
                 destructive: true,
                 separated: true,
-                onSelect: () => setPendingDelete(full)
+                onSelect: () => setPendingDelete(image.full)
             });
         }
         return actions;
@@ -232,7 +275,7 @@ export function HistoryBrowser() {
                                 >
                                     <button
                                         type="button"
-                                        onClick={event => selection.click(event, file.src, () => setSelected(file))}
+                                        onClick={event => selection.click(event, file.src, () => setSelected(pin(file)))}
                                         title={`${file.src}\nRight-click for actions`}
                                         className="block h-full w-full"
                                     >
@@ -254,6 +297,13 @@ export function HistoryBrowser() {
                                             label={`Select ${file.src}`}
                                         />
                                     </span>
+                                    <span className="absolute right-1.5 top-1.5">
+                                        <StarButton
+                                            starred={isImageStarred(file.metadata)}
+                                            variant="overlay"
+                                            onClick={() => star(joinPath(path, file.src))}
+                                        />
+                                    </span>
                                 </div>
                             ))}
                         </div>
@@ -270,9 +320,14 @@ export function HistoryBrowser() {
                                         onToggle={() => selection.toggle(file.src)}
                                         label={`Select ${file.src}`}
                                     />
+                                    <StarButton
+                                        starred={isImageStarred(file.metadata)}
+                                        variant="plain"
+                                        onClick={() => star(joinPath(path, file.src))}
+                                    />
                                     <button
                                         type="button"
-                                        onClick={event => selection.click(event, file.src, () => setSelected(file))}
+                                        onClick={event => selection.click(event, file.src, () => setSelected(pin(file)))}
                                         title={`${file.src}\nRight-click for actions`}
                                         className="flex min-w-0 flex-1 items-center gap-3 py-1.5 text-left"
                                     >
@@ -293,18 +348,18 @@ export function HistoryBrowser() {
                 </div>
             </div>
 
-            {selected && (
+            {detail && (
                 <ImageSheet
-                    entry={selected}
-                    url={urlFor(selected.src)}
-                    starred={joinPath(path, selected.src).startsWith('Starred/')}
+                    entry={detail.entry}
+                    url={urlForPath(detail.full)}
+                    starred={detail.starred}
                     canDelete={canDelete}
                     canUseAsInit={mediaParam.available('initimage')}
-                    onStar={() => toggleStar.mutate({ path: joinPath(path, selected.src) })}
-                    onDownload={() => downloadImage(urlFor(selected.src), selected.src)}
-                    onReuse={() => reuse(selected)}
-                    onUseAsInit={() => void useAsInit(selected)}
-                    onDelete={() => setPendingDelete(joinPath(path, selected.src))}
+                    onStar={() => star(detail.full)}
+                    onDownload={() => downloadImage(urlForPath(detail.full), detail.entry.src)}
+                    onReuse={() => reuse(detail.entry)}
+                    onUseAsInit={() => void useAsInit(detail)}
+                    onDelete={() => setPendingDelete(detail.full)}
                     onClose={() => setSelected(null)}
                 />
             )}
@@ -324,7 +379,8 @@ export function HistoryBrowser() {
                 onConfirm={() => {
                     if (pendingDelete) {
                         deleteImage.mutate({ path: pendingDelete });
-                        setSelected(null);
+                        // Only the sheet showing *that* image closes; another one stays put.
+                        setSelected(current => (current?.full === pendingDelete ? null : current));
                     }
                     setPendingDelete(null);
                 }}

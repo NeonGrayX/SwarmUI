@@ -94,6 +94,24 @@ export function isModelCard(entry: ModelCard | WildcardCard): entry is ModelCard
     return 'preview_image' in entry;
 }
 
+/** True when an image's metadata records it as starred.
+ *
+ * Starring copies the file into `Starred/` rather than editing it in place, so the folder an
+ * image is listed under says nothing about its state - a starred `raw/` image stays in `raw/`.
+ * The server flags both copies (OutputMetadataTracker.cs:409), which makes this the only answer
+ * that holds whichever folder the browser is pointed at. */
+export function isImageStarred(metadata: string | null | undefined): boolean {
+    if (!metadata) {
+        return false;
+    }
+    try {
+        return (JSON.parse(metadata) as { is_starred?: boolean }).is_starred === true;
+    }
+    catch {
+        return false;
+    }
+}
+
 /** Resolves a preview image path to something an <img> can load. */
 export function previewUrl(src: string | null | undefined): string | undefined {
     if (!src) {
