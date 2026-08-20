@@ -3,14 +3,14 @@ import { Dices, RotateCw } from 'lucide-react';
 import type { ParamSchema } from '@/api/types';
 import type { ParamValue } from '@/params/store';
 import { MediaField } from './MediaField';
+import { LoraPicker } from './LoraPicker';
+import { ModelPicker } from './ModelPicker';
 
 export interface ControlProps {
     param: ParamSchema;
     value: ParamValue;
     onChange: (value: ParamValue) => void;
     disabled?: boolean;
-    /** Model name lists keyed by model type, for `model`-typed params. */
-    models?: Record<string, string[]>;
     inputId: string;
 }
 
@@ -244,30 +244,23 @@ export function DropdownField(props: ControlProps) {
     );
 }
 
-/** Model picker. Options come from the per-type lists in the ListT2IParams response, selected by
- *  the param's `subtype` (eg 'Stable-Diffusion', 'LoRA', 'VAE'). */
+/** Model picker. The option list is keyed off the param's `subtype` (eg 'Stable-Diffusion',
+ *  'LoRA', 'VAE'); ModelPicker resolves it from the schema itself, so nothing has to be threaded
+ *  down to reach it. */
 export function ModelField(props: ControlProps) {
-    const options = props.models?.[props.param.subtype ?? 'Stable-Diffusion'] ?? [];
     return (
-        <select
+        <ModelPicker
             id={props.inputId}
+            subtype={props.param.subtype ?? 'Stable-Diffusion'}
             value={String(props.value ?? '')}
+            emptyValue={props.param.default ?? ''}
             disabled={props.disabled}
-            onChange={e => props.onChange(e.target.value)}
-            className={`${INPUT_CLASS} w-full`}
-        >
-            <option value="">(none)</option>
-            {options.map(option => (
-                <option key={option} value={option}>
-                    {option}
-                </option>
-            ))}
-        </select>
+            onChange={props.onChange}
+        />
     );
 }
 
-/** Comma-separated multi-value input. A proper multi-select lands with the Library work in Phase 4,
- *  where the model/LoRA pickers get real chip UI. */
+/** Comma-separated multi-value input, for list params that are not model lists. */
 export function ListField(props: ControlProps) {
     const list = Array.isArray(props.value) ? props.value : [];
     return (
@@ -335,7 +328,13 @@ export function ParamControl(props: Omit<ControlProps, 'inputId'>) {
         case 'model':
             return <ModelField {...inner} />;
         case 'list':
-            return <ListField {...inner} />;
+            // `loras` is a list of models edited alongside its weights, so it gets its own control;
+            // anything else stays a plain comma-separated box.
+            return param.id === 'loras' ? (
+                <LoraPicker inputId={inputId} disabled={props.disabled} />
+            ) : (
+                <ListField {...inner} />
+            );
         case 'image':
         case 'image_list':
         case 'audio':

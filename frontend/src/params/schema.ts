@@ -8,7 +8,13 @@
 
 import { useMemo } from 'react';
 import { useSession, useT2IParams } from '@/api/hooks';
-import type { ListT2IParamsResponse, ParamGroupSchema, ParamSchema } from '@/api/types';
+import type {
+    ListT2IParamsResponse,
+    ModelClassInfo,
+    ModelCompatClassInfo,
+    ParamGroupSchema,
+    ParamSchema
+} from '@/api/types';
 
 /** User overrides of param/group metadata, as stored by SetParamEdits. */
 export interface ParamEdits {
@@ -35,6 +41,13 @@ export interface NormalizedSchema {
     ungrouped: ParamSchema[];
     /** Model lists keyed by model type, for `model`-typed params. */
     models: Record<string, string[]>;
+    /** Architecture (model class) id per model, keyed by model type then cleaned model name.
+     *  Null where the server could not classify the file. */
+    modelArch: Record<string, Record<string, string | null>>;
+    /** Every architecture the server knows, keyed by id. */
+    modelClasses: Record<string, ModelClassInfo>;
+    /** Every compatibility family the server knows, keyed by id. */
+    compatClasses: Record<string, ModelCompatClassInfo>;
 }
 
 /** Params the server hides from the panel because the legacy UI gives them a bespoke home, but
@@ -44,7 +57,12 @@ export interface NormalizedSchema {
  * out here means it counts towards the Modified filter without ever appearing in it, so it lands in
  * Core Parameters, above Images (priority -50). User `param_edits` still win over this. */
 const PANEL_PLACEMENT: Record<string, Partial<ParamSchema>> = {
-    model: { visible: true, group: 'coreparameters', priority: -60 }
+    model: { visible: true, group: 'coreparameters', priority: -60 },
+    // LoRAs are hidden the same way (T2IParamTypes.cs:698) because the legacy UI drives them from
+    // the model browser and a bottom-bar strip. This UI gives them a real picker, so they sit
+    // directly under the model they attach to - and not as `advanced`, since choosing a LoRA is
+    // ordinary work, not an expert setting.
+    loras: { visible: true, advanced: false, group: 'coreparameters', priority: -55 }
 };
 
 function applyEdits<T extends object>(base: T, edits: Partial<T> | undefined): T {
@@ -129,13 +147,33 @@ export function normalizeSchema(data: ListT2IParamsResponse): NormalizedSchema {
     tree.sort(byPriority);
     tree.forEach(sortAndIndex);
 
-    // Model dropdowns want plain name lists; the API sends [name, modelClass] pairs.
+    // Model dropdowns want plain name lists; the API sends [name, modelClass] pairs. The class id
+    // half is kept beside it, because it is what the compatibility rules in the pickers read.
     const models: Record<string, string[]> = {};
+    const modelArch: Record<string, Record<string, string | null>> = {};
     for (const [type, entries] of Object.entries(data.models)) {
-        models[type] = entries.map(entry => cleanModelName(entry[0]));
+        const names: string[] = [];
+        const arch: Record<string, string | null> = {};
+        for (const entry of entries) {
+            const name = cleanModelName(entry[0]);
+            names.push(name);
+            arch[name] = entry[1];
+        }
+        models[type] = names;
+        modelArch[type] = arch;
     }
 
-    return { params, byId, groupsById, tree, ungrouped, models };
+    return {
+        params,
+        byId,
+        groupsById,
+        tree,
+        ungrouped,
+        models,
+        modelArch,
+        modelClasses: data.model_classes ?? {},
+        compatClasses: data.model_compat_classes ?? {}
+    };
 }
 
 /** The normalized schema for the current session, or null until it has loaded. Shared by the

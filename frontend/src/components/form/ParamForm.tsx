@@ -138,13 +138,12 @@ export function ParamForm() {
 
             <div className="flex-1 min-h-0 overflow-y-auto p-2">
                 {visibleUngrouped.map(param => (
-                    <ParamField key={param.id} param={param} schema={schema} visibility={visibility} />
+                    <ParamField key={param.id} param={param} visibility={visibility} />
                 ))}
                 {schema.tree.map(node => (
                     <ParamGroup
                         key={node.group.id}
                         node={node}
-                        schema={schema}
                         visibility={visibility}
                         forceOpen={searching}
                     />

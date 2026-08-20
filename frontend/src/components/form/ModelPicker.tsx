@@ -1,0 +1,640 @@
+import { useMemo, useState } from 'react';
+import * as Popover from '@radix-ui/react-popover';
+import { Command } from 'cmdk';
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { Check, ChevronDown, Grid3x3, ImageOff, List, Search, Star, X } from 'lucide-react';
+import {
+    isArchCompatible,
+    subtypeNoun,
+    subtypeUsesCompat,
+    useCurrentModel,
+    useModelCatalog,
+    type ModelOption
+} from '@/library/catalog';
+import { useToggleStar } from '@/library/hooks';
+import type { ViewMode } from '@/library/types';
+
+/** Model pickers, replacing the plain `<select>` the legacy UI gives every model parameter.
+ *
+ * A `<select>` of a thousand file names, ordered by path, is unusable for the two questions people
+ * actually ask - "which one was that anime model called?" and "which of these will even work with
+ * what I have loaded?" - so this offers search, preview thumbnails, and filters, with the
+ * compatibility filter answering the second question directly.
+ *
+ * The legacy UI has an equivalent of that last rule (isModelArchCorrect, models.js:435) but only
+ * applies it to dim entries in the model browser; the dropdowns themselves list everything.
+ */
+
+/** Filter state worth remembering between openings. Kept out of the query cache because it is
+ *  interface preference, not server state. */
+interface PickerPrefs {
+    view: ViewMode;
+    /** Per-subtype state of the compatibility filter. */
+    fits: Record<string, boolean>;
+    starredOnly: boolean;
+    setView: (view: ViewMode) => void;
+    setFits: (subtype: string, on: boolean) => void;
+    setStarredOnly: (on: boolean) => void;
+}
+
+const usePickerPrefs = create<PickerPrefs>()(
+    persist(
+        set => ({
+            view: 'grid',
+            fits: {},
+            starredOnly: false,
+            setView: view => set({ view }),
+            setFits: (subtype, on) => set(state => ({ fits: { ...state.fits, [subtype]: on } })),
+            setStarredOnly: starredOnly => set({ starredOnly })
+        }),
+        { name: 'swarm-ui-model-picker' }
+    )
+);
+
+const TRIGGER_CLASS =
+    'flex w-full items-center gap-2 rounded border border-default bg-surface-sunken text-left ' +
+    'text-fg outline-none hover:border-[var(--emphasis)] focus:border-[var(--emphasis)] ' +
+    'disabled:cursor-not-allowed disabled:opacity-60';
+
+const CHIP_CLASS = 'rounded-full border px-2 py-0.5 text-xs transition-colors';
+
+const SELECT_CLASS =
+    'rounded-full border border-default bg-surface-sunken px-1.5 py-0.5 text-xs text-fg-soft ' +
+    'outline-none focus:border-[var(--emphasis)]';
+
+/** Single-select model field. */
+export function ModelPicker(props: {
+    id?: string;
+    subtype: string;
+    value: string;
+    onChange: (name: string) => void;
+    disabled?: boolean;
+    /** Fetches metadata immediately rather than on first open. For pickers that are always on
+     *  screen, where a thumbnail beside the current model is worth the one request. */
+    eager?: boolean;
+    /** Slimmer trigger, for the context strip. */
+    compact?: boolean;
+    /** Noun for the search placeholder and empty states. Defaults to the subtype's own. */
+    noun?: string;
+    /** The value that means "nothing picked". Empty for the main model, but the add-on params use
+     *  a sentinel instead - VAE defaults to the literal "None" (T2IParamTypes.cs:692) - and that
+     *  is not a file, so it must not be read as a model this server is missing. */
+    emptyValue?: string;
+}) {
+    const [open, setOpen] = useState(false);
+    // Metadata is fetched from the first open onward: closing must not drop it, or every reopen
+    // would flash empty thumbnails.
+    const [everOpened, setEverOpened] = useState(false);
+    const catalog = useModelCatalog(props.subtype, props.eager || everOpened);
+    const noun = props.noun ?? subtypeNoun(props.subtype);
+
+    const empty = props.emptyValue ?? '';
+    const hasValue = props.value !== '' && props.value !== empty;
+    const option = hasValue ? catalog.byName.get(props.value) : undefined;
+    // Only a loaded list can prove a name wrong: before the schema arrives every value looks
+    // unknown, and a flash of "missing" on a perfectly good model is worse than saying nothing.
+    const missing = hasValue && catalog.options.length > 0 && !option;
+
+    return (
+        <Popover.Root
+            open={open}
+            onOpenChange={next => {
+                setOpen(next);
+                if (next) {
+                    setEverOpened(true);
+                }
+            }}
+        >
+            <Popover.Trigger asChild>
+                <button
+                    type="button"
+                    id={props.id}
+                    disabled={props.disabled}
+                    title={hasValue ? props.value : undefined}
+                    className={[
+                        TRIGGER_CLASS,
+                        props.compact ? 'py-0.5 pl-1 pr-1.5 text-xs' : 'py-1 pl-1 pr-2 text-sm',
+                        missing ? 'border-[var(--sw-error-border)]' : ''
+                    ].join(' ')}
+                >
+                    <ModelThumb option={option} size={props.compact ? 'xs' : 'sm'} />
+                    <span className={['min-w-0 flex-1 truncate', hasValue ? '' : 'text-fg-soft'].join(' ')}>
+                        {hasValue
+                            ? (option?.title ?? props.value)
+                            : catalog.options.length === 0
+                              ? `(no ${noun} installed)`
+                              : '(none selected)'}
+                    </span>
+                    {missing && (
+                        <span
+                            title={`"${props.value}" is not installed on this server.`}
+                            className="shrink-0 text-xs"
+                            style={{ color: 'var(--backend-errored)' }}
+                        >
+                            missing
+                        </span>
+                    )}
+                    <ShortCode option={option} />
+                    <ChevronDown size={13} aria-hidden className="shrink-0 text-fg-soft" />
+                </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+                <Popover.Content
+                    align="start"
+                    sideOffset={4}
+                    collisionPadding={8}
+                    className="z-50 w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
+                >
+                    <ModelOptionList
+                        subtype={props.subtype}
+                        noun={noun}
+                        selected={hasValue ? [props.value] : []}
+                        onPick={picked => {
+                            props.onChange(picked.name);
+                            setOpen(false);
+                        }}
+                        onClear={
+                            hasValue
+                                ? () => {
+                                      props.onChange(empty);
+                                      setOpen(false);
+                                  }
+                                : undefined
+                        }
+                    />
+                </Popover.Content>
+            </Popover.Portal>
+        </Popover.Root>
+    );
+}
+
+/** The searchable, filterable body of a picker. Shared by the single-select field above and the
+ *  LoRA picker's add-popover, so both offer the same filters. */
+export function ModelOptionList(props: {
+    subtype: string;
+    /** Names already chosen, shown with a check. */
+    selected: string[];
+    onPick: (option: ModelOption) => void;
+    /** Present for single-select: renders the row that clears the value. */
+    onClear?: () => void;
+    noun: string;
+}) {
+    const [search, setSearch] = useState('');
+    const [arch, setArch] = useState('all');
+    const [folder, setFolder] = useState('all');
+    const prefs = usePickerPrefs();
+    const catalog = useModelCatalog(props.subtype);
+    const current = useCurrentModel();
+    const toggleStar = useToggleStar();
+
+    const usesCompat = subtypeUsesCompat(props.subtype);
+    // Add-ons default to hiding what cannot work; base models have nothing to be matched against.
+    const fits = (prefs.fits[props.subtype] ?? usesCompat) && usesCompat && current.compatClass !== null;
+    const chosen = useMemo(() => new Set(props.selected), [props.selected]);
+
+    const { options } = catalog;
+
+    /** Every filter except the compatibility one, so the count of what it hides can be shown. */
+    const preCompat = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        return options.filter(option => {
+            if (prefs.starredOnly && !option.starred) {
+                return false;
+            }
+            if (arch !== 'all' && (option.compatClass ?? '') !== arch) {
+                return false;
+            }
+            if (folder !== 'all' && (option.folder.split('/')[0] ?? '') !== folder) {
+                return false;
+            }
+            if (!query) {
+                return true;
+            }
+            const haystack = `${option.name} ${option.title} ${option.className ?? ''} ${option.tags.join(' ')}`;
+            return haystack.toLowerCase().includes(query);
+        });
+    }, [options, search, prefs.starredOnly, arch, folder]);
+
+    const matches = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        const shown = fits
+            ? preCompat.filter(option => isArchCompatible(option, current.compatClass))
+            : preCompat;
+        if (!query) {
+            return shown;
+        }
+        // Name hits beat metadata hits, and a leading match beats one buried mid-name, so typing
+        // "juggernaut" lands on the model rather than on something merely tagged with it.
+        const rank = (option: ModelOption) => {
+            const leaf = option.leaf.toLowerCase();
+            if (leaf.startsWith(query)) {
+                return 0;
+            }
+            if (leaf.includes(query)) {
+                return 1;
+            }
+            return option.name.toLowerCase().includes(query) ? 2 : 3;
+        };
+        return [...shown].sort(
+            (a, b) => rank(a) - rank(b) || Number(b.starred) - Number(a.starred) || a.name.localeCompare(b.name)
+        );
+    }, [preCompat, fits, current.compatClass, search]);
+
+    const hiddenByCompat = preCompat.length - matches.length;
+
+    const archOptions = useMemo(() => {
+        const seen = new Map<string, string>();
+        for (const option of options) {
+            if (option.compatClass && !seen.has(option.compatClass)) {
+                seen.set(option.compatClass, option.shortCode || option.compatClass);
+            }
+        }
+        return [...seen].sort((a, b) => a[1].localeCompare(b[1]));
+    }, [options]);
+
+    const folderOptions = useMemo(() => {
+        const seen = new Set<string>();
+        for (const option of options) {
+            const top = option.folder.split('/')[0];
+            if (top) {
+                seen.add(top);
+            }
+        }
+        return [...seen].sort((a, b) => a.localeCompare(b));
+    }, [options]);
+
+    return (
+        <Command shouldFilter={false} loop label={`Choose ${props.noun}`}>
+            <div className="border-b border-subtle p-2">
+                <div className="relative">
+                    <Search
+                        size={14}
+                        aria-hidden
+                        className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-fg-soft"
+                    />
+                    <Command.Input
+                        value={search}
+                        onValueChange={setSearch}
+                        placeholder={`Search ${props.noun}…`}
+                        className="w-full rounded border border-default bg-surface-sunken py-1.5 pl-7 pr-7 text-sm text-fg outline-none focus:border-[var(--emphasis)] placeholder:text-fg-soft"
+                    />
+                    {search && (
+                        <button
+                            type="button"
+                            onClick={() => setSearch('')}
+                            aria-label="Clear search"
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
+                        >
+                            <X size={13} aria-hidden />
+                        </button>
+                    )}
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-1">
+                    {usesCompat && current.compatClass && (
+                        <button
+                            type="button"
+                            onClick={() => prefs.setFits(props.subtype, !fits)}
+                            aria-pressed={fits}
+                            title={`Show only ${props.noun} built for ${current.label ?? current.compatClass}. Others are trained on a different base model and will not apply correctly.`}
+                            className={[
+                                CHIP_CLASS,
+                                fits
+                                    ? 'border-transparent bg-[var(--emphasis)] text-[var(--sw-accent-fg)]'
+                                    : 'border-default text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg'
+                            ].join(' ')}
+                        >
+                            Fits {current.label ?? 'model'}
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => prefs.setStarredOnly(!prefs.starredOnly)}
+                        aria-pressed={prefs.starredOnly}
+                        title="Show only starred entries"
+                        className={[
+                            CHIP_CLASS,
+                            'inline-flex items-center gap-1',
+                            prefs.starredOnly
+                                ? 'border-transparent bg-[var(--emphasis)] text-[var(--sw-accent-fg)]'
+                                : 'border-default text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg'
+                        ].join(' ')}
+                    >
+                        <Star
+                            size={11}
+                            aria-hidden
+                            fill={prefs.starredOnly ? 'currentColor' : 'none'}
+                        />
+                        Starred
+                    </button>
+                    {archOptions.length > 1 && (
+                        <select
+                            value={arch}
+                            onChange={e => setArch(e.target.value)}
+                            aria-label="Filter by architecture"
+                            className={SELECT_CLASS}
+                        >
+                            <option value="all">All architectures</option>
+                            {archOptions.map(([id, label]) => (
+                                <option key={id} value={id}>
+                                    {label}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                    {folderOptions.length > 0 && (
+                        <select
+                            value={folder}
+                            onChange={e => setFolder(e.target.value)}
+                            aria-label="Filter by folder"
+                            className={SELECT_CLASS}
+                        >
+                            <option value="all">All folders</option>
+                            {folderOptions.map(name => (
+                                <option key={name} value={name}>
+                                    {name}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                    <div className="flex-1" />
+                    <div className="flex overflow-hidden rounded border border-default">
+                        {(
+                            [
+                                ['grid', Grid3x3, 'Grid view'],
+                                ['list', List, 'List view']
+                            ] as const
+                        ).map(([mode, Icon, label]) => (
+                            <button
+                                key={mode}
+                                type="button"
+                                onClick={() => prefs.setView(mode)}
+                                aria-pressed={prefs.view === mode}
+                                aria-label={label}
+                                title={label}
+                                className={[
+                                    'p-1 transition-colors',
+                                    prefs.view === mode
+                                        ? 'bg-[var(--sw-active)] text-fg-strong'
+                                        : 'text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg'
+                                ].join(' ')}
+                            >
+                                <Icon size={13} aria-hidden />
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <Command.List className="max-h-80 overflow-y-auto p-2">
+                {matches.length === 0 && (
+                    <p className="px-2 py-6 text-center text-sm text-fg-soft">
+                        {options.length === 0
+                            ? `No ${props.noun} are installed.`
+                            : `No ${props.noun} match these filters.`}
+                    </p>
+                )}
+
+                <Command.Group
+                    className={
+                        prefs.view === 'grid'
+                            ? '[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] [&_[cmdk-group-items]]:gap-2'
+                            : ''
+                    }
+                >
+                    {matches.map(option => {
+                        const incompatible =
+                            usesCompat &&
+                            current.compatClass !== null &&
+                            !isArchCompatible(option, current.compatClass);
+                        // Starring keys off the file name the model routes use, so it is offered
+                        // only for entries ListModels actually described.
+                        const rawName = option.rawName;
+                        const shared = {
+                            option,
+                            incompatible,
+                            picked: chosen.has(option.name),
+                            onPick: () => props.onPick(option),
+                            onStar: rawName
+                                ? () => toggleStar.mutate({ subtype: props.subtype, name: rawName })
+                                : undefined
+                        };
+                        return prefs.view === 'grid' ? (
+                            <OptionCard key={option.name} {...shared} />
+                        ) : (
+                            <OptionRow key={option.name} {...shared} />
+                        );
+                    })}
+                </Command.Group>
+            </Command.List>
+
+            <div className="flex items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
+                <span>
+                    {matches.length} of {options.length}
+                </span>
+                {hiddenByCompat > 0 && (
+                    <button
+                        type="button"
+                        onClick={() => prefs.setFits(props.subtype, false)}
+                        className="rounded px-1.5 py-0.5 hover:bg-[var(--sw-hover)] hover:text-fg"
+                    >
+                        Show {hiddenByCompat} that {hiddenByCompat === 1 ? 'does' : 'do'} not fit
+                    </button>
+                )}
+                <div className="flex-1" />
+                {catalog.loadingDetails && <span>Loading details…</span>}
+                {/* Clearing lives here rather than as a row in the list: cmdk keeps the first item
+                    highlighted, so a "none" row at the top would be what Enter picks after a
+                    search - the one result nobody typing a model name is looking for. */}
+                {props.onClear && (
+                    <button
+                        type="button"
+                        onClick={props.onClear}
+                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-[var(--sw-hover)] hover:text-fg"
+                    >
+                        <X size={11} aria-hidden />
+                        Clear selection
+                    </button>
+                )}
+            </div>
+        </Command>
+    );
+}
+
+interface EntryProps {
+    option: ModelOption;
+    picked: boolean;
+    incompatible: boolean;
+    onPick: () => void;
+    onStar?: () => void;
+}
+
+function OptionCard(props: EntryProps) {
+    const { option } = props;
+    return (
+        <Command.Item
+            value={option.name}
+            onSelect={props.onPick}
+            title={describe(option, props.incompatible)}
+            className={[
+                'group relative cursor-pointer overflow-hidden rounded-lg border bg-surface text-left',
+                'data-[selected=true]:border-[var(--emphasis)]',
+                props.picked ? 'border-[var(--emphasis)]' : 'border-default'
+            ].join(' ')}
+        >
+            <div className="relative flex aspect-square items-center justify-center bg-surface-sunken">
+                {option.preview ? (
+                    <img src={option.preview} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                    <ImageOff size={20} aria-hidden className="text-fg-soft opacity-40" />
+                )}
+                {option.shortCode && (
+                    <span
+                        className="absolute bottom-1 right-1 rounded px-1 text-[10px]"
+                        style={
+                            props.incompatible
+                                ? { background: 'var(--sw-danger-surface)', color: 'var(--backend-errored)' }
+                                : { background: 'var(--sw-chip-bg)', color: 'var(--text)' }
+                        }
+                    >
+                        {option.shortCode}
+                    </span>
+                )}
+            </div>
+            <div className="p-1.5">
+                <p className="truncate text-xs text-fg-strong">{option.title}</p>
+                <p className="truncate text-[10px] text-fg-soft">
+                    {option.folder || option.className || ' '}
+                </p>
+            </div>
+            <div className="absolute left-1 top-1 flex items-center gap-1">
+                {props.picked && (
+                    <span className="rounded-full bg-[var(--emphasis)] p-0.5 text-[var(--sw-accent-fg)]">
+                        <Check size={11} aria-hidden />
+                    </span>
+                )}
+                {option.loaded && <LoadedDot />}
+            </div>
+            <div className="absolute right-1 top-1 flex items-center gap-1">
+                <StarToggle starred={option.starred} onStar={props.onStar} overlay />
+            </div>
+        </Command.Item>
+    );
+}
+
+function OptionRow(props: EntryProps) {
+    const { option } = props;
+    return (
+        <Command.Item
+            value={option.name}
+            onSelect={props.onPick}
+            title={describe(option, props.incompatible)}
+            className="group flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 data-[selected=true]:bg-[var(--sw-active)]"
+        >
+            <ModelThumb option={option} size="sm" />
+            <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1">
+                    {props.picked && <Check size={12} aria-hidden className="shrink-0 text-[var(--emphasis)]" />}
+                    <span className="truncate text-sm text-fg">{option.leaf}</span>
+                </span>
+                {option.folder && <span className="block truncate text-[11px] text-fg-soft">{option.folder}</span>}
+            </span>
+            {option.loaded && <LoadedDot />}
+            <ShortCode option={option} incompatible={props.incompatible} />
+            <StarToggle starred={option.starred} onStar={props.onStar} />
+        </Command.Item>
+    );
+}
+
+/** Preview thumbnail, or a neutral placeholder so rows keep a stable rhythm. */
+export function ModelThumb(props: { option: ModelOption | undefined; size: 'xs' | 'sm' }) {
+    const side = props.size === 'xs' ? 'size-5' : 'size-7';
+    return (
+        <span className={`${side} shrink-0 overflow-hidden rounded bg-surface-sunken`}>
+            {props.option?.preview && (
+                <img src={props.option.preview} alt="" loading="lazy" className="h-full w-full object-cover" />
+            )}
+        </span>
+    );
+}
+
+/** Compat-family badge, eg 'SDXL'. Turns to the error colour when the entry cannot work with the
+ *  base model that is currently selected. */
+function ShortCode(props: { option: ModelOption | undefined; incompatible?: boolean }) {
+    if (!props.option?.shortCode) {
+        return null;
+    }
+    return (
+        <span
+            className="shrink-0 rounded px-1 text-[10px]"
+            style={
+                props.incompatible
+                    ? { background: 'var(--sw-danger-surface)', color: 'var(--backend-errored)' }
+                    : { background: 'var(--sw-chip-bg)', color: 'var(--text)' }
+            }
+        >
+            {props.option.shortCode}
+        </span>
+    );
+}
+
+function LoadedDot() {
+    return (
+        <span
+            title="Loaded on a backend"
+            className="size-1.5 shrink-0 rounded-full"
+            style={{ background: 'var(--backend-running)' }}
+        />
+    );
+}
+
+/** Starring is available only for models the metadata routes know by name, since that is the key
+ *  SetStarredModels stores. */
+function StarToggle(props: { starred: boolean; onStar?: () => void; overlay?: boolean }) {
+    if (!props.onStar) {
+        return null;
+    }
+    const label = props.starred ? 'Unstar' : 'Star';
+    return (
+        <button
+            type="button"
+            aria-label={label}
+            aria-pressed={props.starred}
+            title={label}
+            onClick={event => {
+                // The row itself is the pick action, so starring must not also select the model.
+                event.stopPropagation();
+                event.preventDefault();
+                props.onStar?.();
+            }}
+            className={[
+                'shrink-0 rounded-full p-1 transition-[color,opacity]',
+                props.overlay ? 'bg-black/60' : 'hover:bg-[var(--sw-hover)]',
+                props.starred
+                    ? ''
+                    : props.overlay
+                      ? 'text-white/80 opacity-0 hover:text-white focus-visible:opacity-100 group-hover:opacity-100'
+                      : 'text-fg-soft hover:text-fg'
+            ].join(' ')}
+            style={props.starred ? { color: 'var(--star)' } : undefined}
+        >
+            <Star size={11} fill={props.starred ? 'currentColor' : 'none'} aria-hidden />
+        </button>
+    );
+}
+
+/** Hover text: everything known about the entry that the row itself has no room for. */
+function describe(option: ModelOption, incompatible: boolean): string {
+    const lines = [option.name];
+    if (option.className) {
+        lines.push(option.className);
+    }
+    if (option.triggerPhrase) {
+        lines.push(`Trigger: ${option.triggerPhrase}`);
+    }
+    if (incompatible) {
+        lines.push('Built for a different base model - it will not apply correctly.');
+    }
+    return lines.join('\n');
+}

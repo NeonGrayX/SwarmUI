@@ -23,10 +23,12 @@ export function useModels(
     path: string,
     sort: SortMode,
     reverse: boolean,
-    depth: number
+    depth: number,
+    enabled = true
 ): UseQueryResult<ListModelsResponse> {
     return useQuery({
         queryKey: libraryKeys.models(subtype, path, sort, reverse, depth),
+        enabled,
         queryFn: () =>
             api.post<ListModelsResponse>('ListModels', {
                 path,
@@ -55,11 +57,12 @@ export function useImages(
     });
 }
 
-export function useMyUserData(): UseQueryResult<MyUserData> {
+export function useMyUserData(enabled = true): UseQueryResult<MyUserData> {
     return useQuery({
         queryKey: libraryKeys.userData,
         queryFn: () => api.post<MyUserData>('GetMyUserData'),
-        staleTime: 60_000
+        staleTime: 60_000,
+        enabled
     });
 }
 

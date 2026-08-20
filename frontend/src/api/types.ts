@@ -131,6 +131,33 @@ export interface CurrentStatus {
 /** One entry of the per-type model lists: `[modelName, modelClassId]`. */
 export type ModelListEntry = [name: string, modelClass: string | null];
 
+/** One model class, ie one architecture (eg SDXL 1.0-Base LoRA).
+ *  Serialized by T2IModelClass.ToNetData (src/Text2Image/T2IModelClass.cs:27). */
+export interface ModelClassInfo {
+    id: string;
+    name: string;
+    /** The interoperability family this architecture belongs to, or null if unclassified. */
+    compat_class: string | null;
+    standard_width: number;
+    standard_height: number;
+}
+
+/** A family of interoperable architectures - a base model and the LoRAs, VAEs and ControlNets
+ *  built against it all share one compat class, which is what makes "does this fit my model?"
+ *  answerable. Serialized by T2IModelCompatClass.ToNetData (src/Text2Image/T2IModelClass.cs:70). */
+export interface ModelCompatClassInfo {
+    id: string;
+    /** Short label for badges, usually four characters (eg 'SDXL'). */
+    short_code: string;
+    loras_target_text_enc: boolean;
+    is_text2video: boolean;
+    is_image2video: boolean;
+    is_audio_model: boolean;
+    has_joint_av_latents: boolean;
+    resolution_precision: number;
+    vae_family: string | null;
+}
+
 /** Response of the `ListT2IParams` call (src/WebAPI/T2IAPI.cs). */
 export interface ListT2IParamsResponse {
     list: ParamSchema[];
@@ -138,8 +165,8 @@ export interface ListT2IParamsResponse {
     groups: ParamGroupSchema[];
     /** Keyed by model type, eg 'Stable-Diffusion', 'LoRA', 'VAE'. */
     models: Record<string, ModelListEntry[]>;
-    model_compat_classes: Record<string, unknown>;
-    model_classes: Record<string, unknown>;
+    model_compat_classes: Record<string, ModelCompatClassInfo>;
+    model_classes: Record<string, ModelClassInfo>;
     wildcards: string[];
     /** User's saved overrides of param metadata, or null if none set. */
     param_edits: Record<string, unknown> | null;

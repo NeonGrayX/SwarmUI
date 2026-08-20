@@ -1,14 +1,14 @@
 import { ChevronRight } from 'lucide-react';
 import type { ParamSchema } from '@/api/types';
-import type { GroupNode, NormalizedSchema } from '@/params/schema';
+import type { GroupNode } from '@/params/schema';
 import type { VisibilityResult } from '@/params/visibility';
+import { companionParams } from '@/params/loras';
 import { useParamStore, valueOf } from '@/params/store';
 import { Field } from './Field';
 import { ParamControl } from './controls';
 
 interface Props {
     node: GroupNode;
-    schema: NormalizedSchema;
     visibility: VisibilityResult;
     /** Forces groups open while a search is active, so hits are never buried. */
     forceOpen: boolean;
@@ -21,7 +21,7 @@ interface Props {
  * changes without expanding it. In the legacy UI that information only exists once expanded, which
  * is why finding "what did I actually change" means opening all 34 groups one at a time. */
 export function ParamGroup(props: Props) {
-    const { node, schema, visibility } = props;
+    const { node, visibility } = props;
     const depth = props.depth ?? 0;
     const openGroups = useParamStore(s => s.openGroups);
     const setGroupOpen = useParamStore(s => s.setGroupOpen);
@@ -80,7 +80,6 @@ export function ParamGroup(props: Props) {
                         <ParamField
                             key={param.id}
                             param={param}
-                            schema={schema}
                             visibility={visibility}
                             groupDisabled={node.group.toggles && !groupOn}
                         />
@@ -89,7 +88,6 @@ export function ParamGroup(props: Props) {
                         <ParamGroup
                             key={child.group.id}
                             node={child}
-                            schema={schema}
                             visibility={visibility}
                             forceOpen={props.forceOpen}
                             depth={depth + 1}
@@ -103,11 +101,10 @@ export function ParamGroup(props: Props) {
 
 export function ParamField(props: {
     param: ParamSchema;
-    schema: NormalizedSchema;
     visibility: VisibilityResult;
     groupDisabled?: boolean;
 }) {
-    const { param, schema, visibility } = props;
+    const { param, visibility } = props;
     const values = useParamStore(s => s.values);
     const toggles = useParamStore(s => s.toggles);
     const setValue = useParamStore(s => s.setValue);
@@ -128,7 +125,12 @@ export function ParamField(props: {
             examples={param.examples}
             density="compact"
             modified={visibility.altered.has(param.id)}
-            onReset={() => reset(param.id)}
+            onReset={() => {
+                reset(param.id);
+                for (const companion of companionParams(param.id)) {
+                    reset(companion);
+                }
+            }}
             disabled={disabled}
             toggleBlocked={blocked}
             disabledReason={
@@ -147,7 +149,6 @@ export function ParamField(props: {
             <ParamControl
                 param={param}
                 value={valueOf(param, values)}
-                models={schema.models}
                 disabled={disabled}
                 onChange={next => {
                     setValue(param.id, next);
