@@ -39,7 +39,8 @@ export interface VisibilityResult {
     advancedHiddenCount: number;
 }
 
-function isSupported(param: ParamSchema, supportedFeatures: string[]): boolean {
+/** Whether every feature flag the param needs is offered by a connected backend. */
+export function isSupported(param: ParamSchema, supportedFeatures: string[]): boolean {
     if (!param.feature_flag) {
         return true;
     }

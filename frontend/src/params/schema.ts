@@ -35,6 +35,11 @@ export interface NormalizedSchema {
     params: ParamSchema[];
     byId: Map<string, ParamSchema>;
     groupsById: Map<string, ParamGroupSchema>;
+    /** Params and groups as they shipped, before the user's `param_edits`. This is what the
+     *  Parameter Configuration reset controls restore to, and what tells a redefined `default`
+     *  apart from the server's own. */
+    originals: Map<string, ParamSchema>;
+    originalGroups: Map<string, ParamGroupSchema>;
     /** Top-level group nodes, ordered by priority. */
     tree: GroupNode[];
     /** Params with no group, ordered by priority. Rendered above the groups. */
@@ -76,14 +81,20 @@ export function normalizeSchema(data: ListT2IParamsResponse): NormalizedSchema {
     const edits = (data.param_edits ?? {}) as ParamEdits;
 
     const groupsById = new Map<string, ParamGroupSchema>();
+    const originalGroups = new Map<string, ParamGroupSchema>();
     for (const group of data.groups) {
         groupsById.set(group.id, applyEdits(group, edits.groups?.[group.id]));
+        originalGroups.set(group.id, group);
     }
 
+    // PANEL_PLACEMENT counts as shipped state: it is this UI's own placement, not a user edit, so
+    // resetting a parameter puts it back where this UI puts it rather than where the legacy UI did.
+    const originals = new Map<string, ParamSchema>();
     const params = data.list
         .map(param => {
             const paramEdits = edits.params?.[param.id];
             const placed = applyEdits(param, PANEL_PLACEMENT[param.id]);
+            originals.set(param.id, placed);
             const merged = applyEdits(placed, paramEdits as Partial<ParamSchema>);
             // `examples` is stored as a '||'-separated string in edits but is an array in the schema.
             if (paramEdits && typeof paramEdits.examples === 'string') {
@@ -167,6 +178,8 @@ export function normalizeSchema(data: ListT2IParamsResponse): NormalizedSchema {
         params,
         byId,
         groupsById,
+        originals,
+        originalGroups,
         tree,
         ungrouped,
         models,

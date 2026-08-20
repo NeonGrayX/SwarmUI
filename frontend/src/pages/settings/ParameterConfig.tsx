@@ -1,14 +1,20 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, X } from 'lucide-react';
+import { RotateCcw, Search, X } from 'lucide-react';
 import { api } from '@/api/client';
 import { useSession, useT2IParams } from '@/api/hooks';
-import { normalizeSchema } from '@/params/schema';
+import { normalizeSchema, type NormalizedSchema, type ParamEdits } from '@/params/schema';
 import type { ParamSchema } from '@/api/types';
 import { Field } from '@/components/form/Field';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
-/** Per-parameter overrides, keyed by param id, in the shape SetParamEdits expects. */
-type Edits = Record<string, Record<string, unknown>>;
+/** One param's complete override record, in the shape SetParamEdits stores it. An empty record
+ *  means "no overrides at all", ie reset to what the parameter shipped with. */
+type ParamEdit = Record<string, unknown>;
+
+/** Pending, unsaved override records keyed by param id. Each entry replaces the saved record
+ *  wholesale rather than layering on it, so a reset is simply an empty entry. */
+type Pending = Record<string, ParamEdit>;
 
 const FLAG_FIELDS = [
     { key: 'visible', label: 'Visible normally' },
@@ -16,6 +22,34 @@ const FLAG_FIELDS = [
     { key: 'do_not_save', label: 'Do not save' },
     { key: 'toggleable', label: 'Toggleable' }
 ] as const;
+
+/** The shipped value of a field in the shape the edit blob stores it — `examples` lives as a
+ *  '||'-separated string there but as an array in the schema. */
+function shippedEditValue(original: ParamSchema, key: string): unknown {
+    if (key === 'examples') {
+        return (original.examples ?? []).join(' || ');
+    }
+    if (key === 'default' && original.type === 'boolean') {
+        // The editor offers exactly 'true'/'false'; a boolean that ships with neither (an empty
+        // default) still means false, and picking false is not an override of it.
+        return original.default === 'true' || original.default === 'True' ? 'true' : 'false';
+    }
+    return original[key as keyof ParamSchema];
+}
+
+function sameEditValue(a: unknown, b: unknown): boolean {
+    return String(a ?? '') === String(b ?? '');
+}
+
+function sameRecord(a: ParamEdit, b: ParamEdit): boolean {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of keys) {
+        if (!(key in a) || !(key in b) || !sameEditValue(a[key], b[key])) {
+            return false;
+        }
+    }
+    return true;
+}
 
 /** Parameter Configuration.
  *
@@ -30,12 +64,17 @@ export function ParameterConfigPage() {
     const [search, setSearch] = useState('');
     const [groupFilter, setGroupFilter] = useState('');
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [edits, setEdits] = useState<Edits>({});
+    const [pending, setPending] = useState<Pending>({});
+    const [confirmResetAll, setConfirmResetAll] = useState(false);
 
     const schema = useMemo(() => (params.data ? normalizeSchema(params.data) : null), [params.data]);
+    const saved = (params.data?.param_edits ?? {}) as ParamEdits;
+    const savedParams = saved.params ?? {};
 
+    // The blob is stored whole, so a save has to carry every override the server already holds -
+    // including the group edits this screen does not touch, which the legacy UI can still write.
     const save = useMutation({
-        mutationFn: (next: Edits) => api.post('SetParamEdits', { edits: { params: next, groups: {} } }),
+        mutationFn: (next: ParamEdits) => api.post('SetParamEdits', { edits: next }),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['t2i-params'] })
     });
 
@@ -66,17 +105,87 @@ export function ParameterConfigPage() {
         );
     }
 
+    // Aliased because the helpers below are hoisted function declarations, which TypeScript reads
+    // as created before the null check above.
+    const loaded = schema;
     const selected = selectedId ? schema.byId.get(selectedId) : undefined;
-    const dirtyCount = Object.keys(edits).length;
+    const dirtyIds = Object.keys(pending).filter(id => !sameRecord(pending[id], savedParams[id] ?? {}));
+    const customizedCount = new Set([...Object.keys(savedParams), ...dirtyIds]).size;
+
+    /** The param as it stands before pending edits: the shipped form once anything is pending for
+     *  it (a pending record is complete, not a patch), otherwise the saved-edits form. */
+    function baseOf(param: ParamSchema): ParamSchema {
+        return param.id in pending ? (loaded.originals.get(param.id) ?? param) : param;
+    }
 
     /** Effective value of a field, preferring an unsaved edit. */
     function effective<K extends keyof ParamSchema>(param: ParamSchema, key: K): ParamSchema[K] {
-        const edit = edits[param.id];
-        return edit && key in edit ? (edit[key as string] as ParamSchema[K]) : param[key];
+        const entry = pending[param.id];
+        if (entry && key in entry) {
+            return entry[key as string] as ParamSchema[K];
+        }
+        return baseOf(param)[key];
     }
 
-    function setEdit(id: string, key: string, value: unknown) {
-        setEdits(prev => ({ ...prev, [id]: { ...(prev[id] ?? {}), [key]: value } }));
+    function examplesText(param: ParamSchema): string {
+        const entry = pending[param.id];
+        if (entry && 'examples' in entry) {
+            return String(entry.examples ?? '');
+        }
+        return (baseOf(param).examples ?? []).join(' || ');
+    }
+
+    function setEdit(param: ParamSchema, key: string, value: unknown) {
+        const original = loaded.originals.get(param.id);
+        setPending(prev => {
+            const next: ParamEdit = { ...(prev[param.id] ?? savedParams[param.id] ?? {}) };
+            // An edit that lands back on the shipped value is not an override, so it is dropped
+            // rather than stored - that keeps the blob honest about what is actually customized.
+            if (original && sameEditValue(value, shippedEditValue(original, key))) {
+                delete next[key];
+            }
+            else {
+                next[key] = value;
+            }
+            return { ...prev, [param.id]: next };
+        });
+    }
+
+    /** Stages "back to how it shipped" for one param. Committed by Save, like any other edit. */
+    function resetParam(id: string) {
+        setPending(prev => ({ ...prev, [id]: {} }));
+    }
+
+    function discardParam(id: string) {
+        setPending(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+    }
+
+    function isCustomized(param: ParamSchema): boolean {
+        const entry = pending[param.id] ?? savedParams[param.id] ?? {};
+        return Object.keys(entry).length > 0;
+    }
+
+    function saveAll() {
+        const nextParams: Record<string, ParamEdit> = { ...savedParams };
+        for (const [id, entry] of Object.entries(pending)) {
+            if (Object.keys(entry).length === 0) {
+                delete nextParams[id];
+            }
+            else {
+                nextParams[id] = entry;
+            }
+        }
+        const next = { groups: saved.groups ?? {}, params: nextParams } as ParamEdits;
+        save.mutate(next, { onSuccess: () => setPending({}) });
+    }
+
+    function resetEverything() {
+        setConfirmResetAll(false);
+        save.mutate({ groups: {}, params: {} }, { onSuccess: () => setPending({}) });
     }
 
     return (
@@ -84,7 +193,8 @@ export function ParameterConfigPage() {
             <div className="shrink-0 border-b border-subtle px-4 py-2">
                 <p className="mb-2 text-xs text-fg-soft">
                     Raw internal configuration of generation parameters. Changing these affects how
-                    parameters appear in the Generate workspace, not what they do.
+                    parameters appear in the Generate workspace, and what value they start at — not what
+                    they do.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="relative min-w-48 max-w-sm flex-1">
@@ -128,6 +238,20 @@ export function ParameterConfigPage() {
                     <span className="text-xs text-fg-soft tabular-nums">
                         {rows.length} of {schema.params.length}
                     </span>
+                    <div className="flex-1" />
+                    <span className="text-xs text-fg-soft tabular-nums">
+                        {customizedCount} customized
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setConfirmResetAll(true)}
+                        disabled={customizedCount === 0 || save.isPending}
+                        title="Put every parameter back to how it shipped"
+                        className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-sm text-fg hover:bg-[var(--sw-hover)] disabled:opacity-40 disabled:hover:bg-transparent"
+                    >
+                        <RotateCcw size={13} aria-hidden />
+                        Reset all
+                    </button>
                 </div>
             </div>
 
@@ -144,8 +268,16 @@ export function ParameterConfigPage() {
                         </thead>
                         <tbody>
                             {rows.map(param => {
-                                const group = param.group ? schema.groupsById.get(param.group) : undefined;
-                                const isDirty = param.id in edits;
+                                const groupId = effective(param, 'group');
+                                const group = groupId ? schema.groupsById.get(groupId) : undefined;
+                                const isDirty = dirtyIds.includes(param.id);
+                                const original = schema.originals.get(param.id);
+                                const customDefault =
+                                    original !== undefined &&
+                                    !sameEditValue(
+                                        effective(param, 'default'),
+                                        shippedEditValue(original, 'default')
+                                    );
                                 return (
                                     <tr
                                         key={param.id}
@@ -179,6 +311,7 @@ export function ParameterConfigPage() {
                                                 {!effective(param, 'visible') && <Flag label="hidden" />}
                                                 {effective(param, 'toggleable') && <Flag label="toggleable" />}
                                                 {effective(param, 'do_not_save') && <Flag label="no-save" />}
+                                                {customDefault && <Flag label="custom default" />}
                                             </span>
                                         </Td>
                                     </tr>
@@ -204,6 +337,16 @@ export function ParameterConfigPage() {
                             </div>
                             <button
                                 type="button"
+                                onClick={() => resetParam(selected.id)}
+                                disabled={!isCustomized(selected)}
+                                title="Put this parameter back to how it shipped"
+                                className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
+                            >
+                                <RotateCcw size={12} aria-hidden />
+                                Reset
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => setSelectedId(null)}
                                 aria-label="Close"
                                 className="rounded p-1 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
@@ -219,11 +362,18 @@ export function ParameterConfigPage() {
                                 </p>
                             )}
 
+                            <DefaultField
+                                param={selected}
+                                schema={schema}
+                                value={effective(selected, 'default')}
+                                onChange={value => setEdit(selected, 'default', value)}
+                            />
+
                             <Field id="priority" label="Ordering priority" density="compact">
                                 <input
                                     type="number"
                                     value={String(effective(selected, 'priority'))}
-                                    onChange={e => setEdit(selected.id, 'priority', Number(e.target.value))}
+                                    onChange={e => setEdit(selected, 'priority', Number(e.target.value))}
                                     className="w-24 rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                                 />
                             </Field>
@@ -231,7 +381,7 @@ export function ParameterConfigPage() {
                             <Field id="group" label="Group" density="compact">
                                 <select
                                     value={String(effective(selected, 'group') ?? '')}
-                                    onChange={e => setEdit(selected.id, 'group', e.target.value || null)}
+                                    onChange={e => setEdit(selected, 'group', e.target.value || null)}
                                     className="w-full rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                                 >
                                     <option value="">(ungrouped)</option>
@@ -248,7 +398,7 @@ export function ParameterConfigPage() {
                                     <input
                                         type="checkbox"
                                         checked={Boolean(effective(selected, flag.key))}
-                                        onChange={e => setEdit(selected.id, flag.key, e.target.checked)}
+                                        onChange={e => setEdit(selected, flag.key, e.target.checked)}
                                         className="accent-[var(--emphasis)]"
                                     />
                                 </Field>
@@ -257,26 +407,20 @@ export function ParameterConfigPage() {
                             <Field id="examples" label="Examples" density="compact">
                                 <textarea
                                     rows={3}
-                                    value={(effective(selected, 'examples') ?? []).join(' || ')}
-                                    onChange={e => setEdit(selected.id, 'examples', e.target.value)}
+                                    value={examplesText(selected)}
+                                    onChange={e => setEdit(selected, 'examples', e.target.value)}
                                     placeholder="Separate with ||"
                                     className="w-full resize-y rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                                 />
                             </Field>
 
-                            {selected.id in edits && (
+                            {dirtyIds.includes(selected.id) && (
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        setEdits(prev => {
-                                            const next = { ...prev };
-                                            delete next[selected.id];
-                                            return next;
-                                        })
-                                    }
+                                    onClick={() => discardParam(selected.id)}
                                     className="mt-2 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                                 >
-                                    Revert this parameter
+                                    Discard unsaved changes to this parameter
                                 </button>
                             )}
                         </div>
@@ -284,22 +428,22 @@ export function ParameterConfigPage() {
                 )}
             </div>
 
-            {dirtyCount > 0 && (
+            {dirtyIds.length > 0 && (
                 <div className="flex shrink-0 items-center gap-3 border-t border-subtle bg-surface-raised px-4 py-2">
                     <span className="text-sm text-fg">
-                        {dirtyCount} {dirtyCount === 1 ? 'parameter' : 'parameters'} changed
+                        {dirtyIds.length} {dirtyIds.length === 1 ? 'parameter' : 'parameters'} changed
                     </span>
                     <div className="flex-1" />
                     <button
                         type="button"
-                        onClick={() => setEdits({})}
+                        onClick={() => setPending({})}
                         className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
                     >
                         Discard
                     </button>
                     <button
                         type="button"
-                        onClick={() => save.mutate(edits, { onSuccess: () => setEdits({}) })}
+                        onClick={saveAll}
                         disabled={save.isPending}
                         className="rounded px-3 py-1.5 text-sm disabled:opacity-50"
                         style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
@@ -308,7 +452,129 @@ export function ParameterConfigPage() {
                     </button>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={confirmResetAll}
+                title="Reset all parameter configuration?"
+                body={
+                    <>
+                        Every parameter — and every group — goes back to how it shipped, including custom
+                        default values, visibility, ordering and grouping. Unsaved changes are discarded
+                        too. Generated images and settings are untouched.
+                    </>
+                }
+                confirmLabel="Reset all"
+                destructive
+                onConfirm={resetEverything}
+                onCancel={() => setConfirmResetAll(false)}
+            />
         </div>
+    );
+}
+
+/** Editor for a parameter's starting value.
+ *
+ * This is the value the Generate panel opens on and the value its per-row "Reset to default"
+ * restores to, so it is how you make your own preferences the baseline instead of the server's.
+ * Deliberately not `ParamControl`: the media and LoRA controls read the generation param store,
+ * which has no business being touched from a settings screen. */
+function DefaultField(props: {
+    param: ParamSchema;
+    schema: NormalizedSchema;
+    value: string | null;
+    onChange: (value: string) => void;
+}) {
+    const { param, schema } = props;
+    const value = props.value ?? '';
+    const original = schema.originals.get(param.id);
+    const shipped = original ? String(shippedEditValue(original, 'default') ?? '') : '';
+    const inputClass =
+        'w-full rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]';
+
+    const modelList = param.type === 'model' ? (schema.models[param.subtype ?? ''] ?? []) : null;
+    const options = param.values ?? modelList;
+
+    let control;
+    if (param.type === 'boolean') {
+        // Normalized the same way the panel reads it (defaultValue, src/params/store.ts), so a
+        // param that ships with no default at all still lands on a real option rather than blank.
+        const on = value === 'true' || value === 'True';
+        control = (
+            <select
+                value={on ? 'true' : 'false'}
+                onChange={e => props.onChange(e.target.value)}
+                className={inputClass}
+            >
+                <option value="false">false</option>
+                <option value="true">true</option>
+            </select>
+        );
+    }
+    else if (options) {
+        control = (
+            <select value={value} onChange={e => props.onChange(e.target.value)} className={inputClass}>
+                <option value="">(none)</option>
+                {/* A default set before a model was renamed or removed would otherwise vanish
+                    silently on the next visit, so it stays in the list until changed. */}
+                {value && !options.includes(value) && <option value={value}>{value} (missing)</option>}
+                {options.map((option, index) => (
+                    <option key={option} value={option}>
+                        {param.value_names?.[index] ?? option}
+                    </option>
+                ))}
+            </select>
+        );
+    }
+    else if (param.type === 'integer' || param.type === 'decimal') {
+        control = (
+            <input
+                type="number"
+                min={param.min}
+                max={param.max}
+                step={param.step || 1}
+                value={value}
+                onChange={e => props.onChange(e.target.value)}
+                className={`${inputClass} tabular-nums`}
+            />
+        );
+    }
+    else if (param.view_type === 'prompt' || param.view_type === 'big') {
+        control = (
+            <textarea
+                rows={3}
+                value={value}
+                onChange={e => props.onChange(e.target.value)}
+                className={`${inputClass} resize-y`}
+            />
+        );
+    }
+    else {
+        control = (
+            <input
+                type="text"
+                value={value}
+                onChange={e => props.onChange(e.target.value)}
+                className={inputClass}
+            />
+        );
+    }
+
+    return (
+        <Field
+            id="default"
+            label="Default value"
+            description="What this parameter starts at in the Generate panel, and what its Reset to default button restores."
+            density="compact"
+        >
+            <div className="min-w-0">
+                {control}
+                {!sameEditValue(value, shipped) && (
+                    <p className="mt-1 text-[11px] text-fg-soft">
+                        Ships with: <span className="font-mono">{shipped === '' ? '(none)' : shipped}</span>
+                    </p>
+                )}
+            </div>
+        </Field>
     );
 }
 
