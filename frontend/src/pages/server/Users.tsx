@@ -1,147 +1,592 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Shield, User as UserIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Dialog from '@radix-ui/react-dialog';
+import { Plus, Search, Shield, User as UserIcon, X } from 'lucide-react';
 import { api } from '@/api/client';
+import { usePermission } from '@/api/permissions';
+import { MIN_PASSWORD_LENGTH, prehashPassword } from '@/api/password';
+import { PermissionCatalog } from '@/components/server/PermissionCatalog';
+import { RoleDetail } from '@/components/server/RoleDetail';
+import { UserDetail } from '@/components/server/UserDetail';
+import type { PermissionInfo, RoleInfo } from '@/server/users';
 
-interface RoleInfo {
-    name: string;
-    description: string;
-    max_outpath_depth?: number;
-    max_t2i_simultaneous?: number;
-    allow_unsafe_outpaths?: boolean;
-    model_whitelist?: string[];
-    model_blacklist?: string[];
-    permissions?: string[];
+const INPUT =
+    'rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]';
+
+type Tab = 'users' | 'roles' | 'permissions';
+
+function errorText(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
-interface PermissionInfo {
-    name: string;
-    description: string;
-    group?: { name?: string } | string;
-    default?: string;
-}
-
+/** Accounts, roles and permissions.
+ *
+ * Master-detail rather than the legacy UI's shared left rail, which stacks roles and users into one
+ * column and paints the right pane with hand-built HTML strings
+ * (src/wwwroot/js/genpage/server/servertab.js:77). The two lists have different actions and
+ * different permissions behind them, so they get their own tabs.
+ *
+ * Two permissions are in play and neither implies the other: manage_users covers the accounts,
+ * configure_roles covers roles and the permission catalog. */
 export function UsersPage() {
-    const [tab, setTab] = useState<'users' | 'roles' | 'permissions'>('users');
+    const queryClient = useQueryClient();
+    const canManageUsers = usePermission('manage_users');
+    const canConfigureRoles = usePermission('configure_roles');
+
+    const [tab, setTab] = useState<Tab>('users');
+    const [search, setSearch] = useState('');
+    const [selectedUser, setSelectedUser] = useState<string | null>(null);
+    const [selectedRole, setSelectedRole] = useState<string | null>(null);
+    const [addingUser, setAddingUser] = useState(false);
+    const [addingRole, setAddingRole] = useState(false);
 
     const users = useQuery({
         queryKey: ['admin-users'],
-        queryFn: () => api.post<{ users: string[] }>('AdminListUsers')
+        queryFn: () => api.post<{ users: string[] }>('AdminListUsers'),
+        enabled: canManageUsers
     });
+    // AdminListRoles and AdminListPermissions are both gated on ConfigureRoles
+    // (src/WebAPI/AdminAPI.cs:50), which manage_users does not imply — so an admin who can only
+    // manage accounts never gets a role list, and the account screens fall back accordingly.
     const roles = useQuery({
         queryKey: ['admin-roles'],
-        queryFn: () => api.post<Record<string, RoleInfo>>('AdminListRoles'),
-        enabled: tab === 'roles'
+        queryFn: () => api.post<{ roles: Record<string, RoleInfo> }>('AdminListRoles'),
+        enabled: canConfigureRoles
     });
     const permissions = useQuery({
         queryKey: ['admin-permissions'],
-        queryFn: () => api.post<Record<string, PermissionInfo>>('AdminListPermissions'),
-        enabled: tab === 'permissions'
+        queryFn: () =>
+            api.post<{ permissions: Record<string, PermissionInfo>; ordered: string[] }>(
+                'AdminListPermissions'
+            ),
+        // The catalog is fixed for the life of the server process.
+        staleTime: Infinity,
+        enabled: canConfigureRoles
     });
+
+    const roleMap = useMemo(() => roles.data?.roles ?? {}, [roles.data]);
+    const query = search.trim().toLowerCase();
+
+    const userList = useMemo(
+        () => (users.data?.users ?? []).filter(name => name.toLowerCase().includes(query)),
+        [users.data, query]
+    );
+    const roleList = useMemo(
+        () =>
+            Object.entries(roleMap).filter(([id, role]) =>
+                `${id} ${role.name} ${role.description}`.toLowerCase().includes(query)
+            ),
+        [roleMap, query]
+    );
+
+    // A selection can disappear underneath us — the account was deleted, or the role was.
+    useEffect(() => {
+        if (selectedUser && users.data && !users.data.users.includes(selectedUser)) {
+            setSelectedUser(null);
+        }
+    }, [users.data, selectedUser]);
+    useEffect(() => {
+        if (selectedRole && roles.data && !(selectedRole in roles.data.roles)) {
+            setSelectedRole(null);
+        }
+    }, [roles.data, selectedRole]);
+
+    const tabs: { id: Tab; label: string; visible: boolean }[] = [
+        { id: 'users', label: 'Users', visible: canManageUsers },
+        { id: 'roles', label: 'Roles', visible: canConfigureRoles },
+        { id: 'permissions', label: 'Permissions', visible: canConfigureRoles }
+    ];
+    const visibleTabs = tabs.filter(t => t.visible);
+    // Permissions read false until the session resolves, so the stored tab can briefly name one the
+    // user cannot see. Render whichever tab is actually available rather than an empty pane.
+    const activeTab = visibleTabs.some(t => t.id === tab) ? tab : visibleTabs[0]?.id;
+    const showList = activeTab !== 'permissions';
 
     return (
         <div className="flex h-full min-h-0 flex-col">
-            <div className="flex shrink-0 items-center gap-2 border-b border-subtle px-4 py-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle px-4 py-2">
                 <div className="flex overflow-hidden rounded border border-default">
-                    {(['users', 'roles', 'permissions'] as const).map(id => (
+                    {visibleTabs.map(entry => (
                         <button
-                            key={id}
+                            key={entry.id}
                             type="button"
-                            onClick={() => setTab(id)}
-                            aria-pressed={tab === id}
-                            className="px-3 py-1 text-xs capitalize transition-colors"
+                            onClick={() => setTab(entry.id)}
+                            aria-pressed={activeTab === entry.id}
+                            className="px-3 py-1 text-xs transition-colors"
                             style={
-                                tab === id
+                                activeTab === entry.id
                                     ? { background: 'var(--sw-active)', color: 'var(--text-strong)' }
                                     : { color: 'var(--sw-fg-soft)' }
                             }
                         >
-                            {id}
+                            {entry.label}
+                            {entry.id === 'users' && users.data ? ` (${users.data.users.length})` : ''}
+                            {entry.id === 'roles' && roles.data
+                                ? ` (${Object.keys(roles.data.roles).length})`
+                                : ''}
                         </button>
                     ))}
                 </div>
+
+                {showList && (
+                    <div className="relative min-w-40 max-w-xs flex-1">
+                        <Search
+                            size={14}
+                            aria-hidden
+                            className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-fg-soft"
+                        />
+                        <input
+                            type="search"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            placeholder={activeTab === 'users' ? 'Search users…' : 'Search roles…'}
+                            aria-label={activeTab === 'users' ? 'Search users' : 'Search roles'}
+                            className={`${INPUT} w-full py-1 pl-7 pr-6`}
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                onClick={() => setSearch('')}
+                                aria-label="Clear search"
+                                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-soft hover:text-fg"
+                            >
+                                <X size={12} aria-hidden />
+                            </button>
+                        )}
+                    </div>
+                )}
+
+                <div className="flex-1" />
+
+                {activeTab === 'users' && canManageUsers && (
+                    <button
+                        type="button"
+                        onClick={() => setAddingUser(true)}
+                        className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
+                    >
+                        <Plus size={12} aria-hidden />
+                        Add user
+                    </button>
+                )}
+                {activeTab === 'roles' && canConfigureRoles && (
+                    <button
+                        type="button"
+                        onClick={() => setAddingRole(true)}
+                        className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
+                    >
+                        <Plus size={12} aria-hidden />
+                        Add role
+                    </button>
+                )}
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                {tab === 'users' && (
-                    <List
-                        pending={users.isPending}
-                        empty="No user accounts."
-                        items={(users.data?.users ?? []).map(name => ({
-                            key: name,
-                            icon: <UserIcon size={14} aria-hidden />,
-                            title: name,
-                            subtitle: ''
-                        }))}
+            {activeTab === 'permissions' ? (
+                permissions.isPending ? (
+                    <p className="p-4 text-sm text-fg-soft">Loading permissions…</p>
+                ) : permissions.isError || !permissions.data ? (
+                    <p className="p-4 text-sm" style={{ color: 'var(--backend-errored)' }}>
+                        {errorText(permissions.error)}
+                    </p>
+                ) : (
+                    <PermissionCatalog
+                        ordered={permissions.data.ordered}
+                        info={permissions.data.permissions}
+                        roles={roleMap}
                     />
-                )}
-                {tab === 'roles' && (
-                    <List
-                        pending={roles.isPending}
-                        empty="No roles defined."
-                        items={Object.entries(roles.data ?? {}).map(([id, role]) => ({
-                            key: id,
-                            icon: <Shield size={14} aria-hidden />,
-                            title: role.name || id,
-                            subtitle: `${role.description || 'No description.'}${
-                                role.permissions ? ` · ${role.permissions.length} permissions` : ''
-                            }`
-                        }))}
-                    />
-                )}
-                {tab === 'permissions' && (
-                    <List
-                        pending={permissions.isPending}
-                        empty="No permissions registered."
-                        items={Object.entries(permissions.data ?? {}).map(([id, perm]) => ({
-                            key: id,
-                            icon: <Shield size={14} aria-hidden />,
-                            title: perm.name || id,
-                            subtitle: perm.description || '',
-                            mono: id
-                        }))}
-                    />
-                )}
-            </div>
+                )
+            ) : (
+                <div className="flex min-h-0 flex-1">
+                    <nav
+                        aria-label={activeTab === 'users' ? 'User accounts' : 'Roles'}
+                        className="w-60 shrink-0 overflow-y-auto border-r border-subtle p-2"
+                    >
+                        {activeTab === 'users' ? (
+                            users.isPending ? (
+                                <p className="p-2 text-sm text-fg-soft">Loading…</p>
+                            ) : users.isError ? (
+                                <p className="p-2 text-sm" style={{ color: 'var(--backend-errored)' }}>
+                                    {errorText(users.error)}
+                                </p>
+                            ) : userList.length === 0 ? (
+                                <p className="p-2 text-sm text-fg-soft">
+                                    {query ? 'No matching users.' : 'No user accounts.'}
+                                </p>
+                            ) : (
+                                userList.map(name => (
+                                    <ListButton
+                                        key={name}
+                                        icon={<UserIcon size={13} aria-hidden />}
+                                        label={name}
+                                        active={selectedUser === name}
+                                        onClick={() => setSelectedUser(name)}
+                                    />
+                                ))
+                            )
+                        ) : roles.isPending ? (
+                            <p className="p-2 text-sm text-fg-soft">Loading…</p>
+                        ) : roles.isError ? (
+                            <p className="p-2 text-sm" style={{ color: 'var(--backend-errored)' }}>
+                                {errorText(roles.error)}
+                            </p>
+                        ) : roleList.length === 0 ? (
+                            <p className="p-2 text-sm text-fg-soft">
+                                {query ? 'No matching roles.' : 'No roles defined.'}
+                            </p>
+                        ) : (
+                            roleList.map(([id, role]) => (
+                                <ListButton
+                                    key={id}
+                                    icon={<Shield size={13} aria-hidden />}
+                                    label={role.name || id}
+                                    sublabel={`${role.permissions.length} permission(s)`}
+                                    title={role.description}
+                                    active={selectedRole === id}
+                                    onClick={() => setSelectedRole(id)}
+                                />
+                            ))
+                        )}
+                    </nav>
 
-            <p className="shrink-0 border-t border-subtle px-4 py-2 text-xs text-fg-soft">
-                Creating and editing users and roles is read-only here for now; use the existing
-                interface at <a href="/Text2Image" className="underline">/Text2Image</a> to make changes.
-            </p>
+                    <div className="min-w-0 flex-1">
+                        {activeTab === 'users' ? (
+                            selectedUser ? (
+                                <UserDetail
+                                    key={selectedUser}
+                                    userId={selectedUser}
+                                    roles={roleMap}
+                                    rolesKnown={canConfigureRoles}
+                                />
+                            ) : (
+                                <Empty text="Select an account to manage it." />
+                            )
+                        ) : selectedRole && roleMap[selectedRole] ? (
+                            permissions.isPending || !permissions.data ? (
+                                <p className="p-4 text-sm text-fg-soft">Loading permissions…</p>
+                            ) : (
+                                <RoleDetail
+                                    key={selectedRole}
+                                    roleId={selectedRole}
+                                    role={roleMap[selectedRole]}
+                                    permissionsOrdered={permissions.data.ordered}
+                                    permissionsInfo={permissions.data.permissions}
+                                    onDeleted={() => setSelectedRole(null)}
+                                />
+                            )
+                        ) : (
+                            <Empty text="Select a role to edit its limits and permissions." />
+                        )}
+                    </div>
+                </div>
+            )}
+
+            <AddUserDialog
+                open={addingUser}
+                roles={roleMap}
+                rolesKnown={canConfigureRoles}
+                onClose={() => setAddingUser(false)}
+                onAdded={name => {
+                    queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+                    setSelectedUser(name);
+                }}
+            />
+            <AddRoleDialog
+                open={addingRole}
+                onClose={() => setAddingRole(false)}
+                onAdded={() => queryClient.invalidateQueries({ queryKey: ['admin-roles'] })}
+            />
         </div>
     );
 }
 
-function List(props: {
-    pending: boolean;
-    empty: string;
-    items: { key: string; icon: React.ReactNode; title: string; subtitle: string; mono?: string }[];
+function ListButton(props: {
+    icon: React.ReactNode;
+    label: string;
+    sublabel?: string;
+    title?: string;
+    active: boolean;
+    onClick: () => void;
 }) {
-    if (props.pending) {
-        return <p className="text-sm text-fg-soft">Loading…</p>;
-    }
-    if (props.items.length === 0) {
-        return <p className="text-sm text-fg-soft">{props.empty}</p>;
-    }
     return (
-        <ul className="space-y-1.5">
-            {props.items.map(item => (
-                <li
-                    key={item.key}
-                    className="flex items-start gap-3 rounded-lg border border-default bg-surface p-3"
-                >
-                    <span className="mt-0.5 shrink-0 text-fg-soft">{item.icon}</span>
-                    <div className="min-w-0 flex-1">
-                        <p className="flex flex-wrap items-baseline gap-2 text-sm text-fg-strong">
-                            {item.title}
-                            {item.mono && (
-                                <span className="font-mono text-[11px] text-fg-soft">{item.mono}</span>
-                            )}
+        <button
+            type="button"
+            onClick={props.onClick}
+            title={props.title}
+            aria-current={props.active ? 'true' : undefined}
+            className={[
+                'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors',
+                props.active
+                    ? 'bg-[var(--sw-active)] text-fg-strong'
+                    : 'text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg'
+            ].join(' ')}
+        >
+            <span className="shrink-0">{props.icon}</span>
+            <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm">{props.label}</span>
+                {props.sublabel && (
+                    <span className="block truncate text-[11px] opacity-70">{props.sublabel}</span>
+                )}
+            </span>
+        </button>
+    );
+}
+
+function Empty(props: { text: string }) {
+    return (
+        <div className="flex h-full items-center justify-center p-8">
+            <p className="text-sm text-fg-soft">{props.text}</p>
+        </div>
+    );
+}
+
+/** The server lowercases the name and strips anything outside its username pattern before using
+ *  it (SessionHandler.UsernameValidator), so preview the id the account will actually get. */
+function cleanName(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9_]/g, '');
+}
+
+/** What the legacy add-user form offers when it cannot read the role list
+ *  (src/wwwroot/js/genpage/server/servertab.js:94). */
+const FALLBACK_ROLES: [string, string][] = [
+    ['user', 'User'],
+    ['guest', 'Guest']
+];
+
+function AddUserDialog(props: {
+    open: boolean;
+    roles: Record<string, RoleInfo>;
+    rolesKnown: boolean;
+    onClose: () => void;
+    onAdded: (name: string) => void;
+}) {
+    const [name, setName] = useState('');
+    const [password, setPassword] = useState('');
+    const [role, setRole] = useState('user');
+
+    const options: [string, string][] = props.rolesKnown
+        ? Object.entries(props.roles).map(([id, entry]) => [id, entry.name || id])
+        : FALLBACK_ROLES;
+    const activeRole = options.some(([id]) => id === role) ? role : (options[0]?.[0] ?? 'user');
+
+    useEffect(() => {
+        if (props.open) {
+            setName('');
+            setPassword('');
+            setRole('user');
+        }
+    }, [props.open]);
+
+    const cleaned = cleanName(name);
+
+    const add = useMutation({
+        mutationFn: async () =>
+            api.post('AdminAddUser', {
+                name: cleaned,
+                password: await prehashPassword(cleaned, password),
+                role: activeRole
+            }),
+        onSuccess: () => {
+            props.onAdded(cleaned);
+            props.onClose();
+        }
+    });
+
+    const canSubmit = cleaned.length >= 3 && password.length >= MIN_PASSWORD_LENGTH && !add.isPending;
+
+    return (
+        <Dialog.Root open={props.open} onOpenChange={open => !open && props.onClose()}>
+            <Dialog.Portal>
+                <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+                <Dialog.Content className="fixed left-1/2 top-1/3 z-50 w-[min(28rem,90vw)] -translate-x-1/2 rounded-lg border border-default bg-surface-raised p-4 shadow-2xl">
+                    <Dialog.Title className="mb-1 text-base font-medium text-fg-strong">
+                        Add user
+                    </Dialog.Title>
+                    <Dialog.Description className="mb-3 text-sm text-fg-soft">
+                        The account is created with the password you set here, and the user is asked to
+                        change it when they first log in.
+                    </Dialog.Description>
+
+                    <label className="mb-1 block text-xs text-fg-soft" htmlFor="new-user-name">
+                        Username
+                    </label>
+                    <input
+                        id="new-user-name"
+                        type="text"
+                        autoFocus
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        placeholder="at least 3 characters, a-z 0-9"
+                        className={`${INPUT} w-full font-mono`}
+                    />
+                    {cleaned !== name.toLowerCase() && cleaned.length > 0 && (
+                        <p className="mt-1 text-xs text-fg-soft">
+                            Will be created as <span className="font-mono text-fg">{cleaned}</span>.
                         </p>
-                        {item.subtitle && <p className="text-xs text-fg-soft">{item.subtitle}</p>}
+                    )}
+                    {name.length > 0 && cleaned.length < 3 && (
+                        <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
+                            Needs at least 3 usable characters.
+                        </p>
+                    )}
+
+                    <label className="mb-1 mt-2 block text-xs text-fg-soft" htmlFor="new-user-pw">
+                        Password
+                    </label>
+                    <input
+                        id="new-user-pw"
+                        type="password"
+                        autoComplete="new-password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        className={`${INPUT} w-full`}
+                    />
+                    {password.length > 0 && password.length < MIN_PASSWORD_LENGTH && (
+                        <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
+                            Must be at least {MIN_PASSWORD_LENGTH} characters.
+                        </p>
+                    )}
+
+                    <label className="mb-1 mt-2 block text-xs text-fg-soft" htmlFor="new-user-role">
+                        Initial role
+                    </label>
+                    <select
+                        id="new-user-role"
+                        value={activeRole}
+                        onChange={e => setRole(e.target.value)}
+                        className={`${INPUT} w-full`}
+                    >
+                        {options.map(([id, label]) => (
+                            <option key={id} value={id} title={props.roles[id]?.description}>
+                                {label}
+                            </option>
+                        ))}
+                    </select>
+                    {!props.rolesKnown && (
+                        <p className="mt-1 text-xs text-fg-soft">
+                            Showing the built-in roles only — listing every role needs the
+                            configure_roles permission. The role can be changed after creation.
+                        </p>
+                    )}
+
+                    {add.isError && (
+                        <p className="mt-2 text-xs" style={{ color: 'var(--backend-errored)' }}>
+                            {errorText(add.error)}
+                        </p>
+                    )}
+
+                    <div className="mt-4 flex justify-end gap-2">
+                        <Dialog.Close asChild>
+                            <button
+                                type="button"
+                                className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
+                            >
+                                Cancel
+                            </button>
+                        </Dialog.Close>
+                        <button
+                            type="button"
+                            disabled={!canSubmit}
+                            onClick={() => add.mutate()}
+                            className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
+                            style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
+                        >
+                            {add.isPending ? 'Creating…' : 'Create user'}
+                        </button>
                     </div>
-                </li>
-            ))}
-        </ul>
+                </Dialog.Content>
+            </Dialog.Portal>
+        </Dialog.Root>
+    );
+}
+
+function AddRoleDialog(props: { open: boolean; onClose: () => void; onAdded: () => void }) {
+    const [name, setName] = useState('');
+
+    useEffect(() => {
+        if (props.open) {
+            setName('');
+        }
+    }, [props.open]);
+
+    const cleaned = cleanName(name);
+
+    const add = useMutation({
+        // AdminAddRole keys the role by the cleaned name but stores the display name as typed.
+        mutationFn: () => api.post('AdminAddRole', { name }),
+        onSuccess: () => {
+            props.onAdded();
+            props.onClose();
+        }
+    });
+
+    const canSubmit = cleaned.length >= 3 && !add.isPending;
+
+    return (
+        <Dialog.Root open={props.open} onOpenChange={open => !open && props.onClose()}>
+            <Dialog.Portal>
+                <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+                <Dialog.Content className="fixed left-1/2 top-1/3 z-50 w-[min(28rem,90vw)] -translate-x-1/2 rounded-lg border border-default bg-surface-raised p-4 shadow-2xl">
+                    <Dialog.Title className="mb-1 text-base font-medium text-fg-strong">
+                        Add role
+                    </Dialog.Title>
+                    <Dialog.Description className="mb-3 text-sm text-fg-soft">
+                        The new role starts with no permissions. Grant them after creating it.
+                    </Dialog.Description>
+
+                    <label className="mb-1 block text-xs text-fg-soft" htmlFor="new-role-name">
+                        Role name
+                    </label>
+                    <input
+                        id="new-role-name"
+                        type="text"
+                        autoFocus
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter' && canSubmit) {
+                                add.mutate();
+                            }
+                        }}
+                        placeholder="at least 3 characters, a-z 0-9"
+                        className={`${INPUT} w-full`}
+                    />
+                    {cleaned.length > 0 && (
+                        <p className="mt-1 text-xs text-fg-soft">
+                            Looked up as <span className="font-mono text-fg">{cleaned}</span>.
+                        </p>
+                    )}
+                    {name.length > 0 && cleaned.length < 3 && (
+                        <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
+                            Needs at least 3 usable characters.
+                        </p>
+                    )}
+
+                    {add.isError && (
+                        <p className="mt-2 text-xs" style={{ color: 'var(--backend-errored)' }}>
+                            {errorText(add.error)}
+                        </p>
+                    )}
+
+                    <div className="mt-4 flex justify-end gap-2">
+                        <Dialog.Close asChild>
+                            <button
+                                type="button"
+                                className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
+                            >
+                                Cancel
+                            </button>
+                        </Dialog.Close>
+                        <button
+                            type="button"
+                            disabled={!canSubmit}
+                            onClick={() => add.mutate()}
+                            className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
+                            style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
+                        >
+                            {add.isPending ? 'Creating…' : 'Create role'}
+                        </button>
+                    </div>
+                </Dialog.Content>
+            </Dialog.Portal>
+        </Dialog.Root>
     );
 }

@@ -33,6 +33,8 @@ import {
     type LucideIcon
 } from 'lucide-react';
 
+import type { PermissionRequirement } from '@/api/permissions';
+
 /** Top-level rail entries. */
 export type SectionId = 'generate' | 'library' | 'tools' | 'server' | 'settings';
 
@@ -41,7 +43,7 @@ export interface Section {
     label: string;
     icon: LucideIcon;
     /** Permission required to see the section at all. */
-    permission?: string;
+    permission?: PermissionRequirement;
 }
 
 export interface Destination {
@@ -52,8 +54,9 @@ export interface Destination {
     icon: LucideIcon;
     /** Full route path, eg '/library/models'. */
     path: string;
-    /** Permission required, matched against the session's permission list. */
-    permission?: string;
+    /** Permission required, matched against the session's permission list.
+     *  An array means any one of them is enough. */
+    permission?: PermissionRequirement;
     /** Extra search terms for the command palette (legacy names, synonyms). */
     keywords?: string[];
     /** Set until the screen is actually implemented, so placeholders are honest. */
@@ -243,7 +246,7 @@ export const DESTINATIONS: Destination[] = [
         label: 'Users',
         icon: Users,
         path: '/server/users',
-        permission: 'manage_users',
+        permission: ['manage_users', 'configure_roles'],
         keywords: ['accounts', 'roles', 'permissions', 'login'],
         placeholder: true
     },

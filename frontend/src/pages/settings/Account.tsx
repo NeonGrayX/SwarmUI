@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { KeyRound, Trash2 } from 'lucide-react';
 import { api } from '@/api/client';
 import { useSession } from '@/api/hooks';
+import { MIN_PASSWORD_LENGTH, prehashPassword } from '@/api/password';
 import { useMyUserData } from '@/library/hooks';
 import { Field } from '@/components/form/Field';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -55,13 +56,22 @@ export function AccountPage() {
 }
 
 function ChangePasswordPanel() {
+    const session = useSession();
     const [current, setCurrent] = useState('');
     const [next, setNext] = useState('');
     const [confirm, setConfirm] = useState('');
     const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+    const userId = session.data?.user_id ?? '';
 
     const change = useMutation({
-        mutationFn: () => api.post('ChangePassword', { oldPassword: current, newPassword: next }),
+        // Both values go over prehashed. The server hashes again on top of whatever it receives
+        // (BasicAPIFeatures.ChangePassword), so a raw password here would store a hash the login
+        // page — which does prehash — could never reproduce, locking the account out.
+        mutationFn: async () =>
+            api.post('ChangePassword', {
+                oldPassword: await prehashPassword(userId, current),
+                newPassword: await prehashPassword(userId, next)
+            }),
         onSuccess: () => {
             setMessage({ ok: true, text: 'Password changed.' });
             setCurrent('');
@@ -73,7 +83,9 @@ function ChangePasswordPanel() {
     });
 
     const mismatch = next.length > 0 && confirm.length > 0 && next !== confirm;
-    const canSubmit = current && next && next === confirm && !change.isPending;
+    const tooShort = next.length > 0 && next.length < MIN_PASSWORD_LENGTH;
+    const canSubmit =
+        Boolean(userId) && current && next.length >= MIN_PASSWORD_LENGTH && next === confirm && !change.isPending;
 
     return (
         <Panel title="Change password">
@@ -110,6 +122,11 @@ function ChangePasswordPanel() {
             {mismatch && (
                 <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
                     The new passwords don't match.
+                </p>
+            )}
+            {tooShort && (
+                <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
+                    Must be at least {MIN_PASSWORD_LENGTH} characters.
                 </p>
             )}
             {message && (

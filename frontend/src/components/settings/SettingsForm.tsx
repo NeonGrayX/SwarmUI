@@ -13,6 +13,16 @@ import {
 const INPUT =
     'rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]';
 
+/** How the server joins a List<string> on the way out, and how this form shows it. */
+const LIST_SEPARATOR = ' || ';
+
+function splitList(text: string): string[] {
+    return text
+        .split('||')
+        .map(entry => entry.trim())
+        .filter(Boolean);
+}
+
 /** Schema-driven settings editor, shared by Server Configuration and user Preferences.
  *
  * The legacy versions of both screens (src/wwwroot/js/genpage/helpers/settings_editor.js) render
@@ -230,13 +240,17 @@ export function SettingsForm(props: {
                     />
                 );
             case 'list':
+                // Displayed joined by ' || ', which is how the server serializes a List<string>
+                // (AdminAPI.AutoConfigToParamData) — but saved as a real array, because the
+                // matching parse (AdminAPI.DataToType) splits a *string* on commas instead. Sending
+                // the text back verbatim would collapse every entry into one on the first comma.
                 return (
                     <textarea
                         id={`setting-${key}`}
                         rows={2}
-                        value={String(value ?? '')}
+                        value={Array.isArray(value) ? value.join(LIST_SEPARATOR) : String(value ?? '')}
                         disabled={disabled}
-                        onChange={e => set(e.target.value)}
+                        onChange={e => set(splitList(e.target.value))}
                         placeholder="Separate entries with ||"
                         className={`${INPUT} w-full resize-y font-mono text-xs`}
                     />
