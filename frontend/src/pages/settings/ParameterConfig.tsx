@@ -7,6 +7,7 @@ import { normalizeSchema, type NormalizedSchema, type ParamEdits } from '@/param
 import type { ParamSchema } from '@/api/types';
 import { Field } from '@/components/form/Field';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { DetailSheet } from '@/components/ui/DetailSheet';
 import { useTranslation } from '@/i18n';
 
 /** One param's complete override record, in the shape SetParamEdits stores it. An empty record
@@ -339,10 +340,10 @@ export function ParameterConfigPage() {
                 </div>
 
                 {selected && (
-                    <aside
-                        aria-label={t('paramConfig.settingsLabel')}
-                        className="flex w-96 shrink-0 flex-col border-l border-subtle bg-surface"
-                        style={{ ['--sw-field-label-width' as string]: '9rem' }}
+                    <DetailSheet
+                        label={t('paramConfig.settingsLabel')}
+                        onClose={() => setSelectedId(null)}
+                        style={{ ['--sw-field-label-width' as string]: '9rem' } as React.CSSProperties}
                     >
                         <div className="flex shrink-0 items-start gap-2 border-b border-subtle p-3">
                             <div className="min-w-0 flex-1">
@@ -440,7 +441,7 @@ export function ParameterConfigPage() {
                                 </button>
                             )}
                         </div>
-                    </aside>
+                    </DetailSheet>
                 )}
             </div>
 

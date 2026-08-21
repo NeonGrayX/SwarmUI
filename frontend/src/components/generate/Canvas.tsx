@@ -3,6 +3,7 @@ import { ImageIcon, Info } from 'lucide-react';
 import { imageUrl, useGenerateStore } from '@/generate/store';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
 import { MetadataView } from '../ui/MetadataView';
+import { DetailSheet } from '../ui/DetailSheet';
 import { ZoomableImage } from './ZoomableImage';
 import { useTranslation } from '@/i18n';
 
@@ -107,10 +108,18 @@ export function Canvas() {
             </div>
 
             {showMetadata && current && (
-                <aside className="w-80 shrink-0 overflow-auto border-l border-subtle bg-surface p-3">
-                    <h2 className="mb-2 text-sm font-medium text-fg-strong">{t('canvas.metadata')}</h2>
-                    <MetadataView metadata={current.metadata} empty={t('canvas.noMetadata')} />
-                </aside>
+                <DetailSheet
+                    label={t('canvas.metadata')}
+                    onClose={() => setShowMetadata(false)}
+                    width="w-80"
+                >
+                    <h2 className="shrink-0 px-3 pt-3 text-sm font-medium text-fg-strong">
+                        {t('canvas.metadata')}
+                    </h2>
+                    <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                        <MetadataView metadata={current.metadata} empty={t('canvas.noMetadata')} />
+                    </div>
+                </DetailSheet>
             )}
         </div>
     );

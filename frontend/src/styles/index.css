@@ -37,6 +37,10 @@ html,
 body,
 #root {
     height: 100%;
+    /* dvh follows a mobile browser's collapsing address bar. Without it the fixed-height shell is
+     * sized to the *expanded* bar and its bottom row - the prompt and Generate button - sits below
+     * the fold until the page is scrolled, which a page with `overflow: hidden` never does. */
+    height: 100dvh;
 }
 
 body {
@@ -60,6 +64,14 @@ body {
     height: 10px;
 }
 
+/* Touch devices scroll by dragging the content, so a 10px gutter is pure lost width. */
+@media (pointer: coarse) {
+    ::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+    }
+}
+
 ::-webkit-scrollbar-thumb {
     background: var(--scrollbar);
     border-radius: 5px;
@@ -67,4 +79,39 @@ body {
 
 ::-webkit-scrollbar-track {
     background: transparent;
+}
+
+/* Horizontally scrolling nav strips: the bar is noise on a control whose overflow is obvious from
+ * the clipped item at its edge. */
+.sw-no-scrollbar {
+    scrollbar-width: none;
+}
+
+.sw-no-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+/* The form row shared by every screen, in class form rather than inline so it can be responsive.
+ * The two-column grid with a fixed label column is what makes rows in a panel line up; below `sm`
+ * there is no width to divide, so the label sits above its control instead. */
+.sw-field-row {
+    display: grid;
+    align-items: start;
+    column-gap: var(--sw-field-gap);
+    grid-template-columns: var(--sw-field-label-width) minmax(0, 1fr);
+}
+
+@media (max-width: 639px) {
+    .sw-field-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* iOS zooms the viewport when a control smaller than 16px takes focus, and never zooms back
+     * out. Every text control in this UI is 14px, so they all trigger it. */
+    input:not([type='checkbox']):not([type='radio']):not([type='range']),
+    select,
+    textarea {
+        font-size: 16px;
+    }
 }

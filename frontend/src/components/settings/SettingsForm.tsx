@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, EyeOff, Search, X } from 'lucide-react';
 import { Field } from '../form/Field';
+import { SideNav } from '../ui/SideNav';
 import {
     isChangedFromDefault,
     organizeSettings,
@@ -273,27 +274,40 @@ export function SettingsForm(props: {
     }
 
     return (
-        <div className="flex h-full min-h-0" style={{ ['--sw-field-label-width' as string]: '14rem' }}>
-            <nav
-                aria-label={t('settings.groupsLabel')}
-                className="w-56 shrink-0 overflow-y-auto border-r border-subtle p-2"
+        <div
+            className="flex h-full min-h-0 flex-col md:flex-row"
+            style={{ ['--sw-field-label-width' as string]: '14rem' }}
+        >
+            <SideNav
+                label={t('settings.groupsLabel')}
+                summary={visibleGroup ? tDynamic(visibleGroup.name) : t('settings.general')}
             >
-                <GroupButton
-                    label={t('settings.general')}
-                    active={activeGroup === ''}
-                    count={countDirty(rootSettings, edits)}
-                    onClick={() => setActiveGroup('')}
-                />
-                {groups.map(group => (
-                    <GroupTree
-                        key={group.key}
-                        group={group}
-                        activeGroup={activeGroup}
-                        edits={edits}
-                        onSelect={setActiveGroup}
-                    />
-                ))}
-            </nav>
+                {close => (
+                    <>
+                        <GroupButton
+                            label={t('settings.general')}
+                            active={activeGroup === ''}
+                            count={countDirty(rootSettings, edits)}
+                            onClick={() => {
+                                setActiveGroup('');
+                                close();
+                            }}
+                        />
+                        {groups.map(group => (
+                            <GroupTree
+                                key={group.key}
+                                group={group}
+                                activeGroup={activeGroup}
+                                edits={edits}
+                                onSelect={key => {
+                                    setActiveGroup(key);
+                                    close();
+                                }}
+                            />
+                        ))}
+                    </>
+                )}
+            </SideNav>
 
             <div className="flex min-w-0 flex-1 flex-col">
                 <div className="shrink-0 border-b border-subtle p-2">

@@ -1,4 +1,13 @@
-import { useCallback, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    type KeyboardEvent,
+    type MouseEvent,
+    type ReactNode,
+    type TouchEvent
+} from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { t } from '@/i18n';
 
@@ -17,11 +26,58 @@ interface MenuState {
     items: MenuAction[];
 }
 
+/** Touch handlers to spread onto the element that also carries `onContextMenu`. */
+export interface LongPressHandlers {
+    onTouchStart: (event: TouchEvent<HTMLElement>) => void;
+    onTouchMove: (event: TouchEvent<HTMLElement>) => void;
+    onTouchEnd: () => void;
+    onTouchCancel: () => void;
+}
+
 export interface ContextMenuHandle {
     /** `onContextMenu` handler for one item: opens the menu at the pointer with these actions. */
     open: (event: MouseEvent, items: MenuAction[]) => void;
+    /** Long-press equivalent, for touch screens. Spread onto the same element as `onContextMenu`. */
+    touch: (items: MenuAction[]) => LongPressHandlers;
     /** Render once per browser, anywhere in its tree. */
     menu: ReactNode;
+}
+
+/** How long a finger must rest before the press counts as a menu request. */
+const LONG_PRESS_MS = 500;
+/** How far it may drift in that time before the gesture is a scroll instead. */
+const LONG_PRESS_SLOP_PX = 10;
+
+/** The compatibility mouse sequence a touch release replays, in order. */
+const RELEASE_EVENTS = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click'] as const;
+
+/** Lifting the finger after a long press replays that whole sequence at the pressed point: it
+ *  would activate whatever was pressed *and* read as a click outside the menu that just opened,
+ *  dismissing it before it can be used. Swallow that one release in the capture phase, so it
+ *  reaches neither the item nor Radix's outside-press watcher — but never swallow a press on the
+ *  menu itself, which is the action the whole gesture was for. */
+function swallowTapAfterLongPress(): void {
+    const stop = (event: Event) => {
+        if (event.target instanceof Element && event.target.closest('[data-radix-popper-content-wrapper]')) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.type === 'click') {
+            done();
+        }
+    };
+    const done = () => {
+        for (const type of RELEASE_EVENTS) {
+            window.removeEventListener(type, stop, true);
+        }
+        clearTimeout(expiry);
+    };
+    for (const type of RELEASE_EVENTS) {
+        window.addEventListener(type, stop, true);
+    }
+    // A release that produces no click — dragged off the item, say — never reaches `done` itself.
+    const expiry = window.setTimeout(done, 700);
 }
 
 /** Up/down through the rows, which is what a menu is expected to do. Radix's popover only gives
@@ -49,7 +105,8 @@ function moveWithArrows(event: KeyboardEvent<HTMLDivElement>): void {
  *
  * The keyboard menu key (and Shift+F10) also fires `contextmenu`, but with no meaningful pointer
  * position; those anchor to the item itself, which is what keeps the actions reachable without a
- * mouse now that the models browser has no visible "more actions" button. */
+ * mouse now that the models browser has no visible "more actions" button. Touch gets the same
+ * actions from `touch()`, on a long press. */
 export function useContextMenu(): ContextMenuHandle {
     const [state, setState] = useState<MenuState | null>(null);
     /** The element focused when the menu opened, to hand focus back to on Escape. */
@@ -74,6 +131,60 @@ export function useContextMenu(): ContextMenuHandle {
             items
         });
     }, []);
+
+    /** Pending long press, if a finger is currently down. */
+    const press = useRef<{ timer: number; x: number; y: number } | null>(null);
+
+    const cancelPress = useCallback(() => {
+        if (press.current) {
+            clearTimeout(press.current.timer);
+            press.current = null;
+        }
+    }, []);
+
+    // A press in flight when the browser unmounts would otherwise open a menu on nothing.
+    useEffect(() => cancelPress, [cancelPress]);
+
+    /** Touch has no right-click, and iOS Safari does not synthesise `contextmenu` from a long press
+     *  the way Android Chrome does, so on a phone this is the only route to rename and delete. */
+    const touch = useCallback(
+        (items: MenuAction[]): LongPressHandlers => ({
+            onTouchStart: event => {
+                cancelPress();
+                if (items.length === 0 || event.touches.length !== 1) {
+                    return;
+                }
+                const { clientX, clientY } = event.touches[0];
+                press.current = {
+                    x: clientX,
+                    y: clientY,
+                    timer: window.setTimeout(() => {
+                        press.current = null;
+                        opener.current = null;
+                        dismissedOutside.current = false;
+                        swallowTapAfterLongPress();
+                        setState({ x: clientX, y: clientY, items });
+                    }, LONG_PRESS_MS)
+                };
+            },
+            onTouchMove: event => {
+                const pending = press.current;
+                const point = event.touches[0];
+                if (!pending || !point) {
+                    return;
+                }
+                if (
+                    Math.abs(point.clientX - pending.x) > LONG_PRESS_SLOP_PX ||
+                    Math.abs(point.clientY - pending.y) > LONG_PRESS_SLOP_PX
+                ) {
+                    cancelPress();
+                }
+            },
+            onTouchEnd: cancelPress,
+            onTouchCancel: cancelPress
+        }),
+        [cancelPress]
+    );
 
     const menu = (
         // Keying on the position is what actually moves the menu: the anchor is a zero-size element
@@ -130,5 +241,5 @@ export function useContextMenu(): ContextMenuHandle {
         </Popover.Root>
     );
 
-    return { open, menu };
+    return { open, touch, menu };
 }

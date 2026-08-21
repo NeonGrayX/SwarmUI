@@ -34,7 +34,8 @@ export interface FieldProps {
  * The layout rule that matters: label and control live in a two-column grid with a *fixed* label
  * column (--sw-field-label-width), so every row in a panel aligns. The legacy UI emits label and
  * control as inline siblings, which is why User Settings and Server Configuration render as ragged
- * text with controls at arbitrary x-positions.
+ * text with controls at arbitrary x-positions. The grid itself lives in `.sw-field-row` in
+ * index.css, which stacks the two below `sm` — a phone has no width to give a label column.
  *
  * The legacy `?` glyph becomes a real info tooltip, so descriptions are readable rather than
  * hover-only tooltips on a 9px character. */
@@ -49,10 +50,9 @@ export function Field(props: FieldProps) {
     return (
         <div
             className={[
-                'group/field grid items-start gap-x-[var(--sw-field-gap)]',
+                'group/field sw-field-row',
                 density === 'comfortable' ? 'py-1.5' : density === 'compact' ? 'py-1' : 'py-0.5'
             ].join(' ')}
-            style={{ gridTemplateColumns: 'var(--sw-field-label-width) minmax(0, 1fr)' }}
             title={props.disabled ? props.disabledReason : undefined}
         >
             <div className="flex items-center gap-1 min-w-0 pt-1">

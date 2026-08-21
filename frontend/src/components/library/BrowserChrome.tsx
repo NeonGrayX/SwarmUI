@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, Folder, Grid3x3, List, Search, Star, X } from 'lucide-react';
 import type { SortMode, ViewMode } from '@/library/types';
+import { SideNav } from '../ui/SideNav';
 import { t as translate, useTranslation } from '@/i18n';
 
 /** Child folder names keyed by their absolute parent path ('' is the root). */
@@ -62,7 +63,11 @@ function ancestorsOf(path: string): string[] {
  * The legacy browsers render a bare nested tree of links with no indication of where you are;
  * this pairs an explicit breadcrumb with a tree whose parents expand in place. `folders` is
  * undefined while a folder's contents are still loading, which leaves the tree untouched rather
- * than momentarily collapsing the branch being opened. */
+ * than momentarily collapsing the branch being opened.
+ *
+ * On a phone the whole thing folds into one row via <SideNav>, showing the current folder's name.
+ * Only the explicit navigation buttons close it: opening a branch below the fetched depth also
+ * calls `onNavigate`, to go and load that level, and must leave the tree on screen. */
 export function FolderPane(props: {
     folders: string[] | undefined;
     path: string;
@@ -109,51 +114,67 @@ export function FolderPane(props: {
     const roots = tree.get('') ?? [];
 
     return (
-        <nav aria-label={t('browser.folders')} className="w-56 shrink-0 overflow-y-auto border-r border-subtle p-2">
-            <ol className="mb-2 flex flex-wrap items-center gap-0.5 text-xs">
-                <li>
-                    <button
-                        type="button"
-                        onClick={() => props.onNavigate('')}
-                        className="rounded px-1 py-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
-                    >
-                        {t('browser.root')}
-                    </button>
-                </li>
-                {segments.map((segment, i) => (
-                    <li key={segment + i} className="flex items-center gap-0.5">
-                        <ChevronRight size={11} className="text-fg-soft" aria-hidden />
-                        <button
-                            type="button"
-                            onClick={() => props.onNavigate(segments.slice(0, i + 1).join('/'))}
-                            className="max-w-28 truncate rounded px-1 py-0.5 text-fg hover:bg-[var(--sw-hover)]"
-                        >
-                            {segment}
-                        </button>
-                    </li>
-                ))}
-            </ol>
+        <SideNav
+            label={t('browser.folders')}
+            summary={segments.length === 0 ? t('browser.root') : segments[segments.length - 1]}
+        >
+            {close => (
+                <>
+                    <ol className="mb-2 flex flex-wrap items-center gap-0.5 text-xs">
+                        <li>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    props.onNavigate('');
+                                    close();
+                                }}
+                                className="rounded px-1 py-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
+                            >
+                                {t('browser.root')}
+                            </button>
+                        </li>
+                        {segments.map((segment, i) => (
+                            <li key={segment + i} className="flex items-center gap-0.5">
+                                <ChevronRight size={11} className="text-fg-soft" aria-hidden />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        props.onNavigate(segments.slice(0, i + 1).join('/'));
+                                        close();
+                                    }}
+                                    className="max-w-28 truncate rounded px-1 py-0.5 text-fg hover:bg-[var(--sw-hover)]"
+                                >
+                                    {segment}
+                                </button>
+                            </li>
+                        ))}
+                    </ol>
 
-            {roots.length === 0 ? (
-                <p className="px-1 text-xs text-fg-soft">{t('browser.noSubfolders')}</p>
-            ) : (
-                <ul className="space-y-0.5">
-                    {roots.map(folder => (
-                        <FolderNode
-                            key={folder}
-                            name={folder}
-                            path={folder}
-                            level={0}
-                            tree={tree}
-                            expanded={expanded}
-                            onToggle={toggle}
-                            current={props.path}
-                            onNavigate={props.onNavigate}
-                        />
-                    ))}
-                </ul>
+                    {roots.length === 0 ? (
+                        <p className="px-1 text-xs text-fg-soft">{t('browser.noSubfolders')}</p>
+                    ) : (
+                        <ul className="space-y-0.5">
+                            {roots.map(folder => (
+                                <FolderNode
+                                    key={folder}
+                                    name={folder}
+                                    path={folder}
+                                    level={0}
+                                    tree={tree}
+                                    expanded={expanded}
+                                    onToggle={toggle}
+                                    current={props.path}
+                                    onNavigate={path => {
+                                        props.onNavigate(path);
+                                        close();
+                                    }}
+                                />
+                            ))}
+                        </ul>
+                    )}
+                </>
             )}
-        </nav>
+        </SideNav>
     );
 }
 

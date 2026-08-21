@@ -8,6 +8,7 @@ import { useSession } from '@/api/hooks';
 import { useReuseParameters } from '@/params/reuse';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
 import { BrowserToolbar, EmptyState, FolderPane, StarButton } from './BrowserChrome';
+import { DetailSheet } from '../ui/DetailSheet';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { MetadataView } from '../ui/MetadataView';
@@ -212,7 +213,7 @@ export function HistoryBrowser() {
     }
 
     return (
-        <div className="relative flex h-full min-h-0">
+        <div className="relative flex h-full min-h-0 flex-col md:flex-row">
             <FolderPane folders={images.data?.folders} path={path} onNavigate={setPath} />
 
             <div className="flex min-w-0 flex-1 flex-col">
@@ -272,6 +273,7 @@ export function HistoryBrowser() {
                                 <div
                                     key={file.src}
                                     onContextMenu={event => contextMenu.open(event, actionsFor(file))}
+                                    {...contextMenu.touch(actionsFor(file))}
                                     className={[
                                         'group relative aspect-square overflow-hidden rounded border bg-surface-sunken',
                                         selection.isSelected(file.src)
@@ -319,6 +321,7 @@ export function HistoryBrowser() {
                                 <li
                                     key={file.src}
                                     onContextMenu={event => contextMenu.open(event, actionsFor(file))}
+                                    {...contextMenu.touch(actionsFor(file))}
                                     className="group flex items-center gap-3"
                                 >
                                     <SelectionCheckbox
@@ -434,10 +437,7 @@ function ImageSheet(props: {
 }) {
     const { t } = useTranslation();
     return (
-        <aside
-            aria-label={t('history.imageDetails')}
-            className="flex w-96 shrink-0 flex-col border-l border-subtle bg-surface"
-        >
+        <DetailSheet label={t('history.imageDetails')} onClose={props.onClose}>
             <div className="flex shrink-0 items-center gap-2 border-b border-subtle p-3">
                 <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-fg-strong" title={props.entry.src}>
                     {props.entry.src.split('/').pop()}
@@ -475,11 +475,11 @@ function ImageSheet(props: {
                 <img
                     src={props.url}
                     alt=""
-                    className="mb-3 w-full rounded border border-subtle"
+                    className="mb-3 max-h-72 w-full rounded border border-subtle object-contain lg:max-h-none"
                 />
                 <MetadataView metadata={props.entry.metadata} empty={t('history.noMetadata')} />
             </div>
-        </aside>
+        </DetailSheet>
     );
 }
 

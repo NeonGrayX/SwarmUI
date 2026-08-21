@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { isModelCard, previewUrl, type ModelCard, type ModelSubtype, type WildcardCard } from '@/library/types';
 import { Field } from '../form/Field';
+import { DetailSheet } from '../ui/DetailSheet';
 import { useTranslation } from '@/i18n';
 
 /** Side sheet showing a model's details, with inline metadata editing.
@@ -28,17 +29,6 @@ export function ModelDetailSheet(props: {
         setDraft(toDraft(isModelCard(props.file) ? props.file : null));
         setError(null);
     }, [props.file]);
-
-    // Escape closes, matching every other overlay in this UI.
-    useEffect(() => {
-        function onKey(e: KeyboardEvent) {
-            if (e.key === 'Escape') {
-                props.onClose();
-            }
-        }
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [props]);
 
     const image = previewUrl(card ? card.preview_image : (props.file as WildcardCard).image);
     const dirty = card !== null && JSON.stringify(draft) !== JSON.stringify(toDraft(card));
@@ -78,10 +68,10 @@ export function ModelDetailSheet(props: {
     }
 
     return (
-        <aside
-            aria-label={t('modelDetail.title')}
-            className="flex w-96 shrink-0 flex-col border-l border-subtle bg-surface"
-            style={{ ['--sw-field-label-width' as string]: '7rem' }}
+        <DetailSheet
+            label={t('modelDetail.title')}
+            onClose={props.onClose}
+            style={{ ['--sw-field-label-width' as string]: '7rem' } as React.CSSProperties}
         >
             <div className="flex shrink-0 items-start gap-2 border-b border-subtle p-3">
                 <div className="min-w-0 flex-1">
@@ -104,10 +94,12 @@ export function ModelDetailSheet(props: {
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 {image && (
+                    // Capped in the bottom sheet, where a full-width preview is tall enough to
+                    // push every editable field below the fold.
                     <img
                         src={image}
                         alt=""
-                        className="mb-3 w-full rounded border border-subtle object-cover"
+                        className="mb-3 max-h-64 w-full rounded border border-subtle object-cover lg:max-h-none"
                     />
                 )}
 
@@ -245,7 +237,7 @@ export function ModelDetailSheet(props: {
                     </div>
                 </div>
             )}
-        </aside>
+        </DetailSheet>
     );
 }
 

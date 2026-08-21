@@ -17,8 +17,10 @@ export function Breadcrumbs() {
 
     return (
         <nav aria-label={t('nav.breadcrumb.label')} className="flex items-center gap-1 text-sm min-w-0">
-            <span className="text-fg-soft shrink-0">{t(section.labelKey)}</span>
-            <ChevronRight size={14} className="text-fg-soft shrink-0" aria-hidden />
+            {/* The section is one tap away in the drawer on a phone, and the level-two strip sits
+                directly under this row, so the trail collapses to just where you are. */}
+            <span className="hidden sm:inline text-fg-soft shrink-0">{t(section.labelKey)}</span>
+            <ChevronRight size={14} className="hidden sm:inline text-fg-soft shrink-0" aria-hidden />
             <span className="font-medium text-fg-strong truncate">{t(destination.labelKey)}</span>
         </nav>
     );

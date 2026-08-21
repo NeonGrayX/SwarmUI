@@ -23,7 +23,7 @@ import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from '
 import { ModelDetailSheet } from './ModelDetailSheet';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { PromptDialog } from '../ui/PromptDialog';
-import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
+import { useContextMenu, type LongPressHandlers, type MenuAction } from '../ui/ContextMenu';
 import { useTranslation } from '@/i18n';
 
 /** Unified browser for every model-family asset plus wildcards.
@@ -124,7 +124,8 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
     }
 
     return (
-        <div className="flex h-full min-h-0">
+        // Column-first below `md`, where the folder pane is a collapsible bar rather than a rail.
+        <div className="flex h-full min-h-0 flex-col md:flex-row">
             <FolderPane folders={models.data?.folders} path={path} onNavigate={setPath} />
 
             <div className="flex min-w-0 flex-1 flex-col">
@@ -192,6 +193,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                                     onStar={() => toggleStar.mutate({ subtype: props.subtype, name: file.name })}
                                     onOpen={event => selection.click(event, file.name, () => setSelected(file))}
                                     onMenu={event => contextMenu.open(event, actionsFor(file))}
+                                    longPress={contextMenu.touch(actionsFor(file))}
                                 />
                             ))}
                         </div>
@@ -207,6 +209,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                                     onStar={() => toggleStar.mutate({ subtype: props.subtype, name: file.name })}
                                     onOpen={event => selection.click(event, file.name, () => setSelected(file))}
                                     onMenu={event => contextMenu.open(event, actionsFor(file))}
+                                    longPress={contextMenu.touch(actionsFor(file))}
                                 />
                             ))}
                         </ul>
@@ -288,6 +291,7 @@ function Card(props: {
     onStar: () => void;
     onOpen: (event: React.MouseEvent) => void;
     onMenu: (event: React.MouseEvent) => void;
+    longPress: LongPressHandlers;
 }) {
     const { t, tDynamic } = useTranslation();
     const { file } = props;
@@ -301,6 +305,7 @@ function Card(props: {
                 props.checked ? 'border-[var(--emphasis)]' : 'border-default'
             ].join(' ')}
             onContextMenu={props.onMenu}
+            {...props.longPress}
         >
             <button
                 type="button"
@@ -357,13 +362,14 @@ function Row(props: {
     onStar: () => void;
     onOpen: (event: React.MouseEvent) => void;
     onMenu: (event: React.MouseEvent) => void;
+    longPress: LongPressHandlers;
 }) {
     const { t, tDynamic } = useTranslation();
     const card = isModelCard(props.file) ? props.file : null;
     const image = previewUrl(card ? card.preview_image : (props.file as WildcardCard).image);
 
     return (
-        <li className="group flex items-center gap-3 py-1.5" onContextMenu={props.onMenu}>
+        <li className="group flex items-center gap-3 py-1.5" onContextMenu={props.onMenu} {...props.longPress}>
             <SelectionCheckbox
                 checked={props.checked}
                 onToggle={props.onCheck}

@@ -21,7 +21,8 @@ export function PromptAttachments() {
     }
 
     return (
-        <div className="w-56 shrink-0">
+        // Full-width on a phone, where 14rem beside the Generate button leaves neither room.
+        <div className="w-full shrink-0 sm:w-56">
             <MediaField
                 param={param}
                 value={valueOf(param, values)}

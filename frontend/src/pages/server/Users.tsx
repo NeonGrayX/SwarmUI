@@ -6,6 +6,7 @@ import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import { MIN_PASSWORD_LENGTH, prehashPassword } from '@/api/password';
 import { PermissionCatalog } from '@/components/server/PermissionCatalog';
+import { SideNav } from '@/components/ui/SideNav';
 import { RoleDetail } from '@/components/server/RoleDetail';
 import { UserDetail } from '@/components/server/UserDetail';
 import type { PermissionInfo, RoleInfo } from '@/server/users';
@@ -203,59 +204,72 @@ export function UsersPage() {
                     />
                 )
             ) : (
-                <div className="flex min-h-0 flex-1">
-                    <nav
-                        aria-label={activeTab === 'users' ? t('users.accountsLabel') : t('users.tab.roles')}
-                        className="w-60 shrink-0 overflow-y-auto border-r border-subtle p-2"
+                <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+                    <SideNav
+                        label={activeTab === 'users' ? t('users.accountsLabel') : t('users.tab.roles')}
+                        summary={
+                            activeTab === 'users'
+                                ? selectedUser ?? t('users.noSelection')
+                                : roleMap[selectedRole ?? '']?.name ?? selectedRole ?? t('users.noSelection')
+                        }
+                        width="w-60"
                     >
-                        {activeTab === 'users' ? (
-                            users.isPending ? (
+                        {close =>
+                            activeTab === 'users' ? (
+                                users.isPending ? (
+                                    <p className="p-2 text-sm text-fg-soft">{t('common.loading')}</p>
+                                ) : users.isError ? (
+                                    <p className="p-2 text-sm" style={{ color: 'var(--backend-errored)' }}>
+                                        {errorText(users.error)}
+                                    </p>
+                                ) : userList.length === 0 ? (
+                                    <p className="p-2 text-sm text-fg-soft">
+                                        {query ? t('users.noMatchingUsers') : t('users.noAccounts')}
+                                    </p>
+                                ) : (
+                                    userList.map(name => (
+                                        <ListButton
+                                            key={name}
+                                            icon={<UserIcon size={13} aria-hidden />}
+                                            label={name}
+                                            active={selectedUser === name}
+                                            onClick={() => {
+                                                setSelectedUser(name);
+                                                close();
+                                            }}
+                                        />
+                                    ))
+                                )
+                            ) : roles.isPending ? (
                                 <p className="p-2 text-sm text-fg-soft">{t('common.loading')}</p>
-                            ) : users.isError ? (
+                            ) : roles.isError ? (
                                 <p className="p-2 text-sm" style={{ color: 'var(--backend-errored)' }}>
-                                    {errorText(users.error)}
+                                    {errorText(roles.error)}
                                 </p>
-                            ) : userList.length === 0 ? (
+                            ) : roleList.length === 0 ? (
                                 <p className="p-2 text-sm text-fg-soft">
-                                    {query ? t('users.noMatchingUsers') : t('users.noAccounts')}
+                                    {query ? t('users.noMatchingRoles') : t('users.noRoles')}
                                 </p>
                             ) : (
-                                userList.map(name => (
+                                roleList.map(([id, role]) => (
                                     <ListButton
-                                        key={name}
-                                        icon={<UserIcon size={13} aria-hidden />}
-                                        label={name}
-                                        active={selectedUser === name}
-                                        onClick={() => setSelectedUser(name)}
+                                        key={id}
+                                        icon={<Shield size={13} aria-hidden />}
+                                        label={role.name || id}
+                                        sublabel={t('users.permissionCount', {
+                                            count: role.permissions.length
+                                        })}
+                                        title={tDynamic(role.description)}
+                                        active={selectedRole === id}
+                                        onClick={() => {
+                                            setSelectedRole(id);
+                                            close();
+                                        }}
                                     />
                                 ))
                             )
-                        ) : roles.isPending ? (
-                            <p className="p-2 text-sm text-fg-soft">{t('common.loading')}</p>
-                        ) : roles.isError ? (
-                            <p className="p-2 text-sm" style={{ color: 'var(--backend-errored)' }}>
-                                {errorText(roles.error)}
-                            </p>
-                        ) : roleList.length === 0 ? (
-                            <p className="p-2 text-sm text-fg-soft">
-                                {query ? t('users.noMatchingRoles') : t('users.noRoles')}
-                            </p>
-                        ) : (
-                            roleList.map(([id, role]) => (
-                                <ListButton
-                                    key={id}
-                                    icon={<Shield size={13} aria-hidden />}
-                                    label={role.name || id}
-                                    sublabel={t('users.permissionCount', {
-                                        count: role.permissions.length
-                                    })}
-                                    title={tDynamic(role.description)}
-                                    active={selectedRole === id}
-                                    onClick={() => setSelectedRole(id)}
-                                />
-                            ))
-                        )}
-                    </nav>
+                        }
+                    </SideNav>
 
                     <div className="min-w-0 flex-1">
                         {activeTab === 'users' ? (

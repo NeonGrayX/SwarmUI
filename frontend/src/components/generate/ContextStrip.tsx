@@ -23,12 +23,14 @@ export function ContextStrip() {
     const setValue = useParamStore(s => s.setValue);
 
     return (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-subtle bg-surface px-3 py-1.5 text-xs">
+        // The LoRA chips wrap, and a dozen of them would push the prompt off a phone screen, so
+        // below `lg` the strip scrolls within a fixed budget instead of growing without bound.
+        <div className="flex max-h-20 flex-wrap items-center gap-x-4 gap-y-1 overflow-y-auto border-t border-subtle bg-surface px-3 py-1.5 text-xs lg:max-h-none lg:overflow-visible">
             <span className="flex min-w-0 items-center gap-1.5">
                 <label className="text-fg-soft" htmlFor={MODEL_SELECT_ID}>
                     {t('context.model')}
                 </label>
-                <span className="w-64 max-w-full">
+                <span className="w-56 max-w-full sm:w-64">
                     <ModelPicker
                         id={MODEL_SELECT_ID}
                         subtype="Stable-Diffusion"

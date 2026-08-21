@@ -74,7 +74,9 @@ export function BatchRail() {
                         {t('batch.empty')}
                     </p>
                 ) : (
-                    <div className="grid grid-cols-2 gap-1.5">
+                    // Sized by the container rather than by a column count: the same grid backs a
+                    // 200px rail on the desktop layout and a full-width pane on the stacked one.
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-1.5">
                         {visible.map(item => (
                             <BatchTile
                                 key={item.id}

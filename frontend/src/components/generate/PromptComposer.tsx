@@ -127,14 +127,17 @@ export function PromptComposer() {
 
             {inputError && <InputErrorNotice issue={inputError} />}
 
-            <div className="flex items-end gap-2">
-                <PromptAttachments />
-                <div className="flex-1" />
+            {/* Wraps rather than compresses: on a phone the attachment control takes its own row
+                and the actions drop below it, still right-aligned and still thumb-height. */}
+            <div className="flex flex-wrap items-end justify-end gap-2">
+                <div className="mr-auto w-full sm:w-auto">
+                    <PromptAttachments />
+                </div>
                 {running && (
                     <button
                         type="button"
                         onClick={() => interrupt(false)}
-                        className="flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-sm"
+                        className="flex items-center gap-1.5 rounded border px-2.5 py-2 text-sm sm:py-1.5"
                         style={{
                             borderColor: 'var(--danger-button-border)',
                             background: 'var(--danger-button-background)',
@@ -194,7 +197,7 @@ function GenerateSplitButton(props: { running: boolean; forever: boolean; onGene
                 type="button"
                 onClick={props.onGenerate}
                 disabled={props.running}
-                className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium disabled:opacity-60"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium disabled:opacity-60 sm:py-1.5"
                 style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
             >
                 {props.running && <Loader2 size={14} className="animate-spin" aria-hidden />}
@@ -205,7 +208,7 @@ function GenerateSplitButton(props: { running: boolean; forever: boolean; onGene
                     <button
                         type="button"
                         aria-label={t('generate.moreOptions')}
-                        className="px-1.5 border-l"
+                        className="px-2.5 border-l sm:px-1.5"
                         style={{
                             background: 'var(--emphasis)',
                             color: 'var(--sw-accent-fg)',
