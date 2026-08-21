@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { isModelCard, previewUrl, type ModelCard, type ModelSubtype, type WildcardCard } from '@/library/types';
 import { Field } from '../form/Field';
+import { useTranslation } from '@/i18n';
 
 /** Side sheet showing a model's details, with inline metadata editing.
  *
@@ -16,6 +17,7 @@ export function ModelDetailSheet(props: {
     canEdit: boolean;
     onClose: () => void;
 }) {
+    const { t, tDynamic } = useTranslation();
     const card = isModelCard(props.file) ? props.file : null;
     const [draft, setDraft] = useState(() => toDraft(card));
     const [saving, setSaving] = useState(false);
@@ -68,7 +70,7 @@ export function ModelDetailSheet(props: {
             props.onClose();
         }
         catch (e) {
-            setError(e instanceof Error ? e.message : 'Failed to save metadata.');
+            setError(e instanceof Error ? e.message : t('modelDetail.saveFailed'));
         }
         finally {
             setSaving(false);
@@ -77,7 +79,7 @@ export function ModelDetailSheet(props: {
 
     return (
         <aside
-            aria-label="Model details"
+            aria-label={t('modelDetail.title')}
             className="flex w-96 shrink-0 flex-col border-l border-subtle bg-surface"
             style={{ ['--sw-field-label-width' as string]: '7rem' }}
         >
@@ -93,7 +95,7 @@ export function ModelDetailSheet(props: {
                 <button
                     type="button"
                     onClick={props.onClose}
-                    aria-label="Close details"
+                    aria-label={t('common.closeDetails')}
                     className="rounded p-1 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                 >
                     <X size={15} aria-hidden />
@@ -113,47 +115,76 @@ export function ModelDetailSheet(props: {
                     <WildcardBody file={props.file as WildcardCard} />
                 ) : props.canEdit ? (
                     <>
-                        <Editable label="Title" value={draft.title} onChange={v => setDraft({ ...draft, title: v })} />
-                        <Editable label="Author" value={draft.author} onChange={v => setDraft({ ...draft, author: v })} />
                         <Editable
-                            label="Architecture"
+                            id="title"
+                            label={t('modelDetail.field.title')}
+                            value={draft.title}
+                            onChange={v => setDraft({ ...draft, title: v })}
+                        />
+                        <Editable
+                            id="author"
+                            label={t('modelDetail.field.author')}
+                            value={draft.author}
+                            onChange={v => setDraft({ ...draft, author: v })}
+                        />
+                        <Editable
+                            id="architecture"
+                            label={t('modelDetail.field.architecture')}
                             value={draft.architecture}
                             onChange={v => setDraft({ ...draft, architecture: v })}
                         />
                         <Editable
-                            label="Prediction type"
+                            id="prediction-type"
+                            label={t('modelDetail.field.predictionType')}
                             value={draft.prediction_type}
                             onChange={v => setDraft({ ...draft, prediction_type: v })}
                         />
-                        <Field id="res" label="Resolution" density="compact">
+                        <Field id="res" label={t('modelDetail.field.resolution')} density="compact">
                             <div className="flex items-center gap-1">
                                 <NumberBox
                                     value={draft.standard_width}
                                     onChange={v => setDraft({ ...draft, standard_width: v })}
-                                    label="Width"
+                                    label={t('modelDetail.field.width')}
                                 />
                                 <span className="text-fg-soft">×</span>
                                 <NumberBox
                                     value={draft.standard_height}
                                     onChange={v => setDraft({ ...draft, standard_height: v })}
-                                    label="Height"
+                                    label={t('modelDetail.field.height')}
                                 />
                             </div>
                         </Field>
-                        <Editable label="License" value={draft.license} onChange={v => setDraft({ ...draft, license: v })} />
-                        <Editable label="Date" value={draft.date} onChange={v => setDraft({ ...draft, date: v })} />
                         <Editable
-                            label="Trigger phrase"
+                            id="license"
+                            label={t('modelDetail.field.license')}
+                            value={draft.license}
+                            onChange={v => setDraft({ ...draft, license: v })}
+                        />
+                        <Editable
+                            id="date"
+                            label={t('modelDetail.field.date')}
+                            value={draft.date}
+                            onChange={v => setDraft({ ...draft, date: v })}
+                        />
+                        <Editable
+                            id="trigger-phrase"
+                            label={t('modelDetail.field.triggerPhrase')}
                             value={draft.trigger_phrase}
                             onChange={v => setDraft({ ...draft, trigger_phrase: v })}
                         />
                         <Editable
-                            label="Usage hint"
+                            id="usage-hint"
+                            label={t('modelDetail.field.usageHint')}
                             value={draft.usage_hint}
                             onChange={v => setDraft({ ...draft, usage_hint: v })}
                         />
-                        <Editable label="Tags" value={draft.tags} onChange={v => setDraft({ ...draft, tags: v })} />
-                        <Field id="desc" label="Description" density="compact">
+                        <Editable
+                            id="tags"
+                            label={t('modelDetail.field.tags')}
+                            value={draft.tags}
+                            onChange={v => setDraft({ ...draft, tags: v })}
+                        />
+                        <Field id="desc" label={t('modelDetail.field.description')} density="compact">
                             <textarea
                                 rows={4}
                                 value={draft.description}
@@ -165,11 +196,19 @@ export function ModelDetailSheet(props: {
                     </>
                 ) : (
                     <>
-                        <ReadOnly label="Author" value={card.author} />
-                        <ReadOnly label="Architecture" value={card.class} />
-                        <ReadOnly label="Resolution" value={card.resolution} />
-                        <ReadOnly label="License" value={card.license} />
-                        <ReadOnly label="Trigger phrase" value={card.trigger_phrase} />
+                        <ReadOnly id="author" label={t('modelDetail.field.author')} value={card.author} />
+                        <ReadOnly
+                            id="architecture"
+                            label={t('modelDetail.field.architecture')}
+                            value={tDynamic(card.class)}
+                        />
+                        <ReadOnly id="res" label={t('modelDetail.field.resolution')} value={card.resolution} />
+                        <ReadOnly id="license" label={t('modelDetail.field.license')} value={card.license} />
+                        <ReadOnly
+                            id="trigger-phrase"
+                            label={t('modelDetail.field.triggerPhrase')}
+                            value={card.trigger_phrase}
+                        />
                         {card.description && (
                             <p className="mt-2 whitespace-pre-wrap text-sm text-fg-soft">{card.description}</p>
                         )}
@@ -192,7 +231,7 @@ export function ModelDetailSheet(props: {
                             disabled={!dirty || saving}
                             className="rounded border border-default px-3 py-1.5 text-sm text-fg disabled:opacity-40 hover:bg-[var(--sw-hover)]"
                         >
-                            Discard
+                            {t('common.discard')}
                         </button>
                         <button
                             type="button"
@@ -201,7 +240,7 @@ export function ModelDetailSheet(props: {
                             className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
                             style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                         >
-                            {saving ? 'Saving…' : 'Save'}
+                            {saving ? t('common.saving') : t('common.save')}
                         </button>
                     </div>
                 </div>
@@ -227,9 +266,9 @@ function toDraft(card: ModelCard | null) {
     };
 }
 
-function Editable(props: { label: string; value: string; onChange: (value: string) => void }) {
+function Editable(props: { id: string; label: string; value: string; onChange: (value: string) => void }) {
     return (
-        <Field id={props.label} label={props.label} density="compact">
+        <Field id={props.id} label={props.label} density="compact">
             <input
                 type="text"
                 value={props.value}
@@ -252,12 +291,12 @@ function NumberBox(props: { value: string; onChange: (value: string) => void; la
     );
 }
 
-function ReadOnly(props: { label: string; value: string | null }) {
+function ReadOnly(props: { id: string; label: string; value: string | null }) {
     if (!props.value) {
         return null;
     }
     return (
-        <Field id={props.label} label={props.label} density="compact">
+        <Field id={props.id} label={props.label} density="compact">
             <span className="text-sm text-fg">{props.value}</span>
         </Field>
     );
@@ -265,14 +304,23 @@ function ReadOnly(props: { label: string; value: string | null }) {
 
 /** Immutable technical facts, always read-only. */
 function Facts(props: { card: ModelCard }) {
+    const { t } = useTranslation();
     const { card } = props;
     return (
         <dl className="mt-3 space-y-1 border-t border-subtle pt-3 text-xs">
-            <Fact label="Format" value={card.special_format || (card.is_supported_model_format ? 'supported' : 'unsupported')} />
-            <Fact label="Compat class" value={card.compat_class} />
-            <Fact label="Hash" value={card.hash ? `${card.hash.slice(0, 16)}…` : null} />
             <Fact
-                label="Modified"
+                label={t('modelDetail.fact.format')}
+                value={
+                    card.special_format ||
+                    (card.is_supported_model_format
+                        ? t('modelDetail.format.supported')
+                        : t('modelDetail.format.unsupported'))
+                }
+            />
+            <Fact label={t('modelDetail.fact.compatClass')} value={card.compat_class} />
+            <Fact label={t('modelDetail.fact.hash')} value={card.hash ? `${card.hash.slice(0, 16)}…` : null} />
+            <Fact
+                label={t('modelDetail.fact.modified')}
                 value={card.time_modified ? new Date(card.time_modified * 1000).toLocaleString() : null}
             />
         </dl>
@@ -292,11 +340,14 @@ function Fact(props: { label: string; value: string | null }) {
 }
 
 function WildcardBody(props: { file: WildcardCard }) {
+    const { t } = useTranslation();
     return (
         <div>
-            <h3 className="mb-1 text-xs uppercase tracking-wide text-fg-soft">Entries</h3>
+            <h3 className="mb-1 text-xs uppercase tracking-wide text-fg-soft">
+                {t('modelDetail.wildcardEntries')}
+            </h3>
             <pre className="whitespace-pre-wrap break-words rounded border border-subtle bg-surface-sunken p-2 font-mono text-[11px] text-fg-soft">
-                {props.file.raw || '(empty)'}
+                {props.file.raw || t('modelDetail.wildcardEmpty')}
             </pre>
         </div>
     );

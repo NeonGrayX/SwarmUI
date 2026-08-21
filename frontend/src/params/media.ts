@@ -9,6 +9,7 @@
  * setMediaFileDirect, clearMediaFileInput).
  */
 
+import { t } from '@/i18n';
 import type { ParamDataType } from '@/api/types';
 
 export type MediaKind = 'image' | 'audio' | 'video';
@@ -118,7 +119,7 @@ export function fileToDataUrl(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+        reader.onerror = () => reject(new Error(t('media.readFileFailed', { name: file.name })));
         reader.readAsDataURL(file);
     });
 }
@@ -131,13 +132,13 @@ export async function urlToDataUrl(url: string): Promise<string> {
     }
     const response = await fetch(url);
     if (!response.ok) {
-        throw new Error(`Could not load image (HTTP ${response.status}).`);
+        throw new Error(t('media.loadImageFailed', { status: response.status }));
     }
     const blob = await response.blob();
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error('Could not read image data.'));
+        reader.onerror = () => reject(new Error(t('media.readImageDataFailed')));
         reader.readAsDataURL(blob);
     });
 }

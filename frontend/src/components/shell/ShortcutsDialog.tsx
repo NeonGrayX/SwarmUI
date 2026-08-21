@@ -1,32 +1,35 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Keyboard, X } from 'lucide-react';
+import { useTranslation } from '@/i18n';
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
 const MOD = IS_MAC ? 'Cmd' : 'Ctrl';
 
-const SHORTCUTS: { group: string; items: { keys: string[]; action: string }[] }[] = [
+/** Key names stay literal — they are what is printed on the keyboard, not prose. Only the group
+ *  headings and the action descriptions carry translation identifiers. */
+const SHORTCUTS: { groupKey: string; items: { keys: string[]; actionKey: string }[] }[] = [
     {
-        group: 'Anywhere',
+        groupKey: 'shortcuts.group.anywhere',
         items: [
-            { keys: [MOD, 'K'], action: 'Open the command palette' },
-            { keys: ['?'], action: 'Show this list' },
-            { keys: ['Esc'], action: 'Close the open dialog, popover or panel' }
+            { keys: [MOD, 'K'], actionKey: 'shortcuts.action.commandPalette' },
+            { keys: ['?'], actionKey: 'shortcuts.action.showList' },
+            { keys: ['Esc'], actionKey: 'shortcuts.action.closeOverlay' }
         ]
     },
     {
-        group: 'Generate',
+        groupKey: 'shortcuts.group.generate',
         items: [
-            { keys: [MOD, 'Enter'], action: 'Generate from the prompt box' },
-            { keys: ['Enter'], action: 'New line in the prompt box' }
+            { keys: [MOD, 'Enter'], actionKey: 'shortcuts.action.generate' },
+            { keys: ['Enter'], actionKey: 'shortcuts.action.newLine' }
         ]
     },
     {
-        group: 'Panels',
+        groupKey: 'shortcuts.group.panels',
         items: [
-            { keys: ['Tab'], action: 'Move focus to the pane dividers' },
-            { keys: ['←', '→'], action: 'Resize the focused divider' },
-            { keys: ['Shift', '←/→'], action: 'Resize in larger steps' }
+            { keys: ['Tab'], actionKey: 'shortcuts.action.focusDividers' },
+            { keys: ['←', '→'], actionKey: 'shortcuts.action.resizeDivider' },
+            { keys: ['Shift', '←/→'], actionKey: 'shortcuts.action.resizeLarger' }
         ]
     }
 ];
@@ -34,6 +37,7 @@ const SHORTCUTS: { group: string; items: { keys: string[]; action: string }[] }[
 /** Keyboard reference, opened with `?`.
  *  The legacy UI documents its hotkeys nowhere in the interface. */
 export function ShortcutsDialog() {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
 
     useEffect(() => {
@@ -61,12 +65,12 @@ export function ShortcutsDialog() {
                     <div className="mb-3 flex items-center gap-2">
                         <Keyboard size={16} className="text-fg-soft" aria-hidden />
                         <Dialog.Title className="flex-1 text-base font-medium text-fg-strong">
-                            Keyboard shortcuts
+                            {t('shortcuts.title')}
                         </Dialog.Title>
                         <Dialog.Close asChild>
                             <button
                                 type="button"
-                                aria-label="Close"
+                                aria-label={t('common.close')}
                                 className="rounded p-1 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                             >
                                 <X size={15} aria-hidden />
@@ -74,17 +78,17 @@ export function ShortcutsDialog() {
                         </Dialog.Close>
                     </div>
                     <Dialog.Description className="sr-only">
-                        A list of keyboard shortcuts available in this interface.
+                        {t('shortcuts.description')}
                     </Dialog.Description>
 
                     {SHORTCUTS.map(section => (
-                        <div key={section.group} className="mb-3 last:mb-0">
+                        <div key={section.groupKey} className="mb-3 last:mb-0">
                             <h3 className="mb-1 text-xs uppercase tracking-wide text-fg-soft">
-                                {section.group}
+                                {t(section.groupKey)}
                             </h3>
                             <ul className="space-y-1">
                                 {section.items.map(item => (
-                                    <li key={item.action} className="flex items-center gap-3 text-sm">
+                                    <li key={item.actionKey} className="flex items-center gap-3 text-sm">
                                         <span className="flex shrink-0 gap-1">
                                             {item.keys.map(key => (
                                                 <kbd
@@ -96,7 +100,7 @@ export function ShortcutsDialog() {
                                                 </kbd>
                                             ))}
                                         </span>
-                                        <span className="min-w-0 flex-1 text-fg-soft">{item.action}</span>
+                                        <span className="min-w-0 flex-1 text-fg-soft">{t(item.actionKey)}</span>
                                     </li>
                                 ))}
                             </ul>

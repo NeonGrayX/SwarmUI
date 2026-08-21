@@ -6,6 +6,7 @@ import { useSession } from '@/api/hooks';
 import { usePermission } from '@/api/permissions';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { fetchLegacyServerInfo, type LegacyServerInfo } from '@/server/legacyInfo';
+import { t as translate, useTranslation } from '@/i18n';
 
 interface GpuInfo {
     id: number;
@@ -76,16 +77,16 @@ function formatBytes(bytes: number): string {
 function genSummary(user: ConnectedUser): string {
     const parts: string[] = [];
     if (user.waiting_gens > 0) {
-        parts.push(`${user.waiting_gens} queued`);
+        parts.push(translate('serverInfo.gen.queued', { count: user.waiting_gens }));
     }
     if (user.live_gens > 0) {
-        parts.push(`${user.live_gens} running`);
+        parts.push(translate('serverInfo.gen.running', { count: user.live_gens }));
     }
     if (user.waiting_backends > 0) {
-        parts.push(`${user.waiting_backends} waiting on a backend`);
+        parts.push(translate('serverInfo.gen.waitingBackend', { count: user.waiting_backends }));
     }
     if (user.loading_models > 0) {
-        parts.push(`${user.loading_models} loading a model`);
+        parts.push(translate('serverInfo.gen.loadingModel', { count: user.loading_models }));
     }
     return parts.join(', ');
 }
@@ -95,6 +96,7 @@ function errorText(error: unknown): string {
 }
 
 export function ServerInfoPage() {
+    const { t } = useTranslation();
     const session = useSession();
     const canRestart = usePermission('restart');
     const canShutdown = usePermission('shutdown');
@@ -127,7 +129,7 @@ export function ServerInfoPage() {
     return (
         <div className="flex h-full min-h-0 flex-col">
             <div className="flex shrink-0 items-center gap-2 border-b border-subtle px-4 py-2">
-                <h1 className="text-sm font-medium text-fg-strong">Server Info</h1>
+                <h1 className="text-sm font-medium text-fg-strong">{t('nav.destination.info')}</h1>
                 {info?.version && <span className="text-xs text-fg-soft">v{info.version}</span>}
             </div>
 
@@ -135,44 +137,59 @@ export function ServerInfoPage() {
                 <div className="grid max-w-4xl gap-3">
                     <InstallHealth info={info} />
 
-                    <Panel title="Instance">
-                        <Row label="User" value={session.data?.user_id ?? '—'} />
-                        {info?.version && <Row label="Version" value={info.version} />}
-                        {info?.gitDate && <Row label="Current commit" value={info.gitDate} />}
-                        <Row label="Server build id" value={session.data?.version ?? '—'} />
-                        <Row label="Permissions granted" value={String(session.data?.permissions.length ?? 0)} />
+                    <Panel title={t('serverInfo.instance')}>
+                        <Row label={t('serverInfo.user')} value={session.data?.user_id ?? '—'} />
+                        {info?.version && <Row label={t('serverInfo.version')} value={info.version} />}
+                        {info?.gitDate && <Row label={t('serverInfo.currentCommit')} value={info.gitDate} />}
+                        <Row label={t('serverInfo.buildId')} value={session.data?.version ?? '—'} />
+                        <Row
+                            label={t('serverInfo.permissionsGranted')}
+                            value={String(session.data?.permissions.length ?? 0)}
+                        />
                     </Panel>
 
                     <NetworkPanel network={info?.network} unavailable={legacy.isError} />
 
-                    <Panel title="CPU">
+                    <Panel title={t('serverInfo.cpu')}>
                         {resources.data ? (
                             <>
                                 <Meter
-                                    label={`Usage${resources.data.cpu.cores ? ` (${resources.data.cpu.cores} cores)` : ''}`}
+                                    label={
+                                        resources.data.cpu.cores
+                                            ? t('serverInfo.usageWithCores', { cores: resources.data.cpu.cores })
+                                            : t('serverInfo.usage')
+                                    }
                                     percent={resources.data.cpu.usage * 100}
                                     text={`${(resources.data.cpu.usage * 100).toFixed(0)}%`}
                                 />
                                 {ram && (
                                     <Meter
-                                        label="System RAM"
+                                        label={t('serverInfo.systemRam')}
                                         percent={ram.total ? (ram.used / ram.total) * 100 : 0}
-                                        text={`${formatBytes(ram.used)} / ${formatBytes(ram.total)} (${formatBytes(ram.free)} free)`}
+                                        text={t('serverInfo.memoryUsage', {
+                                            used: formatBytes(ram.used),
+                                            total: formatBytes(ram.total),
+                                            free: formatBytes(ram.free)
+                                        })}
                                     />
                                 )}
                             </>
                         ) : (
-                            <p className="text-sm text-fg-soft">Loading…</p>
+                            <p className="text-sm text-fg-soft">{t('common.loading')}</p>
                         )}
                     </Panel>
 
-                    <Panel title={`GPUs${gpus.length ? ` (${gpus.length})` : ''}`}>
+                    <Panel
+                        title={
+                            gpus.length
+                                ? t('serverInfo.gpusWithCount', { count: gpus.length })
+                                : t('serverInfo.gpus')
+                        }
+                    >
                         {resources.isPending ? (
-                            <p className="text-sm text-fg-soft">Loading…</p>
+                            <p className="text-sm text-fg-soft">{t('common.loading')}</p>
                         ) : gpus.length === 0 ? (
-                            <p className="text-sm text-fg-soft">
-                                No NVIDIA GPUs detected. AMD and Apple hardware are not reported here.
-                            </p>
+                            <p className="text-sm text-fg-soft">{t('serverInfo.noGpus')}</p>
                         ) : (
                             gpus.map(gpu => (
                                 <div key={gpu.id} className="mb-3 last:mb-0">
@@ -183,14 +200,21 @@ export function ServerInfoPage() {
                                         )}
                                     </p>
                                     <Meter
-                                        label="Utilization"
+                                        label={t('serverInfo.utilization')}
                                         percent={gpu.utilization_gpu}
-                                        text={`${gpu.utilization_gpu}% core, ${gpu.utilization_memory}% memory`}
+                                        text={t('serverInfo.gpuUtilization', {
+                                            core: gpu.utilization_gpu,
+                                            memory: gpu.utilization_memory
+                                        })}
                                     />
                                     <Meter
-                                        label="VRAM"
+                                        label={t('serverInfo.vram')}
                                         percent={gpu.total_memory ? (gpu.used_memory / gpu.total_memory) * 100 : 0}
-                                        text={`${formatBytes(gpu.used_memory)} / ${formatBytes(gpu.total_memory)} (${formatBytes(gpu.free_memory)} free)`}
+                                        text={t('serverInfo.memoryUsage', {
+                                            used: formatBytes(gpu.used_memory),
+                                            total: formatBytes(gpu.total_memory),
+                                            free: formatBytes(gpu.free_memory)
+                                        })}
                                     />
                                 </div>
                             ))
@@ -214,6 +238,7 @@ export function ServerInfoPage() {
 /** Warnings about a broken install. Both conditions permanently disable parts of Swarm, so they
  *  lead the page rather than sitting in a card near the bottom like they do in the legacy UI. */
 function InstallHealth(props: { info: LegacyServerInfo | undefined }) {
+    const { t } = useTranslation();
     const canInstall = usePermission('install');
     const install = useMutation({
         mutationFn: () => api.post('InstallDotnetUpdate')
@@ -225,10 +250,9 @@ function InstallHealth(props: { info: LegacyServerInfo | undefined }) {
     return (
         <>
             {info.dotnetMissing && (
-                <Warning title={`DotNET ${info.dotnetMissing} is missing`}>
+                <Warning title={t('serverInfo.dotnetMissing', { version: info.dotnetMissing })}>
                     <p>
-                        A future version of SwarmUI will require it. Install the DotNET SDK{' '}
-                        {info.dotnetMissing}.0 from{' '}
+                        {t('serverInfo.dotnetMissingBody', { version: `${info.dotnetMissing}.0` })}{' '}
                         <a
                             href={`https://dotnet.microsoft.com/en-us/download/dotnet/${info.dotnetMissing}.0`}
                             target="_blank"
@@ -248,8 +272,8 @@ function InstallHealth(props: { info: LegacyServerInfo | undefined }) {
                         >
                             {install.isPending && <Loader2 size={12} className="animate-spin" aria-hidden />}
                             {install.isSuccess
-                                ? 'Installing — the server will restart'
-                                : `Install DotNET SDK ${info.dotnetMissing}.0`}
+                                ? t('serverInfo.dotnetInstalling')
+                                : t('serverInfo.dotnetInstall', { version: `${info.dotnetMissing}.0` })}
                         </button>
                     )}
                     {install.isError && (
@@ -260,17 +284,16 @@ function InstallHealth(props: { info: LegacyServerInfo | undefined }) {
                 </Warning>
             )}
             {info.gitFailed && (
-                <Warning title="Git failed to load">
+                <Warning title={t('serverInfo.gitFailed')}>
                     <p>
-                        SwarmUI does not appear to have been installed via git, so many features —
-                        including auto-updating — will not work. Reinstall by following{' '}
+                        {t('serverInfo.gitFailedBody')}{' '}
                         <a
                             href="https://github.com/mcmonkeyprojects/SwarmUI?tab=readme-ov-file#installing-on-windows"
                             target="_blank"
                             rel="noreferrer noopener"
                             className="underline"
                         >
-                            the readme install instructions
+                            {t('serverInfo.readmeLink')}
                         </a>
                         .
                     </p>
@@ -281,35 +304,34 @@ function InstallHealth(props: { info: LegacyServerInfo | undefined }) {
 }
 
 function NetworkPanel(props: { network: LegacyServerInfo['network'] | undefined; unavailable: boolean }) {
+    const { t } = useTranslation();
     const network = props.network;
     return (
-        <Panel title="Network">
+        <Panel title={t('serverInfo.network')}>
             {!network ? (
                 <p className="text-sm text-fg-soft">
-                    {props.unavailable ? 'Network details are unavailable.' : 'Loading…'}
+                    {props.unavailable ? t('serverInfo.networkUnavailable') : t('common.loading')}
                 </p>
             ) : network.localOnly ? (
-                <p className="text-sm text-fg-soft">This server is only accessible from this computer.</p>
+                <p className="text-sm text-fg-soft">{t('serverInfo.localOnly')}</p>
             ) : network.lanAddresses ? (
                 <>
-                    <p className="text-sm text-fg-soft">
-                        Likely reachable on your local network at:
-                    </p>
+                    <p className="text-sm text-fg-soft">{t('serverInfo.lanReachable')}</p>
                     <p className="mt-0.5 break-words font-mono text-sm text-fg">{network.lanAddresses}</p>
                 </>
             ) : network.unknownHost ? (
                 <p className="text-sm text-fg-soft">
-                    Open to the local network based on the Host setting (
-                    <span className="font-mono text-fg">{network.unknownHost}</span>), but the local
-                    address could not be determined.
+                    {t('serverInfo.unknownHostBefore')}{' '}
+                    <span className="font-mono text-fg">{network.unknownHost}</span>
+                    {t('serverInfo.unknownHostAfter')}
                 </p>
             ) : (
-                <p className="text-sm text-fg-soft">Network details are unavailable.</p>
+                <p className="text-sm text-fg-soft">{t('serverInfo.networkUnavailable')}</p>
             )}
 
             {network?.publicUrl && (
                 <p className="mt-2 text-sm text-fg-soft">
-                    Also reachable from the open internet at{' '}
+                    {t('serverInfo.publicReachable')}{' '}
                     <a
                         href={network.publicUrl}
                         target="_blank"
@@ -326,17 +348,24 @@ function NetworkPanel(props: { network: LegacyServerInfo['network'] | undefined;
 }
 
 function ConnectedUsersPanel(props: { users: ConnectedUser[]; pending: boolean }) {
+    const { t } = useTranslation();
     const canInterrupt = usePermission('interrupt_others');
     const interrupt = useMutation({
         mutationFn: (name: string) => api.post('AdminInterruptUser', { name })
     });
 
     return (
-        <Panel title={`Connected users${props.users.length ? ` (${props.users.length})` : ''}`}>
+        <Panel
+            title={
+                props.users.length
+                    ? t('serverInfo.connectedUsersWithCount', { count: props.users.length })
+                    : t('serverInfo.connectedUsers')
+            }
+        >
             {props.pending ? (
-                <p className="text-sm text-fg-soft">Loading…</p>
+                <p className="text-sm text-fg-soft">{t('common.loading')}</p>
             ) : props.users.length === 0 ? (
-                <p className="text-sm text-fg-soft">Nobody has been active in the last few minutes.</p>
+                <p className="text-sm text-fg-soft">{t('serverInfo.nobodyActive')}</p>
             ) : (
                 <ul className="divide-y divide-[var(--light-border)]">
                     {props.users.map(user => {
@@ -347,11 +376,18 @@ function ConnectedUsersPanel(props: { users: ConnectedUser[]; pending: boolean }
                                     {user.id}
                                 </span>
                                 <span className="min-w-0 flex-1">
-                                    <span className="text-fg-soft">Active {user.last_active}</span>
+                                    <span className="text-fg-soft">
+                                        {t('serverInfo.activeAgo', { when: user.last_active })}
+                                    </span>
                                     {user.active_sessions.length > 0 && (
                                         <span className="block text-xs text-fg-soft opacity-80">
                                             {user.active_sessions
-                                                .map(sess => `${sess.count}× from ${sess.address}`)
+                                                .map(sess =>
+                                                    t('serverInfo.sessionsFrom', {
+                                                        count: sess.count,
+                                                        address: sess.address
+                                                    })
+                                                )
                                                 .join(', ')}
                                         </span>
                                     )}
@@ -364,7 +400,7 @@ function ConnectedUsersPanel(props: { users: ConnectedUser[]; pending: boolean }
                                         className="shrink-0 rounded border border-default px-2 py-0.5 text-xs"
                                         style={{ color: 'var(--backend-errored)' }}
                                     >
-                                        Interrupt
+                                        {t('generate.interrupt')}
                                     </button>
                                 )}
                             </li>
@@ -389,6 +425,7 @@ function ConnectedUsersPanel(props: { users: ConnectedUser[]; pending: boolean }
  * same as legacy — each check runs `git fetch` against the core repo, every extension and every
  * backend, so it is not free. */
 function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
+    const { t } = useTranslation();
     const autoCheck = props.info?.autoUpdateCheck;
     const [checkRequested, setCheckRequested] = useState(false);
     const [deselected, setDeselected] = useState<Set<string>>(new Set());
@@ -423,7 +460,7 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
                 key: 'server',
                 kind: 'server',
                 name: 'server',
-                label: `SwarmUI core — ${updates.data.server.count} update(s)`,
+                label: t('serverInfo.update.core', { count: updates.data.server.count }),
                 target: updates.data.server
             });
         }
@@ -432,7 +469,7 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
                 key: `extension:${name}`,
                 kind: 'extension',
                 name,
-                label: `${name} — ${target.count} update(s)`,
+                label: t('serverInfo.update.named', { name, count: target.count }),
                 target
             });
         }
@@ -441,7 +478,7 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
                 key: `backend:${name}`,
                 kind: 'backend',
                 name,
-                label: `${name} — ${target.count} update(s)`,
+                label: t('serverInfo.update.named', { name, count: target.count }),
                 target
             });
         }
@@ -472,7 +509,7 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
     };
 
     return (
-        <Panel title="Updates">
+        <Panel title={t('serverInfo.updates')}>
             {props.info?.update && (
                 <p className="mb-2 whitespace-pre-wrap text-sm text-fg">
                     {props.info.update.url ? (
@@ -484,7 +521,7 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
                                 rel="noreferrer noopener"
                                 className="underline"
                             >
-                                Release notes
+                                {t('serverInfo.releaseNotes')}
                             </a>
                         </>
                     ) : (
@@ -496,20 +533,20 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
             {!checkRequested ? (
                 <p className="mb-2 text-sm text-fg-soft">
                     {autoCheck === false
-                        ? 'Automatic update checks are disabled in Server Configuration.'
-                        : 'Not checked yet.'}
+                        ? t('serverInfo.autoCheckDisabled')
+                        : t('serverInfo.notCheckedYet')}
                 </p>
             ) : updates.isFetching ? (
                 <p className="mb-2 flex items-center gap-1.5 text-sm text-fg-soft">
                     <Loader2 size={13} className="animate-spin" aria-hidden />
-                    Checking for updates…
+                    {t('serverInfo.checkingUpdates')}
                 </p>
             ) : updates.isError ? (
                 <p className="mb-2 text-sm" style={{ color: 'var(--backend-errored)' }}>
                     {errorText(updates.error)}
                 </p>
             ) : rows.length === 0 ? (
-                <p className="mb-2 text-sm text-fg-soft">No updates available.</p>
+                <p className="mb-2 text-sm text-fg-soft">{t('serverInfo.noUpdates')}</p>
             ) : (
                 <ul className="mb-3 space-y-1.5">
                     {rows.map(row => (
@@ -537,14 +574,14 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <Toggle
-                    label="Aggressive update"
-                    title="Forcibly override common git problems (stash local edits, reset the branch)."
+                    label={t('serverInfo.aggressiveUpdate')}
+                    title={t('serverInfo.aggressiveUpdateHint')}
                     checked={aggressive}
                     onChange={setAggressive}
                 />
                 <Toggle
-                    label="Force restart"
-                    title="Rebuild and restart even when no update was found."
+                    label={t('serverInfo.forceRestart')}
+                    title={t('serverInfo.forceRestartHint')}
                     checked={force}
                     onChange={setForce}
                 />
@@ -566,7 +603,7 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
                     className="flex items-center gap-1.5 rounded border border-default px-2.5 py-1 text-xs text-fg hover:bg-[var(--sw-hover)] disabled:opacity-50"
                 >
                     <RefreshCw size={12} className={updates.isFetching ? 'animate-spin' : ''} aria-hidden />
-                    Check for updates
+                    {t('serverInfo.checkForUpdates')}
                 </button>
                 <button
                     type="button"
@@ -579,14 +616,14 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
                     }}
                 >
                     <Download size={12} aria-hidden />
-                    Update and restart
+                    {t('serverInfo.updateAndRestart')}
                 </button>
             </div>
 
             {apply.isPending && (
                 <p className="mt-2 flex items-center gap-1.5 text-sm text-fg-soft">
                     <Loader2 size={13} className="animate-spin" aria-hidden />
-                    Applying updates…
+                    {t('serverInfo.applyingUpdates')}
                 </p>
             )}
             {apply.isError && (
@@ -598,22 +635,16 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
 
             <ConfirmDialog
                 open={confirming}
-                title="Update and restart?"
+                title={t('serverInfo.updateConfirmTitle')}
                 body={
                     <>
-                        {selected.length > 0 ? (
-                            <>
-                                {selected.length} item(s) will be updated, then SwarmUI will rebuild and
-                                restart itself.
-                            </>
-                        ) : (
-                            <>SwarmUI will rebuild and restart itself, even though no update was found.</>
-                        )}{' '}
-                        Any generation in progress will be lost, and the server is unreachable while it
-                        comes back up.
+                        {selected.length > 0
+                            ? t('serverInfo.updateConfirmSelected', { count: selected.length })
+                            : t('serverInfo.updateConfirmForced')}{' '}
+                        {t('serverInfo.updateConfirmWarning')}
                     </>
                 }
-                confirmLabel="Update and restart"
+                confirmLabel={t('serverInfo.updateAndRestart')}
                 destructive
                 onConfirm={() => {
                     setConfirming(false);
@@ -626,16 +657,14 @@ function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
 }
 
 function FreeMemoryPanel() {
+    const { t } = useTranslation();
     const free = useMutation({
         mutationFn: (systemRam: boolean) => api.post('FreeBackendMemory', { system_ram: systemRam })
     });
 
     return (
-        <Panel title="Free memory">
-            <p className="mb-2 text-sm text-fg-soft">
-                Asks every running backend to drop what it is holding. Models have to be reloaded
-                afterwards, so the next generation is slower.
-            </p>
+        <Panel title={t('serverInfo.freeMemory')}>
+            <p className="mb-2 text-sm text-fg-soft">{t('serverInfo.freeMemoryNote')}</p>
             <div className="flex flex-wrap gap-2">
                 <button
                     type="button"
@@ -643,7 +672,7 @@ function FreeMemoryPanel() {
                     disabled={free.isPending}
                     className="rounded border border-default px-2.5 py-1 text-xs text-fg hover:bg-[var(--sw-hover)] disabled:opacity-50"
                 >
-                    Free VRAM
+                    {t('serverInfo.freeVram')}
                 </button>
                 <button
                     type="button"
@@ -651,7 +680,7 @@ function FreeMemoryPanel() {
                     disabled={free.isPending}
                     className="rounded border border-default px-2.5 py-1 text-xs text-fg hover:bg-[var(--sw-hover)] disabled:opacity-50"
                 >
-                    Free system RAM
+                    {t('serverInfo.freeSystemRam')}
                 </button>
             </div>
             {free.isError && (
@@ -661,7 +690,9 @@ function FreeMemoryPanel() {
             )}
             {free.isSuccess && (
                 <p className="mt-2 text-sm text-fg-soft">
-                    Asked backends to free {free.variables ? 'system RAM' : 'VRAM'}.
+                    {free.variables
+                        ? t('serverInfo.freedSystemRam')
+                        : t('serverInfo.freedVram')}
                 </p>
             )}
         </Panel>
@@ -669,17 +700,15 @@ function FreeMemoryPanel() {
 }
 
 function ShutdownPanel() {
+    const { t } = useTranslation();
     const [confirming, setConfirming] = useState(false);
     const shutdown = useMutation({
         mutationFn: () => api.post('ShutdownServer')
     });
 
     return (
-        <Panel title="Shutdown">
-            <p className="mb-2 text-sm text-fg-soft">
-                Stops SwarmUI and every backend it manages. Nothing in this interface works afterwards
-                until the server is started again from the machine it runs on.
-            </p>
+        <Panel title={t('serverInfo.shutdown')}>
+            <p className="mb-2 text-sm text-fg-soft">{t('serverInfo.shutdownNote')}</p>
             <button
                 type="button"
                 onClick={() => setConfirming(true)}
@@ -691,7 +720,7 @@ function ShutdownPanel() {
                 }}
             >
                 <Power size={12} aria-hidden />
-                Shut down server
+                {t('serverInfo.shutDownServer')}
             </button>
             {shutdown.isError && (
                 <p className="mt-2 text-sm" style={{ color: 'var(--backend-errored)' }}>
@@ -701,15 +730,15 @@ function ShutdownPanel() {
             {shutdown.isSuccess && (
                 <p className="mt-2 flex items-center gap-1.5 text-sm text-fg-soft">
                     <Ban size={13} aria-hidden />
-                    The server is shutting down.
+                    {t('serverInfo.shuttingDown')}
                 </p>
             )}
 
             <ConfirmDialog
                 open={confirming}
-                title="Shut down SwarmUI?"
-                body="The server process ends immediately. Restarting it needs access to the machine SwarmUI runs on."
-                confirmLabel="Shut down"
+                title={t('serverInfo.shutdownConfirmTitle')}
+                body={t('serverInfo.shutdownConfirmBody')}
+                confirmLabel={t('serverInfo.shutDown')}
                 destructive
                 onConfirm={() => {
                     setConfirming(false);

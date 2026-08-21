@@ -8,6 +8,7 @@ import { useStartGenerate } from '@/generate/start';
 import type { GenIssue } from '@/generate/validate';
 import { MODEL_SELECT_ID } from './ContextStrip';
 import { PromptAttachments } from './PromptAttachments';
+import { useTranslation } from '@/i18n';
 
 /** Debounced CLIP token count for a prompt box, via the CountTokens API. */
 function useTokenCount(text: string): number | null {
@@ -47,6 +48,7 @@ function useTokenCount(text: string): number | null {
  * a caret and an interrupt X all share one cramped line. The negative prompt starts collapsed
  * because most generations do not use one. */
 export function PromptComposer() {
+    const { t } = useTranslation();
     const values = useParamStore(s => s.values);
     const setValue = useParamStore(s => s.setValue);
     const [showNegative, setShowNegative] = useState(false);
@@ -85,10 +87,10 @@ export function PromptComposer() {
             <PromptBox
                 ref={promptRef}
                 id="prompt"
-                label="Prompt"
+                label={t('generate.prompt.label')}
                 value={prompt}
                 tokens={promptTokens}
-                placeholder="Describe the image you want..."
+                placeholder={t('generate.prompt.placeholder')}
                 onChange={v => setValue('prompt', v)}
                 onSubmit={doGenerate}
             />
@@ -101,10 +103,10 @@ export function PromptComposer() {
                     className="flex items-center gap-1 rounded px-1 py-0.5 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                 >
                     {showNegative ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
-                    Negative prompt
+                    {t('generate.negativePrompt.label')}
                     {!showNegative && negative.trim() && (
                         <span className="rounded-full px-1.5 text-[10px]" style={{ background: 'var(--sw-chip-bg)' }}>
-                            set
+                            {t('generate.negativePrompt.set')}
                         </span>
                     )}
                 </button>
@@ -112,10 +114,10 @@ export function PromptComposer() {
                     <div className="mt-1">
                         <PromptBox
                             id="negativeprompt"
-                            label="Negative prompt"
+                            label={t('generate.negativePrompt.label')}
                             value={negative}
                             tokens={negativeTokens}
-                            placeholder="What you don't want to see..."
+                            placeholder={t('generate.negativePrompt.placeholder')}
                             onChange={v => setValue('negativeprompt', v)}
                             onSubmit={doGenerate}
                         />
@@ -140,7 +142,7 @@ export function PromptComposer() {
                         }}
                     >
                         <Square size={13} aria-hidden />
-                        Interrupt
+                        {t('generate.interrupt')}
                     </button>
                 )}
                 <GenerateSplitButton running={running} forever={forever} onGenerate={doGenerate} />
@@ -154,6 +156,7 @@ export function PromptComposer() {
  * Sits by the button that was pressed rather than in the canvas banner (which is for errors the
  * server reported), since the fix is always in the controls around it. */
 function InputErrorNotice(props: { issue: GenIssue }) {
+    const { t } = useTranslation();
     return (
         <div
             role="alert"
@@ -171,7 +174,7 @@ function InputErrorNotice(props: { issue: GenIssue }) {
                     onClick={() => document.getElementById(MODEL_SELECT_ID)?.focus()}
                     className="rounded border border-default px-2 py-0.5 text-xs hover:bg-[var(--sw-hover)]"
                 >
-                    Choose model
+                    {t('generate.chooseModel')}
                 </button>
             )}
         </div>
@@ -180,6 +183,7 @@ function InputErrorNotice(props: { issue: GenIssue }) {
 
 /** Primary action plus a menu, replacing the legacy trio of Generate / bare caret / bare X. */
 function GenerateSplitButton(props: { running: boolean; forever: boolean; onGenerate: () => void }) {
+    const { t } = useTranslation();
     const setForever = useGenerateStore(s => s.setForever);
     const clearBatch = useGenerateStore(s => s.clearBatch);
     const interrupt = useGenerateStore(s => s.interrupt);
@@ -194,13 +198,13 @@ function GenerateSplitButton(props: { running: boolean; forever: boolean; onGene
                 style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
             >
                 {props.running && <Loader2 size={14} className="animate-spin" aria-hidden />}
-                {props.running ? 'Generating' : 'Generate'}
+                {props.running ? t('generate.generating') : t('generate.generate')}
             </button>
             <Popover.Root>
                 <Popover.Trigger asChild>
                     <button
                         type="button"
-                        aria-label="More generate options"
+                        aria-label={t('generate.moreOptions')}
                         className="px-1.5 border-l"
                         style={{
                             background: 'var(--emphasis)',
@@ -219,12 +223,16 @@ function GenerateSplitButton(props: { running: boolean; forever: boolean; onGene
                         className="z-50 min-w-52 rounded-lg border border-default bg-surface-raised p-1 shadow-xl"
                     >
                         <MenuItem
-                            label={props.forever ? 'Stop generating forever' : 'Generate forever'}
+                            label={
+                                props.forever
+                                    ? t('generate.menu.stopForever')
+                                    : t('generate.menu.generateForever')
+                            }
                             onClick={() => setForever(!props.forever)}
                         />
-                        <MenuItem label="Interrupt this session" onClick={() => interrupt(false)} />
-                        <MenuItem label="Interrupt all my sessions" onClick={() => interrupt(true)} />
-                        <MenuItem label="Clear batch" onClick={clearBatch} />
+                        <MenuItem label={t('generate.menu.interruptSession')} onClick={() => interrupt(false)} />
+                        <MenuItem label={t('generate.menu.interruptAll')} onClick={() => interrupt(true)} />
+                        <MenuItem label={t('generate.menu.clearBatch')} onClick={clearBatch} />
                     </Popover.Content>
                 </Popover.Portal>
             </Popover.Root>
@@ -256,6 +264,7 @@ function PromptBox(props: {
     onChange: (value: string) => void;
     onSubmit: () => void;
 }) {
+    const { t } = useTranslation();
     return (
         <div className="relative">
             <textarea
@@ -277,10 +286,10 @@ function PromptBox(props: {
             />
             {props.tokens !== null && (
                 <span
-                    title="Text-encoder tokens / chunk size"
+                    title={t('generate.tokenCountHint')}
                     className="pointer-events-none absolute right-2 top-1.5 text-[10px] tabular-nums text-fg-soft"
                 >
-                    {props.tokens}/75
+                    {t('generate.tokenCount', { count: props.tokens, chunk: 75 })}
                 </span>
             )}
         </div>

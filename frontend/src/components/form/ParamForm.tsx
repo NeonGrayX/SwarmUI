@@ -5,11 +5,12 @@ import { useParamSchema } from '@/params/schema';
 import { computeVisibility, type FilterMode } from '@/params/visibility';
 import { useParamStore } from '@/params/store';
 import { ParamField, ParamGroup } from './ParamGroup';
+import { useTranslation } from '@/i18n';
 
-const MODES: { id: FilterMode; label: string }[] = [
-    { id: 'basic', label: 'Basic' },
-    { id: 'modified', label: 'Modified' },
-    { id: 'advanced', label: 'Advanced' }
+const MODES: { id: FilterMode; labelKey: string }[] = [
+    { id: 'basic', labelKey: 'params.filter.basic' },
+    { id: 'modified', labelKey: 'params.filter.modified' },
+    { id: 'advanced', labelKey: 'params.filter.advanced' }
 ];
 
 /** The generation parameter panel: search, filter chips, then the group tree.
@@ -17,6 +18,7 @@ const MODES: { id: FilterMode; label: string }[] = [
  * Replaces the legacy left sidebar (#main_inputs_area), where the only affordances were a text
  * filter and a "Display Advanced Options? (80)" checkbox. */
 export function ParamForm() {
+    const { t } = useTranslation();
     const session = useSession();
     const params = useT2IParams(session.isSuccess);
     const status = useCurrentStatus(session.isSuccess);
@@ -46,12 +48,12 @@ export function ParamForm() {
     }, [schema, values, toggles, groupToggles, status.data?.supported_features, search, mode]);
 
     if (params.isPending) {
-        return <p className="p-4 text-sm text-fg-soft">Loading parameters…</p>;
+        return <p className="p-4 text-sm text-fg-soft">{t('params.loading')}</p>;
     }
     if (params.isError) {
         return (
             <p className="p-4 text-sm" style={{ color: 'var(--backend-errored)' }}>
-                {params.error instanceof Error ? params.error.message : 'Failed to load parameters.'}
+                {params.error instanceof Error ? params.error.message : t('params.loadFailed')}
             </p>
         );
     }
@@ -78,15 +80,15 @@ export function ParamForm() {
                         type="search"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        placeholder="Filter parameters…"
-                        aria-label="Filter parameters"
+                        placeholder={t('params.filterPlaceholder')}
+                        aria-label={t('params.filterLabel')}
                         className="w-full rounded border border-default bg-surface-sunken pl-7 pr-7 py-1.5 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                     />
                     {searching && (
                         <button
                             type="button"
                             onClick={() => setSearch('')}
-                            aria-label="Clear filter"
+                            aria-label={t('common.clearFilter')}
                             className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                         >
                             <X size={13} aria-hidden />
@@ -116,7 +118,7 @@ export function ParamForm() {
                                         : 'border-default text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]'
                                 ].join(' ')}
                             >
-                                {entry.label}
+                                {t(entry.labelKey)}
                                 {count !== null && count > 0 && (
                                     <span className="ml-1 opacity-70">{count}</span>
                                 )}
@@ -130,7 +132,7 @@ export function ParamForm() {
                             onClick={resetAll}
                             className="rounded px-1.5 py-0.5 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                         >
-                            Reset all
+                            {t('params.resetAll')}
                         </button>
                     )}
                 </div>
@@ -150,14 +152,16 @@ export function ParamForm() {
                 ))}
                 {visibility.visible.size === 0 && (
                     <p className="px-2 py-6 text-center text-sm text-fg-soft">
-                        {searching ? `No parameters match "${search.trim()}".` : 'No parameters to show.'}
+                        {searching
+                            ? t('params.noMatches', { search: search.trim() })
+                            : t('params.noneToShow')}
                     </p>
                 )}
             </div>
 
             <div className="shrink-0 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
-                {visibility.visible.size} of {schema.params.length} shown
-                {modifiedCount > 0 && ` · ${modifiedCount} changed`}
+                {t('params.shownCount', { shown: visibility.visible.size, total: schema.params.length })}
+                {modifiedCount > 0 && ` · ${t('params.changedCount', { count: modifiedCount })}`}
             </div>
         </div>
     );

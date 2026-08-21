@@ -2,9 +2,11 @@ import { Settings2, X } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { imageUrl, useGenerateStore } from '@/generate/store';
 import type { BatchItem } from '@/generate/types';
+import { useTranslation } from '@/i18n';
 
 /** The batch strip: one tile per image in the run, with live progress. */
 export function BatchRail() {
+    const { t } = useTranslation();
     const batch = useGenerateStore(s => s.batch);
     const selected = useGenerateStore(s => s.selected);
     const select = useGenerateStore(s => s.select);
@@ -19,15 +21,15 @@ export function BatchRail() {
     return (
         <div className="flex h-full flex-col">
             <div className="flex shrink-0 items-center gap-1 border-b border-subtle px-2 py-1.5">
-                <h2 className="text-xs font-medium text-fg-strong">Batch</h2>
+                <h2 className="text-xs font-medium text-fg-strong">{t('batch.title')}</h2>
                 {visible.length > 0 && <span className="text-xs text-fg-soft">{visible.length}</span>}
                 <div className="flex-1" />
                 {visible.length > 0 && (
                     <button
                         type="button"
                         onClick={clearBatch}
-                        aria-label="Clear batch"
-                        title="Clear batch"
+                        aria-label={t('generate.menu.clearBatch')}
+                        title={t('generate.menu.clearBatch')}
                         className="rounded p-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                     >
                         <X size={13} aria-hidden />
@@ -37,8 +39,8 @@ export function BatchRail() {
                     <Popover.Trigger asChild>
                         <button
                             type="button"
-                            aria-label="Batch settings"
-                            title="Batch settings"
+                            aria-label={t('batch.settings')}
+                            title={t('batch.settings')}
                             className="rounded p-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                         >
                             <Settings2 size={13} aria-hidden />
@@ -52,12 +54,12 @@ export function BatchRail() {
                             className="z-50 w-60 rounded-lg border border-default bg-surface-raised p-2 shadow-xl space-y-1"
                         >
                             <Toggle
-                                label="Auto-swap to new images"
+                                label={t('batch.autoSwap')}
                                 checked={autoSwap}
                                 onChange={setAutoSwap}
                             />
                             <Toggle
-                                label="Auto-clear batch on generate"
+                                label={t('batch.autoClear')}
                                 checked={autoClear}
                                 onChange={setAutoClear}
                             />
@@ -69,7 +71,7 @@ export function BatchRail() {
             <div className="flex-1 min-h-0 overflow-y-auto p-2">
                 {visible.length === 0 ? (
                     <p className="px-1 py-4 text-center text-xs text-fg-soft">
-                        Generated images appear here.
+                        {t('batch.empty')}
                     </p>
                 ) : (
                     <div className="grid grid-cols-2 gap-1.5">
@@ -89,6 +91,7 @@ export function BatchRail() {
 }
 
 function BatchTile(props: { item: BatchItem; active: boolean; onSelect: () => void }) {
+    const { t } = useTranslation();
     const { item } = props;
     const src = imageUrl(item.src);
     const percent = Math.round((item.overallPercent ?? 0) * 100);
@@ -98,7 +101,7 @@ function BatchTile(props: { item: BatchItem; active: boolean; onSelect: () => vo
             type="button"
             onClick={props.onSelect}
             aria-current={props.active ? 'true' : undefined}
-            title={item.error ?? `Image ${item.batchIndex}`}
+            title={item.error ?? t('batch.imageNumber', { index: item.batchIndex })}
             className="relative aspect-square overflow-hidden rounded border transition-colors"
             style={{
                 borderColor: props.active ? 'var(--emphasis)' : 'var(--light-border)',
@@ -108,13 +111,13 @@ function BatchTile(props: { item: BatchItem; active: boolean; onSelect: () => vo
             {src ? (
                 <img
                     src={src}
-                    alt={`Batch image ${item.batchIndex}`}
+                    alt={t('batch.imageAlt', { index: item.batchIndex })}
                     className="h-full w-full object-cover"
                     style={item.isPreview ? { opacity: 0.75 } : undefined}
                 />
             ) : (
                 <span className="flex h-full items-center justify-center text-[10px] text-fg-soft">
-                    {item.status === 'failed' ? 'failed' : `${percent}%`}
+                    {item.status === 'failed' ? t('batch.failed') : `${percent}%`}
                 </span>
             )}
 

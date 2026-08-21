@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from '@/i18n';
 
 /** Multi-selection shared by every Library browser.
  *
@@ -130,13 +131,19 @@ export function SelectionBar(props: {
     onClear: () => void;
     children?: React.ReactNode;
 }) {
+    const { t } = useTranslation();
     return (
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-surface-sunken px-3 py-1.5">
-            <span className="text-xs text-fg-strong tabular-nums">{props.count} selected</span>
+            <span className="text-xs text-fg-strong tabular-nums">
+                {t('selection.count', { count: props.count })}
+            </span>
             {props.count < props.total && (
-                <SelectionButton label={`Select all ${props.total}`} onClick={props.onSelectAll} />
+                <SelectionButton
+                    label={t('selection.selectAll', { total: props.total })}
+                    onClick={props.onSelectAll}
+                />
             )}
-            <SelectionButton label="Clear" onClick={props.onClear} />
+            <SelectionButton label={t('common.clear')} onClick={props.onClear} />
 
             <div className="flex-1" />
 

@@ -4,8 +4,10 @@ import { isModelCard } from '@/library/types';
 import { Field } from '@/components/form/Field';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { useJobStore } from '@/tools/jobs';
+import { useTranslation } from '@/i18n';
 
 export function LoraExtractorPage() {
+    const { t } = useTranslation();
     const models = useModels('Stable-Diffusion', '', 'Name', false, 3);
     const run = useJobStore(s => s.run);
 
@@ -20,38 +22,23 @@ export function LoraExtractorPage() {
 
     return (
         <ToolLayout
-            title="LoRA Extractor"
-            summary="Distill the difference between two checkpoints into a reusable LoRA."
+            title={t('nav.destination.lora-extractor')}
+            summary={t('loraExtract.summary')}
             about={
                 <>
-                    <p>
-                        Given an original model and a fine-tuned version of it, this computes what
-                        changed and stores it as a LoRA, which is far smaller than the full model.
-                    </p>
-                    <p>
-                        Rank controls how much detail is kept. Higher rank captures more of the
-                        difference at the cost of file size; 32 is a reasonable starting point.
-                        Valid range is 1 to 320.
-                    </p>
-                    <p>
-                        Both models must share an architecture. Extraction is GPU-heavy and can take
-                        several minutes.
-                    </p>
+                    <p>{t('loraExtract.about1')}</p>
+                    <p>{t('loraExtract.about2')}</p>
+                    <p>{t('loraExtract.about3')}</p>
                 </>
             }
-            warning={
-                <>
-                    Requires a running backend with enough VRAM to hold both models. The result is
-                    only meaningful if the two models share a base architecture.
-                </>
-            }
+            warning={t('loraExtract.warning')}
             action={
                 <button
                     type="button"
                     disabled={!canRun}
                     onClick={() =>
                         run({
-                            title: `Extract LoRA: ${outName.trim()}`,
+                            title: t('loraExtract.jobTitle', { name: outName.trim() }),
                             route: 'DoLoraExtractionWS',
                             payload: { baseModel, otherModel, rank, outName: outName.trim() }
                         })
@@ -59,20 +46,18 @@ export function LoraExtractorPage() {
                     className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
                     style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                 >
-                    Extract LoRA
+                    {t('loraExtract.extract')}
                 </button>
             }
         >
             {options.length === 0 && (
-                <p className="mb-3 text-sm text-fg-soft">
-                    No models installed, so there is nothing to extract from yet.
-                </p>
+                <p className="mb-3 text-sm text-fg-soft">{t('loraExtract.noModels')}</p>
             )}
 
             <Field
                 id="lx-base"
-                label="Base model"
-                description="The original, unmodified model."
+                label={t('loraExtract.baseModel')}
+                description={t('loraExtract.baseModelHelp')}
                 density="compact"
             >
                 <ModelSelect id="lx-base" value={baseModel} onChange={setBaseModel} options={options} />
@@ -80,8 +65,8 @@ export function LoraExtractorPage() {
 
             <Field
                 id="lx-other"
-                label="Tuned model"
-                description="The fine-tuned model to compare against the base."
+                label={t('loraExtract.tunedModel')}
+                description={t('loraExtract.tunedModelHelp')}
                 density="compact"
             >
                 <ModelSelect id="lx-other" value={otherModel} onChange={setOtherModel} options={options} />
@@ -89,15 +74,20 @@ export function LoraExtractorPage() {
 
             {baseModel && baseModel === otherModel && (
                 <p className="mb-2 text-xs" style={{ color: 'var(--backend-errored)' }}>
-                    Pick two different models — comparing a model to itself produces nothing.
+                    {t('loraExtract.sameModel')}
                 </p>
             )}
 
-            <Field id="lx-rank" label="Rank" description="1 to 320. Higher keeps more detail." density="compact">
+            <Field
+                id="lx-rank"
+                label={t('loraExtract.rank')}
+                description={t('loraExtract.rankHelp')}
+                density="compact"
+            >
                 <div className="flex items-center gap-2">
                     <input
                         type="range"
-                        aria-label="Rank slider"
+                        aria-label={t('control.slider', { label: t('loraExtract.rank') })}
                         min={1}
                         max={320}
                         value={rank}
@@ -116,13 +106,13 @@ export function LoraExtractorPage() {
                 </div>
             </Field>
 
-            <Field id="lx-out" label="Save as" density="compact">
+            <Field id="lx-out" label={t('common.saveAs')} density="compact">
                 <input
                     id="lx-out"
                     type="text"
                     value={outName}
                     onChange={e => setOutName(e.target.value)}
-                    placeholder="my-extracted-lora"
+                    placeholder={t('loraExtract.namePlaceholder')}
                     className="w-full rounded border border-default bg-surface-sunken px-2 py-1 font-mono text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                 />
             </Field>
@@ -136,6 +126,7 @@ function ModelSelect(props: {
     onChange: (value: string) => void;
     options: string[];
 }) {
+    const { t } = useTranslation();
     return (
         <select
             id={props.id}
@@ -144,7 +135,7 @@ function ModelSelect(props: {
             disabled={props.options.length === 0}
             className="w-full rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)] disabled:cursor-not-allowed"
         >
-            <option value="">(select a model)</option>
+            <option value="">{t('loraExtract.selectModel')}</option>
             {props.options.map(option => (
                 <option key={option} value={option}>
                     {option}

@@ -24,6 +24,7 @@ import { ModelDetailSheet } from './ModelDetailSheet';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { PromptDialog } from '../ui/PromptDialog';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
+import { useTranslation } from '@/i18n';
 
 /** Unified browser for every model-family asset plus wildcards.
  *
@@ -31,6 +32,7 @@ import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
  * Embeddings, ControlNets, Wildcards, Presets), which shared vertical space with the image and so
  * defaulted to roughly 300px tall. */
 export function ModelBrowser(props: { subtype: ModelSubtype; label: string; emptyHint?: string }) {
+    const { t } = useTranslation();
     const [path, setPath] = useState('');
     const [search, setSearch] = useState('');
     const [view, setView] = useState<ViewMode>('grid');
@@ -91,24 +93,28 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
     /** Everything one entry can do, for its right-click menu. */
     function actionsFor(file: ModelCard | WildcardCard): MenuAction[] {
         const actions: MenuAction[] = [
-            { label: 'Details', onSelect: () => setSelected(file) },
+            { label: t('modelBrowser.action.details'), onSelect: () => setSelected(file) },
             {
-                label: starred.includes(file.name) ? 'Unstar' : 'Star',
+                label: starred.includes(file.name) ? t('common.unstar') : t('common.star'),
                 onSelect: () => toggleStar.mutate({ subtype: props.subtype, name: file.name })
             }
         ];
         if (isModelCard(file)) {
             actions.push({
-                label: 'Load on backends',
+                label: t('modelBrowser.action.loadOnBackends'),
                 onSelect: () => selectModel.mutate({ name: file.name })
             });
         }
         if (canEdit) {
-            actions.push({ label: 'Rename…', separated: true, onSelect: () => setPendingRename(file.name) });
+            actions.push({
+                label: t('modelBrowser.action.rename'),
+                separated: true,
+                onSelect: () => setPendingRename(file.name)
+            });
         }
         if (canDelete) {
             actions.push({
-                label: 'Delete…',
+                label: t('modelBrowser.action.delete'),
                 destructive: true,
                 separated: !canEdit,
                 onSelect: () => setPendingDelete(file.name)
@@ -144,7 +150,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                     >
                         {canDelete && (
                             <SelectionButton
-                                label="Delete"
+                                label={t('common.delete')}
                                 destructive
                                 onClick={() => setPendingBulkDelete(true)}
                             >
@@ -156,18 +162,21 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
 
                 <div className="min-h-0 flex-1 overflow-y-auto p-3">
                     {models.isPending ? (
-                        <EmptyState title={`Loading ${props.label}…`} />
+                        <EmptyState title={t('modelBrowser.loading', { noun: props.label })} />
                     ) : models.isError ? (
                         <EmptyState
-                            title={`Couldn't load ${props.label}.`}
+                            title={t('modelBrowser.loadFailed', { noun: props.label })}
                             hint={models.error instanceof Error ? models.error.message : undefined}
                         />
                     ) : ordered.length === 0 ? (
                         <EmptyState
                             title={
                                 search
-                                    ? `No ${props.label} match "${search.trim()}".`
-                                    : `No ${props.label} found.`
+                                    ? t('modelBrowser.noSearchMatches', {
+                                          noun: props.label,
+                                          search: search.trim()
+                                      })
+                                    : t('modelBrowser.noneFound', { noun: props.label })
                             }
                             hint={search ? undefined : props.emptyHint}
                         />
@@ -216,14 +225,14 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
 
             <ConfirmDialog
                 open={pendingDelete !== null}
-                title="Delete model?"
+                title={t('modelBrowser.deleteTitle')}
                 body={
                     <>
-                        <code className="font-mono text-fg">{pendingDelete}</code> will be deleted from
-                        disk. Depending on server settings this may be permanent.
+                        <code className="font-mono text-fg">{pendingDelete}</code>{' '}
+                        {t('modelBrowser.deleteBody')}
                     </>
                 }
-                confirmLabel="Delete"
+                confirmLabel={t('common.delete')}
                 destructive
                 onConfirm={() => {
                     if (pendingDelete) {
@@ -236,14 +245,12 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
 
             <ConfirmDialog
                 open={pendingBulkDelete}
-                title={`Delete ${selection.count} ${props.label}?`}
-                body={
-                    <>
-                        All <strong className="text-fg">{selection.count}</strong> selected entries will
-                        be deleted from disk. Depending on server settings this may be permanent.
-                    </>
-                }
-                confirmLabel="Delete"
+                title={t('modelBrowser.bulkDeleteTitle', {
+                    count: selection.count,
+                    noun: props.label
+                })}
+                body={t('modelBrowser.bulkDeleteBody', { count: selection.count })}
+                confirmLabel={t('common.delete')}
                 destructive
                 onConfirm={() => {
                     setPendingBulkDelete(false);
@@ -254,11 +261,11 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
 
             <PromptDialog
                 open={pendingRename !== null}
-                title="Rename model"
-                label="New full path (folders are created as needed)"
-                hint="This renames the file on disk, including its metadata sidecar."
+                title={t('modelBrowser.renameTitle')}
+                label={t('modelBrowser.renameLabel')}
+                hint={t('modelBrowser.renameHint')}
                 initialValue={pendingRename ?? ''}
-                confirmLabel="Rename"
+                confirmLabel={t('modelBrowser.rename')}
                 onConfirm={newName => {
                     if (pendingRename) {
                         renameModel.mutate({ subtype: props.subtype, oldName: pendingRename, newName });
@@ -282,6 +289,7 @@ function Card(props: {
     onOpen: (event: React.MouseEvent) => void;
     onMenu: (event: React.MouseEvent) => void;
 }) {
+    const { t, tDynamic } = useTranslation();
     const { file } = props;
     const card = isModelCard(file) ? file : null;
     const image = previewUrl(card ? card.preview_image : (file as WildcardCard).image);
@@ -298,7 +306,7 @@ function Card(props: {
                 type="button"
                 onClick={props.onOpen}
                 className="block w-full text-left"
-                title={`${file.name}\nRight-click for actions`}
+                title={`${file.name}\n${t('browser.rightClickForActions')}`}
             >
                 <div className="flex aspect-square items-center justify-center bg-surface-sunken">
                     {image ? (
@@ -309,7 +317,9 @@ function Card(props: {
                 </div>
                 <div className="p-2">
                     <p className="truncate text-sm text-fg-strong">{card?.title || file.name.split('/').pop()}</p>
-                    {card?.class && <p className="truncate text-xs text-fg-soft">{card.class}</p>}
+                    {card?.class && (
+                        <p className="truncate text-xs text-fg-soft">{tDynamic(card.class)}</p>
+                    )}
                 </div>
             </button>
 
@@ -319,11 +329,11 @@ function Card(props: {
                     overlay
                     checked={props.checked}
                     onToggle={props.onCheck}
-                    label={`Select ${file.name}`}
+                    label={t('browser.selectEntry', { name: file.name })}
                 />
                 {card?.loaded && (
                     <span
-                        title="Loaded on a backend"
+                        title={t('modelPicker.loadedOnBackend')}
                         className="rounded-full bg-black/60 p-1"
                         style={{ color: 'var(--backend-running)' }}
                     >
@@ -348,6 +358,7 @@ function Row(props: {
     onOpen: (event: React.MouseEvent) => void;
     onMenu: (event: React.MouseEvent) => void;
 }) {
+    const { t, tDynamic } = useTranslation();
     const card = isModelCard(props.file) ? props.file : null;
     const image = previewUrl(card ? card.preview_image : (props.file as WildcardCard).image);
 
@@ -356,23 +367,25 @@ function Row(props: {
             <SelectionCheckbox
                 checked={props.checked}
                 onToggle={props.onCheck}
-                label={`Select ${props.file.name}`}
+                label={t('browser.selectEntry', { name: props.file.name })}
             />
             <StarButton starred={props.starred} variant="plain" onClick={props.onStar} />
             <button
                 type="button"
                 onClick={props.onOpen}
-                title={`${props.file.name}\nRight-click for actions`}
+                title={`${props.file.name}\n${t('browser.rightClickForActions')}`}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
             >
                 <span className="size-8 shrink-0 overflow-hidden rounded bg-surface-sunken">
                     {image && <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm text-fg">{props.file.name}</span>
-                {card?.class && <span className="shrink-0 text-xs text-fg-soft">{card.class}</span>}
+                {card?.class && (
+                    <span className="shrink-0 text-xs text-fg-soft">{tDynamic(card.class)}</span>
+                )}
                 {card?.loaded && (
                     <span className="shrink-0 text-xs" style={{ color: 'var(--backend-running)' }}>
-                        loaded
+                        {t('modelBrowser.loaded')}
                     </span>
                 )}
             </button>

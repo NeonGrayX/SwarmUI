@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { useTranslation } from '@/i18n';
 
 /** Confirmation for irreversible actions.
  *
@@ -14,6 +15,7 @@ export function ConfirmDialog(props: {
     onConfirm: () => void;
     onCancel: () => void;
 }) {
+    const { t } = useTranslation();
     return (
         <Dialog.Root open={props.open} onOpenChange={open => !open && props.onCancel()}>
             <Dialog.Portal>
@@ -31,7 +33,7 @@ export function ConfirmDialog(props: {
                                 type="button"
                                 className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </button>
                         </Dialog.Close>
                         <button

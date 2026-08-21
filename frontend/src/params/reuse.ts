@@ -15,6 +15,7 @@
  */
 
 import { useCallback } from 'react';
+import { t } from '@/i18n';
 import type { ParamSchema } from '@/api/types';
 import { cleanModelName, useParamSchema, type NormalizedSchema } from './schema';
 import {
@@ -51,17 +52,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Reads the metadata blob into params + extra, or throws with a reason it can't be reused. */
 function readMetadata(raw: string | null | undefined): ImageParameters {
     if (!raw) {
-        throw new Error('This image has no recorded parameters.');
+        throw new Error(t('reuse.noParameters'));
     }
     let data: unknown;
     try {
         data = JSON.parse(raw);
     }
     catch {
-        throw new Error("This image's metadata isn't in a format this UI can read.");
+        throw new Error(t('reuse.unreadableMetadata'));
     }
     if (!isRecord(data)) {
-        throw new Error("This image's metadata isn't in a format this UI can read.");
+        throw new Error(t('reuse.unreadableMetadata'));
     }
     // Swarm images nest their params; images from other tools tend to be one flat object.
     const params = isRecord(data.sui_image_params)
@@ -235,7 +236,7 @@ export function useReuseParameters(): (metadata: string | null | undefined) => v
     return useCallback(
         (metadata: string | null | undefined) => {
             if (!schema) {
-                throw new Error('Parameters are still loading, try again in a moment.');
+                throw new Error(t('reuse.schemaLoading'));
             }
             applyImageParameters(schema, metadata);
         },

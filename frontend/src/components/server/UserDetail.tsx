@@ -15,6 +15,7 @@ import {
     type RoleInfo,
     type UserInfo
 } from '@/server/users';
+import { useTranslation } from '@/i18n';
 
 const INPUT =
     'rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]';
@@ -35,6 +36,7 @@ export function UserDetail(props: {
     /** False when the session lacks configure_roles, so AdminListRoles was never readable. */
     rolesKnown: boolean;
 }) {
+    const { t } = useTranslation();
     const queryClient = useQueryClient();
     const session = useSession();
     const [pane, setPane] = useState<'account' | 'settings'>('account');
@@ -67,7 +69,7 @@ export function UserDetail(props: {
     });
 
     if (info.isPending) {
-        return <p className="p-4 text-sm text-fg-soft">Loading {props.userId}…</p>;
+        return <p className="p-4 text-sm text-fg-soft">{t('userDetail.loading', { user: props.userId })}</p>;
     }
     if (info.isError || !info.data) {
         return (
@@ -81,7 +83,7 @@ export function UserDetail(props: {
         <div className="flex h-full min-h-0 flex-col">
             <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle px-4 py-2">
                 <h2 className="text-sm font-medium text-fg-strong">{props.userId}</h2>
-                {isSelf && <span className="text-xs text-fg-soft">(this is you)</span>}
+                {isSelf && <span className="text-xs text-fg-soft">{t('userDetail.thisIsYou')}</span>}
                 <div className="flex overflow-hidden rounded border border-default">
                     {(['account', 'settings'] as const).map(id => (
                         <button
@@ -89,14 +91,14 @@ export function UserDetail(props: {
                             type="button"
                             onClick={() => setPane(id)}
                             aria-pressed={pane === id}
-                            className="px-2.5 py-1 text-xs capitalize transition-colors"
+                            className="px-2.5 py-1 text-xs transition-colors"
                             style={
                                 pane === id
                                     ? { background: 'var(--sw-active)', color: 'var(--text-strong)' }
                                     : { color: 'var(--sw-fg-soft)' }
                             }
                         >
-                            {id}
+                            {t(`userDetail.pane.${id}`)}
                         </button>
                     ))}
                 </div>
@@ -106,11 +108,11 @@ export function UserDetail(props: {
                         <button
                             type="button"
                             onClick={() => impersonate(props.userId)}
-                            title="Reload this interface as that user"
+                            title={t('userDetail.impersonateHint')}
                             className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
                         >
                             <UserCog size={12} aria-hidden />
-                            Impersonate
+                            {t('userDetail.impersonate')}
                         </button>
                         <button
                             type="button"
@@ -119,7 +121,7 @@ export function UserDetail(props: {
                             style={{ color: 'var(--backend-errored)' }}
                         >
                             <Trash2 size={12} aria-hidden />
-                            Delete
+                            {t('common.delete')}
                         </button>
                     </>
                 )}
@@ -132,8 +134,7 @@ export function UserDetail(props: {
                 >
                     {isSelf && (
                         <p className="mb-3 rounded border border-default bg-surface-sunken px-2 py-1.5 text-xs text-fg-soft">
-                            This is your own account. Editing your roles here can lock you out of this
-                            screen, and the server refuses to let you delete yourself.
+                            {t('userDetail.selfWarning')}
                         </p>
                     )}
 
@@ -146,23 +147,22 @@ export function UserDetail(props: {
                         onSaved={invalidate}
                     />
 
-                    <Section title="Password">
-                        <Field id="pw-set-by" label="Last set by" density="compact">
+                    <Section title={t('userDetail.password')}>
+                        <Field id="pw-set-by" label={t('userDetail.lastSetBy')} density="compact">
                             <span className="text-sm text-fg">
-                                {info.data.password_set_by_admin ? 'An admin' : 'The user'}
+                                {info.data.password_set_by_admin
+                                    ? t('userDetail.setByAdmin')
+                                    : t('userDetail.setByUser')}
                             </span>
                         </Field>
-                        <p className="mt-1 mb-2 text-xs text-fg-soft">
-                            Setting a password here marks it admin-set, so the user is asked to change
-                            it the next time they log in.
-                        </p>
+                        <p className="mt-1 mb-2 text-xs text-fg-soft">{t('userDetail.passwordNote')}</p>
                         <button
                             type="button"
                             onClick={() => setChangingPassword(true)}
                             className="flex items-center gap-1.5 rounded border border-default px-2.5 py-1 text-xs text-fg hover:bg-[var(--sw-hover)]"
                         >
                             <KeyRound size={12} aria-hidden />
-                            Set password
+                            {t('userDetail.setPassword')}
                         </button>
                     </Section>
 
@@ -195,15 +195,13 @@ export function UserDetail(props: {
 
             <ConfirmDialog
                 open={pendingDelete}
-                title="Delete user?"
+                title={t('userDetail.deleteTitle')}
                 body={
                     <>
-                        <strong className="text-fg">{props.userId}</strong> and their personal data —
-                        settings, presets, history index — are removed. Images already written to disk
-                        stay there. This cannot be undone.
+                        <strong className="text-fg">{props.userId}</strong> {t('userDetail.deleteBody')}
                     </>
                 }
-                confirmLabel="Delete user"
+                confirmLabel={t('userDetail.deleteUser')}
                 destructive
                 onConfirm={() => {
                     setPendingDelete(false);
@@ -242,6 +240,7 @@ function RolesPanel(props: {
     maxT2I: number;
     onSaved: () => void;
 }) {
+    const { t, tDynamic } = useTranslation();
     const [draft, setDraft] = useState<string[]>(props.current);
 
     useEffect(() => setDraft(props.current), [props.userId, props.current.join(' ')]);
@@ -266,28 +265,25 @@ function RolesPanel(props: {
     // pick from — so show what the account holds and leave editing to someone who can read it.
     if (!props.rolesKnown) {
         return (
-            <Section title="Roles">
+            <Section title={t('users.tab.roles')}>
                 <p className="mb-2 text-xs text-fg-soft">
-                    Editing roles needs the <code className="font-mono">configure_roles</code>{' '}
-                    permission, which this account doesn't have.
+                    {t('userDetail.rolesReadOnlyBefore')}{' '}
+                    <code className="font-mono">configure_roles</code>{' '}
+                    {t('userDetail.rolesReadOnlyAfter')}
                 </p>
                 <p className="text-sm text-fg">
-                    {props.current.length > 0 ? props.current.join(', ') : 'No roles assigned.'}
+                    {props.current.length > 0 ? props.current.join(', ') : t('userDetail.noRoles')}
                 </p>
                 <p className="mt-2 text-xs text-fg-soft">
-                    Effective simultaneous generation cap:{' '}
-                    <span className="text-fg">{props.maxT2I}</span>
+                    {t('userDetail.generationCap')} <span className="text-fg">{props.maxT2I}</span>
                 </p>
             </Section>
         );
     }
 
     return (
-        <Section title="Roles">
-            <p className="mb-2 text-xs text-fg-soft">
-                Permissions come from roles. A user gets the union of every permission across all of
-                their roles, and the most permissive limit of each numeric cap.
-            </p>
+        <Section title={t('users.tab.roles')}>
+            <p className="mb-2 text-xs text-fg-soft">{t('userDetail.rolesExplain')}</p>
             <ul className="mb-2 rounded border border-default divide-y divide-[var(--light-border)]">
                 {known.map(id => {
                     const role = props.roles[id];
@@ -307,12 +303,12 @@ function RolesPanel(props: {
                                     {role.name || id}
                                     <span className="font-mono text-[11px] text-fg-soft">{id}</span>
                                     <span className="text-[11px] text-fg-soft">
-                                        {role.permissions.length} permission(s)
+                                        {t('users.permissionCount', { count: role.permissions.length })}
                                     </span>
                                 </span>
                                 {role.description && (
                                     <span className="block whitespace-pre-wrap text-xs text-fg-soft">
-                                        {role.description}
+                                        {tDynamic(role.description)}
                                     </span>
                                 )}
                             </label>
@@ -334,7 +330,7 @@ function RolesPanel(props: {
                                 className="block text-xs"
                                 style={{ color: 'var(--status-bar-warn-color-start-end)' }}
                             >
-                                This role no longer exists, so it grants nothing.
+                                {t('userDetail.orphanRole')}
                             </span>
                         </label>
                     </li>
@@ -342,8 +338,8 @@ function RolesPanel(props: {
             </ul>
 
             <p className="text-xs text-fg-soft">
-                Effective simultaneous generation cap: <span className="text-fg">{props.maxT2I}</span>{' '}
-                (after combining roles with the backends currently available)
+                {t('userDetail.generationCap')} <span className="text-fg">{props.maxT2I}</span>{' '}
+                {t('userDetail.generationCapNote')}
             </p>
 
             {save.isError && (
@@ -359,7 +355,7 @@ function RolesPanel(props: {
                         onClick={() => setDraft(props.current)}
                         className="rounded border border-default px-2.5 py-1 text-xs text-fg hover:bg-[var(--sw-hover)]"
                     >
-                        Discard
+                        {t('common.discard')}
                     </button>
                     <button
                         type="button"
@@ -368,7 +364,7 @@ function RolesPanel(props: {
                         className="rounded px-2.5 py-1 text-xs disabled:opacity-50"
                         style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                     >
-                        {save.isPending ? 'Saving…' : 'Save roles'}
+                        {save.isPending ? t('common.saving') : t('userDetail.saveRoles')}
                     </button>
                 </div>
             )}
@@ -377,6 +373,7 @@ function RolesPanel(props: {
 }
 
 function OAuthPanel(props: { userId: string; email: string; onSaved: () => void }) {
+    const { t } = useTranslation();
     const [email, setEmail] = useState(props.email);
 
     useEffect(() => setEmail(props.email), [props.userId, props.email]);
@@ -387,18 +384,18 @@ function OAuthPanel(props: { userId: string; email: string; onSaved: () => void 
     });
 
     return (
-        <Section title="OAuth">
+        <Section title={t('userDetail.oauth')}>
             <Field
                 id="oauth-email"
-                label="Linked email"
-                description="The email address an OAuth provider must return for it to sign in as this user. Leave empty to unlink."
+                label={t('userDetail.linkedEmail')}
+                description={t('userDetail.linkedEmailHelp')}
                 density="compact"
             >
                 <input
                     id="oauth-email"
                     type="email"
                     value={email}
-                    placeholder="(not linked)"
+                    placeholder={t('userDetail.notLinked')}
                     onChange={e => setEmail(e.target.value)}
                     className={`${INPUT} w-full`}
                 />
@@ -415,7 +412,7 @@ function OAuthPanel(props: { userId: string; email: string; onSaved: () => void 
                         onClick={() => setEmail(props.email)}
                         className="rounded border border-default px-2.5 py-1 text-xs text-fg hover:bg-[var(--sw-hover)]"
                     >
-                        Discard
+                        {t('common.discard')}
                     </button>
                     <button
                         type="button"
@@ -424,7 +421,7 @@ function OAuthPanel(props: { userId: string; email: string; onSaved: () => void 
                         className="rounded px-2.5 py-1 text-xs disabled:opacity-50"
                         style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                     >
-                        {save.isPending ? 'Saving…' : 'Save email'}
+                        {save.isPending ? t('common.saving') : t('userDetail.saveEmail')}
                     </button>
                 </div>
             )}
@@ -438,6 +435,7 @@ function SetPasswordDialog(props: {
     onClose: () => void;
     onSaved: () => void;
 }) {
+    const { t } = useTranslation();
     const [password, setPassword] = useState('');
     const [confirm, setConfirm] = useState('');
 
@@ -472,15 +470,16 @@ function SetPasswordDialog(props: {
                 <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
                 <Dialog.Content className="fixed left-1/2 top-1/3 z-50 w-[min(28rem,90vw)] -translate-x-1/2 rounded-lg border border-default bg-surface-raised p-4 shadow-2xl">
                     <Dialog.Title className="mb-1 text-base font-medium text-fg-strong">
-                        Set password
+                        {t('userDetail.setPassword')}
                     </Dialog.Title>
                     <Dialog.Description className="mb-3 text-sm text-fg-soft">
-                        Replaces the password for <span className="text-fg">{props.userId}</span>. They
-                        are asked to change it the next time they log in.
+                        {t('userDetail.setPasswordBefore')}{' '}
+                        <span className="text-fg">{props.userId}</span>.{' '}
+                        {t('userDetail.setPasswordAfter')}
                     </Dialog.Description>
 
                     <label className="mb-1 block text-xs text-fg-soft" htmlFor="admin-new-pw">
-                        New password
+                        {t('account.newPassword')}
                     </label>
                     <input
                         id="admin-new-pw"
@@ -492,7 +491,7 @@ function SetPasswordDialog(props: {
                         className={`${INPUT} mb-2 w-full`}
                     />
                     <label className="mb-1 block text-xs text-fg-soft" htmlFor="admin-confirm-pw">
-                        Confirm password
+                        {t('account.confirmPassword')}
                     </label>
                     <input
                         id="admin-confirm-pw"
@@ -510,12 +509,12 @@ function SetPasswordDialog(props: {
 
                     {tooShort && (
                         <p className="mt-1.5 text-xs" style={{ color: 'var(--backend-errored)' }}>
-                            Must be at least {MIN_PASSWORD_LENGTH} characters.
+                            {t('account.passwordTooShort', { count: MIN_PASSWORD_LENGTH })}
                         </p>
                     )}
                     {mismatch && (
                         <p className="mt-1.5 text-xs" style={{ color: 'var(--backend-errored)' }}>
-                            The passwords don't match.
+                            {t('account.passwordMismatch')}
                         </p>
                     )}
                     {save.isError && (
@@ -530,7 +529,7 @@ function SetPasswordDialog(props: {
                                 type="button"
                                 className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </button>
                         </Dialog.Close>
                         <button
@@ -540,7 +539,7 @@ function SetPasswordDialog(props: {
                             className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
                             style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                         >
-                            {save.isPending ? 'Setting…' : 'Set password'}
+                            {save.isPending ? t('userDetail.setting') : t('userDetail.setPassword')}
                         </button>
                     </div>
                 </Dialog.Content>

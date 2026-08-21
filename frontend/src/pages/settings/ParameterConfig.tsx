@@ -7,6 +7,7 @@ import { normalizeSchema, type NormalizedSchema, type ParamEdits } from '@/param
 import type { ParamSchema } from '@/api/types';
 import { Field } from '@/components/form/Field';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useTranslation } from '@/i18n';
 
 /** One param's complete override record, in the shape SetParamEdits stores it. An empty record
  *  means "no overrides at all", ie reset to what the parameter shipped with. */
@@ -17,10 +18,10 @@ type ParamEdit = Record<string, unknown>;
 type Pending = Record<string, ParamEdit>;
 
 const FLAG_FIELDS = [
-    { key: 'visible', label: 'Visible normally' },
-    { key: 'advanced', label: 'Advanced' },
-    { key: 'do_not_save', label: 'Do not save' },
-    { key: 'toggleable', label: 'Toggleable' }
+    { key: 'visible', labelKey: 'paramConfig.flag.visible' },
+    { key: 'advanced', labelKey: 'paramConfig.flag.advanced' },
+    { key: 'do_not_save', labelKey: 'paramConfig.flag.doNotSave' },
+    { key: 'toggleable', labelKey: 'paramConfig.flag.toggleable' }
 ] as const;
 
 /** The shipped value of a field in the shape the edit blob stores it — `examples` lives as a
@@ -57,6 +58,7 @@ function sameRecord(a: ParamEdit, b: ParamEdit): boolean {
  * producing an unreadable and unnavigable wall. This shows the same information as a scannable
  * table and moves editing into a side sheet, so only one parameter's controls are on screen. */
 export function ParameterConfigPage() {
+    const { t, tDynamic } = useTranslation();
     const session = useSession();
     const params = useT2IParams(session.isSuccess);
     const queryClient = useQueryClient();
@@ -90,17 +92,19 @@ export function ParameterConfigPage() {
             if (!query) {
                 return true;
             }
-            return `${param.id} ${param.name} ${param.description}`.toLowerCase().includes(query);
+            return `${param.id} ${tDynamic(param.name)} ${tDynamic(param.description)}`
+                .toLowerCase()
+                .includes(query);
         });
-    }, [schema, search, groupFilter]);
+    }, [schema, search, groupFilter, tDynamic]);
 
     if (params.isPending) {
-        return <p className="p-6 text-sm text-fg-soft">Loading parameters…</p>;
+        return <p className="p-6 text-sm text-fg-soft">{t('params.loading')}</p>;
     }
     if (!schema) {
         return (
             <p className="p-6 text-sm" style={{ color: 'var(--backend-errored)' }}>
-                Failed to load parameters.
+                {t('params.loadFailed')}
             </p>
         );
     }
@@ -191,11 +195,7 @@ export function ParameterConfigPage() {
     return (
         <div className="flex h-full min-h-0 flex-col">
             <div className="shrink-0 border-b border-subtle px-4 py-2">
-                <p className="mb-2 text-xs text-fg-soft">
-                    Raw internal configuration of generation parameters. Changing these affects how
-                    parameters appear in the Generate workspace, and what value they start at — not what
-                    they do.
-                </p>
+                <p className="mb-2 text-xs text-fg-soft">{t('paramConfig.intro')}</p>
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="relative min-w-48 max-w-sm flex-1">
                         <Search
@@ -207,15 +207,15 @@ export function ParameterConfigPage() {
                             type="search"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            placeholder="Search parameters…"
-                            aria-label="Search parameters"
+                            placeholder={t('paramConfig.searchPlaceholder')}
+                            aria-label={t('paramConfig.searchLabel')}
                             className="w-full rounded border border-default bg-surface-sunken py-1 pl-7 pr-7 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                         />
                         {search && (
                             <button
                                 type="button"
                                 onClick={() => setSearch('')}
-                                aria-label="Clear search"
+                                aria-label={t('common.clearSearch')}
                                 className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-soft hover:text-fg"
                             >
                                 <X size={13} aria-hidden />
@@ -225,32 +225,32 @@ export function ParameterConfigPage() {
                     <select
                         value={groupFilter}
                         onChange={e => setGroupFilter(e.target.value)}
-                        aria-label="Filter by group"
+                        aria-label={t('paramConfig.filterByGroup')}
                         className="rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                     >
-                        <option value="">All groups</option>
+                        <option value="">{t('paramConfig.allGroups')}</option>
                         {[...schema.groupsById.values()].map(group => (
                             <option key={group.id} value={group.id}>
-                                {group.name}
+                                {tDynamic(group.name)}
                             </option>
                         ))}
                     </select>
                     <span className="text-xs text-fg-soft tabular-nums">
-                        {rows.length} of {schema.params.length}
+                        {t('modelPicker.countOf', { shown: rows.length, total: schema.params.length })}
                     </span>
                     <div className="flex-1" />
                     <span className="text-xs text-fg-soft tabular-nums">
-                        {customizedCount} customized
+                        {t('paramConfig.customizedCount', { count: customizedCount })}
                     </span>
                     <button
                         type="button"
                         onClick={() => setConfirmResetAll(true)}
                         disabled={customizedCount === 0 || save.isPending}
-                        title="Put every parameter back to how it shipped"
+                        title={t('paramConfig.resetAllHint')}
                         className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-sm text-fg hover:bg-[var(--sw-hover)] disabled:opacity-40 disabled:hover:bg-transparent"
                     >
                         <RotateCcw size={13} aria-hidden />
-                        Reset all
+                        {t('params.resetAll')}
                     </button>
                 </div>
             </div>
@@ -260,10 +260,10 @@ export function ParameterConfigPage() {
                     <table className="w-full border-collapse text-sm">
                         <thead className="sticky top-0 z-10 bg-surface">
                             <tr className="border-b border-default text-left text-xs text-fg-soft">
-                                <Th>Name</Th>
-                                <Th>Group</Th>
-                                <Th className="text-right">Priority</Th>
-                                <Th>Flags</Th>
+                                <Th>{t('paramConfig.column.name')}</Th>
+                                <Th>{t('paramConfig.column.group')}</Th>
+                                <Th className="text-right">{t('paramConfig.column.priority')}</Th>
+                                <Th>{t('paramConfig.column.flags')}</Th>
                             </tr>
                         </thead>
                         <tbody>
@@ -292,26 +292,38 @@ export function ParameterConfigPage() {
                                             <span className="flex items-center gap-1.5">
                                                 {isDirty && (
                                                     <span
-                                                        title="Unsaved change"
+                                                        title={t('paramConfig.unsavedChange')}
                                                         className="size-1.5 shrink-0 rounded-full"
                                                         style={{ background: 'var(--sw-modified)' }}
                                                     />
                                                 )}
-                                                <span className="text-fg">{param.name}</span>
+                                                <span className="text-fg">{tDynamic(param.name)}</span>
                                                 <span className="font-mono text-[11px] text-fg-soft">{param.id}</span>
                                             </span>
                                         </Td>
-                                        <Td className="text-fg-soft">{group?.name ?? '—'}</Td>
+                                        <Td className="text-fg-soft">
+                                            {group ? tDynamic(group.name) : '—'}
+                                        </Td>
                                         <Td className="text-right tabular-nums text-fg-soft">
                                             {String(effective(param, 'priority'))}
                                         </Td>
                                         <Td>
                                             <span className="flex flex-wrap gap-1">
-                                                {effective(param, 'advanced') && <Flag label="advanced" />}
-                                                {!effective(param, 'visible') && <Flag label="hidden" />}
-                                                {effective(param, 'toggleable') && <Flag label="toggleable" />}
-                                                {effective(param, 'do_not_save') && <Flag label="no-save" />}
-                                                {customDefault && <Flag label="custom default" />}
+                                                {effective(param, 'advanced') && (
+                                                    <Flag label={t('paramConfig.tag.advanced')} />
+                                                )}
+                                                {!effective(param, 'visible') && (
+                                                    <Flag label={t('paramConfig.tag.hidden')} />
+                                                )}
+                                                {effective(param, 'toggleable') && (
+                                                    <Flag label={t('paramConfig.tag.toggleable')} />
+                                                )}
+                                                {effective(param, 'do_not_save') && (
+                                                    <Flag label={t('paramConfig.tag.noSave')} />
+                                                )}
+                                                {customDefault && (
+                                                    <Flag label={t('paramConfig.tag.customDefault')} />
+                                                )}
                                             </span>
                                         </Td>
                                     </tr>
@@ -320,35 +332,39 @@ export function ParameterConfigPage() {
                         </tbody>
                     </table>
                     {rows.length === 0 && (
-                        <p className="p-6 text-center text-sm text-fg-soft">No parameters match.</p>
+                        <p className="p-6 text-center text-sm text-fg-soft">
+                            {t('paramConfig.noMatches')}
+                        </p>
                     )}
                 </div>
 
                 {selected && (
                     <aside
-                        aria-label="Parameter settings"
+                        aria-label={t('paramConfig.settingsLabel')}
                         className="flex w-96 shrink-0 flex-col border-l border-subtle bg-surface"
                         style={{ ['--sw-field-label-width' as string]: '9rem' }}
                     >
                         <div className="flex shrink-0 items-start gap-2 border-b border-subtle p-3">
                             <div className="min-w-0 flex-1">
-                                <h2 className="truncate text-sm font-medium text-fg-strong">{selected.name}</h2>
+                                <h2 className="truncate text-sm font-medium text-fg-strong">
+                                    {tDynamic(selected.name)}
+                                </h2>
                                 <p className="truncate font-mono text-[11px] text-fg-soft">{selected.id}</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => resetParam(selected.id)}
                                 disabled={!isCustomized(selected)}
-                                title="Put this parameter back to how it shipped"
+                                title={t('paramConfig.resetOneHint')}
                                 className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
                             >
                                 <RotateCcw size={12} aria-hidden />
-                                Reset
+                                {t('paramConfig.reset')}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setSelectedId(null)}
-                                aria-label="Close"
+                                aria-label={t('common.close')}
                                 className="rounded p-1 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                             >
                                 <X size={15} aria-hidden />
@@ -358,7 +374,7 @@ export function ParameterConfigPage() {
                         <div className="min-h-0 flex-1 overflow-y-auto p-3">
                             {selected.description && (
                                 <p className="mb-3 whitespace-pre-wrap text-xs text-fg-soft">
-                                    {selected.description}
+                                    {tDynamic(selected.description)}
                                 </p>
                             )}
 
@@ -369,7 +385,7 @@ export function ParameterConfigPage() {
                                 onChange={value => setEdit(selected, 'default', value)}
                             />
 
-                            <Field id="priority" label="Ordering priority" density="compact">
+                            <Field id="priority" label={t('paramConfig.orderingPriority')} density="compact">
                                 <input
                                     type="number"
                                     value={String(effective(selected, 'priority'))}
@@ -378,23 +394,23 @@ export function ParameterConfigPage() {
                                 />
                             </Field>
 
-                            <Field id="group" label="Group" density="compact">
+                            <Field id="group" label={t('paramConfig.column.group')} density="compact">
                                 <select
                                     value={String(effective(selected, 'group') ?? '')}
                                     onChange={e => setEdit(selected, 'group', e.target.value || null)}
                                     className="w-full rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                                 >
-                                    <option value="">(ungrouped)</option>
+                                    <option value="">{t('paramConfig.ungrouped')}</option>
                                     {[...schema.groupsById.values()].map(group => (
                                         <option key={group.id} value={group.id}>
-                                            {group.name}
+                                            {tDynamic(group.name)}
                                         </option>
                                     ))}
                                 </select>
                             </Field>
 
                             {FLAG_FIELDS.map(flag => (
-                                <Field key={flag.key} id={flag.key} label={flag.label} density="compact">
+                                <Field key={flag.key} id={flag.key} label={t(flag.labelKey)} density="compact">
                                     <input
                                         type="checkbox"
                                         checked={Boolean(effective(selected, flag.key))}
@@ -404,12 +420,12 @@ export function ParameterConfigPage() {
                                 </Field>
                             ))}
 
-                            <Field id="examples" label="Examples" density="compact">
+                            <Field id="examples" label={t('field.examples')} density="compact">
                                 <textarea
                                     rows={3}
                                     value={examplesText(selected)}
                                     onChange={e => setEdit(selected, 'examples', e.target.value)}
-                                    placeholder="Separate with ||"
+                                    placeholder={t('paramConfig.examplesPlaceholder')}
                                     className="w-full resize-y rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                                 />
                             </Field>
@@ -420,7 +436,7 @@ export function ParameterConfigPage() {
                                     onClick={() => discardParam(selected.id)}
                                     className="mt-2 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                                 >
-                                    Discard unsaved changes to this parameter
+                                    {t('paramConfig.discardOne')}
                                 </button>
                             )}
                         </div>
@@ -431,7 +447,7 @@ export function ParameterConfigPage() {
             {dirtyIds.length > 0 && (
                 <div className="flex shrink-0 items-center gap-3 border-t border-subtle bg-surface-raised px-4 py-2">
                     <span className="text-sm text-fg">
-                        {dirtyIds.length} {dirtyIds.length === 1 ? 'parameter' : 'parameters'} changed
+                        {t('paramConfig.changedCount', { count: dirtyIds.length })}
                     </span>
                     <div className="flex-1" />
                     <button
@@ -439,7 +455,7 @@ export function ParameterConfigPage() {
                         onClick={() => setPending({})}
                         className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
                     >
-                        Discard
+                        {t('common.discard')}
                     </button>
                     <button
                         type="button"
@@ -448,22 +464,16 @@ export function ParameterConfigPage() {
                         className="rounded px-3 py-1.5 text-sm disabled:opacity-50"
                         style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                     >
-                        {save.isPending ? 'Saving…' : 'Save changes'}
+                        {save.isPending ? t('common.saving') : t('settings.saveChanges')}
                     </button>
                 </div>
             )}
 
             <ConfirmDialog
                 open={confirmResetAll}
-                title="Reset all parameter configuration?"
-                body={
-                    <>
-                        Every parameter — and every group — goes back to how it shipped, including custom
-                        default values, visibility, ordering and grouping. Unsaved changes are discarded
-                        too. Generated images and settings are untouched.
-                    </>
-                }
-                confirmLabel="Reset all"
+                title={t('paramConfig.resetAllTitle')}
+                body={t('paramConfig.resetAllBody')}
+                confirmLabel={t('params.resetAll')}
                 destructive
                 onConfirm={resetEverything}
                 onCancel={() => setConfirmResetAll(false)}
@@ -484,6 +494,7 @@ function DefaultField(props: {
     value: string | null;
     onChange: (value: string) => void;
 }) {
+    const { t, tDynamic } = useTranslation();
     const { param, schema } = props;
     const value = props.value ?? '';
     const original = schema.originals.get(param.id);
@@ -513,13 +524,15 @@ function DefaultField(props: {
     else if (options) {
         control = (
             <select value={value} onChange={e => props.onChange(e.target.value)} className={inputClass}>
-                <option value="">(none)</option>
+                <option value="">{t('paramConfig.none')}</option>
                 {/* A default set before a model was renamed or removed would otherwise vanish
                     silently on the next visit, so it stays in the list until changed. */}
-                {value && !options.includes(value) && <option value={value}>{value} (missing)</option>}
+                {value && !options.includes(value) && (
+                    <option value={value}>{t('paramConfig.missingOption', { value })}</option>
+                )}
                 {options.map((option, index) => (
                     <option key={option} value={option}>
-                        {param.value_names?.[index] ?? option}
+                        {param.value_names?.[index] ? tDynamic(param.value_names[index]) : option}
                     </option>
                 ))}
             </select>
@@ -562,15 +575,16 @@ function DefaultField(props: {
     return (
         <Field
             id="default"
-            label="Default value"
-            description="What this parameter starts at in the Generate panel, and what its Reset to default button restores."
+            label={t('paramConfig.defaultValue')}
+            description={t('paramConfig.defaultValueHelp')}
             density="compact"
         >
             <div className="min-w-0">
                 {control}
                 {!sameEditValue(value, shipped) && (
                     <p className="mt-1 text-[11px] text-fg-soft">
-                        Ships with: <span className="font-mono">{shipped === '' ? '(none)' : shipped}</span>
+                        {t('paramConfig.shipsWith')}{' '}
+                        <span className="font-mono">{shipped === '' ? t('paramConfig.none') : shipped}</span>
                     </p>
                 )}
             </div>

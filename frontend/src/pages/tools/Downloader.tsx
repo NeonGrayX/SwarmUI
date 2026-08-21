@@ -3,8 +3,10 @@ import { useT2IParams, useSession } from '@/api/hooks';
 import { Field } from '@/components/form/Field';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { useJobStore } from '@/tools/jobs';
+import { useTranslation } from '@/i18n';
 
 export function DownloaderPage() {
+    const { t } = useTranslation();
     const session = useSession();
     const params = useT2IParams(session.isSuccess);
     const run = useJobStore(s => s.run);
@@ -29,24 +31,18 @@ export function DownloaderPage() {
 
     return (
         <ToolLayout
-            title="Model Downloader"
-            summary="Fetch a model from a direct URL, Civitai, or Hugging Face."
+            title={t('nav.destination.downloader')}
+            summary={t('downloader.summary')}
             about={
                 <>
-                    <p>
-                        The URL must point directly at a model file. For Civitai and Hugging Face,
-                        copy the download link rather than the page link.
-                    </p>
-                    <p>
-                        Downloads run on the server, not through your browser, so you can leave this
-                        page while one is in progress. Progress appears in the Tasks panel below.
-                    </p>
+                    <p>{t('downloader.about1')}</p>
+                    <p>{t('downloader.about2')}</p>
                 </>
             }
             warning={
                 <>
-                    Only download models from sources you trust. Model files can execute code when
-                    loaded, particularly older <code className="font-mono">.ckpt</code> pickle files.
+                    {t('downloader.warningBefore')} <code className="font-mono">.ckpt</code>{' '}
+                    {t('downloader.warningAfter')}
                 </>
             }
             action={
@@ -55,7 +51,7 @@ export function DownloaderPage() {
                     disabled={!canRun}
                     onClick={() =>
                         run({
-                            title: `Download ${type}: ${name.trim()}`,
+                            title: t('downloader.jobTitle', { type, name: name.trim() }),
                             route: 'DoModelDownloadWS',
                             payload: { url: url.trim(), type, name: name.trim() }
                         })
@@ -63,14 +59,14 @@ export function DownloaderPage() {
                     className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
                     style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                 >
-                    Start download
+                    {t('downloader.startDownload')}
                 </button>
             }
         >
             <Field
                 id="dl-url"
-                label="URL"
-                description="Direct link to the model file."
+                label={t('downloader.url')}
+                description={t('downloader.urlHelp')}
                 density="compact"
             >
                 <input
@@ -83,7 +79,7 @@ export function DownloaderPage() {
                 />
             </Field>
 
-            <Field id="dl-type" label="Model type" density="compact">
+            <Field id="dl-type" label={t('pickle2st.modelType')} density="compact">
                 <select
                     id="dl-type"
                     value={type}
@@ -100,8 +96,8 @@ export function DownloaderPage() {
 
             <Field
                 id="dl-name"
-                label="Save as"
-                description="Filename to save under, without extension. Subfolders are allowed, eg SDXL/mymodel."
+                label={t('common.saveAs')}
+                description={t('downloader.saveAsHelp')}
                 density="compact"
             >
                 <input
@@ -109,7 +105,7 @@ export function DownloaderPage() {
                     type="text"
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="my-model"
+                    placeholder={t('downloader.namePlaceholder')}
                     className="w-full rounded border border-default bg-surface-sunken px-2 py-1 font-mono text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                 />
             </Field>

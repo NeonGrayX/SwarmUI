@@ -2,6 +2,7 @@ import { Link, useRouterState } from '@tanstack/react-router';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { usePermitted } from '@/api/permissions';
 import { SECTIONS, defaultDestination, type SectionId } from '@/nav/destinations';
+import { useTranslation } from '@/i18n';
 
 /** The always-visible primary navigation.
  *
@@ -9,13 +10,14 @@ import { SECTIONS, defaultDestination, type SectionId } from '@/nav/destinations
  * unlike the legacy top tab strip, which shared styling with its own sub-strips and sat under a
  * fixed status banner that could cover it. */
 export function Rail() {
+    const { t } = useTranslation();
     const sections = usePermitted(SECTIONS);
     const activeSection = useActiveSection();
 
     return (
         <Tooltip.Provider delayDuration={300}>
             <nav
-                aria-label="Primary"
+                aria-label={t('nav.rail.primary')}
                 className="flex flex-col items-center gap-1 py-3 border-r border-subtle bg-surface-sunken shrink-0"
                 style={{ width: 'var(--sw-rail-width)' }}
             >
@@ -25,6 +27,7 @@ export function Rail() {
                         return null;
                     }
                     const Icon = section.icon;
+                    const label = t(section.labelKey);
                     const isActive = activeSection === section.id;
                     return (
                         <Tooltip.Root key={section.id}>
@@ -40,7 +43,7 @@ export function Rail() {
                                     ].join(' ')}
                                 >
                                     <Icon size={20} strokeWidth={1.75} aria-hidden />
-                                    <span className="text-[10px] leading-none">{section.label}</span>
+                                    <span className="text-[10px] leading-none">{label}</span>
                                 </Link>
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
@@ -49,7 +52,7 @@ export function Rail() {
                                     sideOffset={8}
                                     className="rounded bg-surface-raised border border-default px-2 py-1 text-xs text-fg shadow-lg"
                                 >
-                                    {section.label}
+                                    {label}
                                 </Tooltip.Content>
                             </Tooltip.Portal>
                         </Tooltip.Root>

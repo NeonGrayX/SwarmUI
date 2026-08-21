@@ -5,6 +5,7 @@ import { isArchCompatible, subtypeNoun, useCurrentModel, useModelCatalog } from 
 import { useParamSchema } from '@/params/schema';
 import { useLoraSelection } from '@/params/loras';
 import { ModelOptionList, ModelThumb } from './ModelPicker';
+import { useTranslation } from '@/i18n';
 
 /** The LoRA field: what is applied, at what weight, plus a picker to change it.
  *
@@ -22,6 +23,7 @@ const WEIGHT_MAX = 10;
 const WEIGHT_STEP = 0.1;
 
 export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     const [everOpened, setEverOpened] = useState(false);
     const selection = useLoraSelection();
@@ -54,7 +56,10 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
                                 </span>
                                 {incompatible && (
                                     <span
-                                        title={`Built for ${option?.shortCode ?? 'another base model'}, but the selected model is ${current.label ?? 'a different family'}. This LoRA will not apply correctly.`}
+                                        title={t('lora.incompatible', {
+                                            builtFor: option?.shortCode ?? t('lora.otherBaseModel'),
+                                            current: current.label ?? t('lora.differentFamily')
+                                        })}
                                         style={{ color: 'var(--backend-errored)' }}
                                     >
                                         <AlertTriangle size={13} aria-hidden />
@@ -62,8 +67,8 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
                                 )}
                                 <input
                                     type="number"
-                                    aria-label={`Weight for ${lora.name}`}
-                                    title="LoRA weight"
+                                    aria-label={t('lora.weightFor', { name: lora.name })}
+                                    title={t('lora.weight')}
                                     disabled={props.disabled}
                                     min={weightParam?.min ?? WEIGHT_MIN}
                                     max={weightParam?.max ?? WEIGHT_MAX}
@@ -83,7 +88,7 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
                                     type="button"
                                     onClick={() => selection.remove(lora.name)}
                                     disabled={props.disabled}
-                                    aria-label={`Remove ${lora.name}`}
+                                    aria-label={t('lora.remove', { name: lora.name })}
                                     className="shrink-0 rounded p-0.5 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
                                 >
                                     <X size={12} aria-hidden />
@@ -112,7 +117,7 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
                             className="flex items-center gap-1 rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg-soft outline-none hover:border-[var(--emphasis)] hover:text-fg focus:border-[var(--emphasis)] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             <Plus size={13} aria-hidden />
-                            Add LoRA
+                            {t('lora.add')}
                         </button>
                     </Popover.Trigger>
                     <Popover.Portal>
@@ -141,7 +146,7 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
                         disabled={props.disabled}
                         className="rounded px-1.5 py-1 text-xs text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
                     >
-                        Remove all
+                        {t('lora.removeAll')}
                     </button>
                 )}
             </div>

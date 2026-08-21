@@ -13,6 +13,7 @@
 
 import { useMemo } from 'react';
 import { usePermission } from '@/api/permissions';
+import { hasTranslation, t } from '@/i18n';
 import type { ModelCompatClassInfo } from '@/api/types';
 import { cleanModelName, useParamSchema, type NormalizedSchema } from '@/params/schema';
 import { useParamStore } from '@/params/store';
@@ -106,20 +107,14 @@ export function isArchCompatible(option: ModelOption, current: string | null): b
 }
 
 /** Plural, lower-case-where-natural name for a model subtype, for search placeholders and empty
- *  states. Falls back to the subtype id, which is already readable for anything unlisted. */
+ *  states.
+ *
+ *  Subtypes are open-ended - extensions register their own - so an unlisted one falls back to a
+ *  phrase built from the raw subtype id, which is already readable. */
 export function subtypeNoun(subtype: string): string {
-    return SUBTYPE_NOUNS[subtype] ?? `${subtype} models`;
+    const key = `library.subtypeNoun.${subtype}`;
+    return hasTranslation(key) ? t(key) : t('library.subtypeNoun.generic', { subtype });
 }
-
-const SUBTYPE_NOUNS: Record<string, string> = {
-    'Stable-Diffusion': 'models',
-    LoRA: 'LoRAs',
-    VAE: 'VAEs',
-    Embedding: 'embeddings',
-    ControlNet: 'ControlNets',
-    Clip: 'CLIP models',
-    ClipVision: 'CLIP-Vision models'
-};
 
 /** True when models of this subtype are add-ons whose compat class has to match the base model.
  *  The base models themselves are what everything else is compared against. */

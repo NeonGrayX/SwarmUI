@@ -12,6 +12,7 @@ import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from '
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { MetadataView } from '../ui/MetadataView';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
+import { useTranslation } from '@/i18n';
 
 /** One image, pinned to the folder it was listed in.
  *
@@ -53,6 +54,7 @@ function delay(ms: number): Promise<void> {
  * server's AppendUserNameToOutputPath setting. A bare `/View/<src>` 404s.
  * (Note this differs from the generation websocket, which already sends fully-prefixed paths.) */
 export function HistoryBrowser() {
+    const { t } = useTranslation();
     const [path, setPath] = useState('');
     const [search, setSearch] = useState('');
     const [view, setView] = useState<ViewMode>('grid');
@@ -134,7 +136,7 @@ export function HistoryBrowser() {
             navigate({ to: '/generate' });
         }
         catch (error: unknown) {
-            setFlash(error instanceof Error ? error.message : 'Could not reuse these parameters.');
+            setFlash(error instanceof Error ? error.message : t('history.reuseFailed'));
         }
     }
 
@@ -151,7 +153,7 @@ export function HistoryBrowser() {
             await mediaParam.set('initimage', urlForPath(image.full));
         }
         catch (error: unknown) {
-            setFlash(error instanceof Error ? error.message : 'Could not set the init image.');
+            setFlash(error instanceof Error ? error.message : t('history.initImageFailed'));
             return;
         }
         navigate({ to: '/generate' });
@@ -179,7 +181,7 @@ export function HistoryBrowser() {
             }
         }
         catch (error: unknown) {
-            setFlash(error instanceof Error ? error.message : 'Could not delete every selected image.');
+            setFlash(error instanceof Error ? error.message : t('history.bulkDeleteFailed'));
         }
     }
 
@@ -187,20 +189,20 @@ export function HistoryBrowser() {
     function actionsFor(entry: ImageEntry): MenuAction[] {
         const image = pin(entry);
         const actions: MenuAction[] = [
-            { label: 'Details', onSelect: () => setSelected(image) },
+            { label: t('modelBrowser.action.details'), onSelect: () => setSelected(image) },
             {
-                label: image.starred ? 'Unstar' : 'Star',
+                label: image.starred ? t('common.unstar') : t('common.star'),
                 onSelect: () => star(image.full)
             },
-            { label: 'Download', onSelect: () => downloadImage(urlFor(entry.src), entry.src) },
-            { label: 'Reuse parameters', separated: true, onSelect: () => reuse(entry) }
+            { label: t('common.download'), onSelect: () => downloadImage(urlFor(entry.src), entry.src) },
+            { label: t('history.reuseParameters'), separated: true, onSelect: () => reuse(entry) }
         ];
         if (mediaParam.available('initimage')) {
-            actions.push({ label: 'Use as init', onSelect: () => void useAsInit(image) });
+            actions.push({ label: t('history.useAsInit'), onSelect: () => void useAsInit(image) });
         }
         if (canDelete) {
             actions.push({
-                label: 'Delete…',
+                label: t('modelBrowser.action.delete'),
                 destructive: true,
                 separated: true,
                 onSelect: () => setPendingDelete(image.full)
@@ -232,12 +234,12 @@ export function HistoryBrowser() {
                         onSelectAll={selection.selectAll}
                         onClear={selection.clear}
                     >
-                        <SelectionButton label="Download" onClick={() => void downloadSelected()}>
+                        <SelectionButton label={t('common.download')} onClick={() => void downloadSelected()}>
                             <Download size={13} aria-hidden />
                         </SelectionButton>
                         {canDelete && (
                             <SelectionButton
-                                label="Delete"
+                                label={t('common.delete')}
                                 destructive
                                 onClick={() => setPendingBulkDelete(true)}
                             >
@@ -249,16 +251,20 @@ export function HistoryBrowser() {
 
                 <div className="min-h-0 flex-1 overflow-y-auto p-3">
                     {images.isPending ? (
-                        <EmptyState title="Loading history…" />
+                        <EmptyState title={t('history.loading')} />
                     ) : images.isError ? (
                         <EmptyState
-                            title="Couldn't load history."
+                            title={t('history.loadFailed')}
                             hint={images.error instanceof Error ? images.error.message : undefined}
                         />
                     ) : filtered.length === 0 ? (
                         <EmptyState
-                            title={search ? `No images match "${search.trim()}".` : 'No images yet.'}
-                            hint={search ? undefined : 'Generated images are saved here automatically.'}
+                            title={
+                                search
+                                    ? t('history.noSearchMatches', { search: search.trim() })
+                                    : t('history.noImages')
+                            }
+                            hint={search ? undefined : t('history.noImagesHint')}
                         />
                     ) : view === 'grid' ? (
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
@@ -276,7 +282,7 @@ export function HistoryBrowser() {
                                     <button
                                         type="button"
                                         onClick={event => selection.click(event, file.src, () => setSelected(pin(file)))}
-                                        title={`${file.src}\nRight-click for actions`}
+                                        title={`${file.src}\n${t('browser.rightClickForActions')}`}
                                         className="block h-full w-full"
                                     >
                                         <img
@@ -294,7 +300,7 @@ export function HistoryBrowser() {
                                             overlay
                                             checked={selection.isSelected(file.src)}
                                             onToggle={() => selection.toggle(file.src)}
-                                            label={`Select ${file.src}`}
+                                            label={t('browser.selectEntry', { name: file.src })}
                                         />
                                     </span>
                                     <span className="absolute right-1.5 top-1.5">
@@ -318,7 +324,7 @@ export function HistoryBrowser() {
                                     <SelectionCheckbox
                                         checked={selection.isSelected(file.src)}
                                         onToggle={() => selection.toggle(file.src)}
-                                        label={`Select ${file.src}`}
+                                        label={t('browser.selectEntry', { name: file.src })}
                                     />
                                     <StarButton
                                         starred={isImageStarred(file.metadata)}
@@ -328,7 +334,7 @@ export function HistoryBrowser() {
                                     <button
                                         type="button"
                                         onClick={event => selection.click(event, file.src, () => setSelected(pin(file)))}
-                                        title={`${file.src}\nRight-click for actions`}
+                                        title={`${file.src}\n${t('browser.rightClickForActions')}`}
                                         className="flex min-w-0 flex-1 items-center gap-3 py-1.5 text-left"
                                     >
                                         <span className="size-9 shrink-0 overflow-hidden rounded bg-surface-sunken">
@@ -366,15 +372,14 @@ export function HistoryBrowser() {
 
             <ConfirmDialog
                 open={pendingDelete !== null}
-                title="Delete image?"
+                title={t('history.deleteTitle')}
                 body={
                     <>
-                        <code className="font-mono text-fg">{pendingDelete}</code> will be deleted.
-                        Depending on server settings it may go to a recycle folder rather than being
-                        removed permanently.
+                        <code className="font-mono text-fg">{pendingDelete}</code>{' '}
+                        {t('history.deleteBody')}
                     </>
                 }
-                confirmLabel="Delete"
+                confirmLabel={t('common.delete')}
                 destructive
                 onConfirm={() => {
                     if (pendingDelete) {
@@ -389,15 +394,9 @@ export function HistoryBrowser() {
 
             <ConfirmDialog
                 open={pendingBulkDelete}
-                title={`Delete ${selection.count} images?`}
-                body={
-                    <>
-                        All <strong className="text-fg">{selection.count}</strong> selected images will
-                        be deleted. Depending on server settings they may go to a recycle folder rather
-                        than being removed permanently.
-                    </>
-                }
-                confirmLabel="Delete"
+                title={t('history.bulkDeleteTitle', { count: selection.count })}
+                body={t('history.bulkDeleteBody', { count: selection.count })}
+                confirmLabel={t('common.delete')}
                 destructive
                 onConfirm={() => {
                     setPendingBulkDelete(false);
@@ -433,9 +432,10 @@ function ImageSheet(props: {
     onDelete: () => void;
     onClose: () => void;
 }) {
+    const { t } = useTranslation();
     return (
         <aside
-            aria-label="Image details"
+            aria-label={t('history.imageDetails')}
             className="flex w-96 shrink-0 flex-col border-l border-subtle bg-surface"
         >
             <div className="flex shrink-0 items-center gap-2 border-b border-subtle p-3">
@@ -443,21 +443,21 @@ function ImageSheet(props: {
                     {props.entry.src.split('/').pop()}
                 </h2>
                 <SheetIcon
-                    label={props.starred ? 'Unstar' : 'Star'}
+                    label={props.starred ? t('common.unstar') : t('common.star')}
                     onClick={props.onStar}
                     color={props.starred ? 'var(--star)' : undefined}
                 >
                     <Star size={15} fill={props.starred ? 'currentColor' : 'none'} aria-hidden />
                 </SheetIcon>
-                <SheetIcon label="Download" onClick={props.onDownload}>
+                <SheetIcon label={t('common.download')} onClick={props.onDownload}>
                     <Download size={15} aria-hidden />
                 </SheetIcon>
                 {props.canDelete && (
-                    <SheetIcon label="Delete image" onClick={props.onDelete} color="var(--backend-errored)">
+                    <SheetIcon label={t('history.deleteImage')} onClick={props.onDelete} color="var(--backend-errored)">
                         <Trash2 size={15} aria-hidden />
                     </SheetIcon>
                 )}
-                <SheetIcon label="Close details" onClick={props.onClose}>
+                <SheetIcon label={t('common.closeDetails')} onClick={props.onClose}>
                     <X size={15} aria-hidden />
                 </SheetIcon>
             </div>
@@ -465,8 +465,10 @@ function ImageSheet(props: {
             {/* Spelled out rather than iconified: which button reuses what is exactly the thing an
                 icon strip makes you hover to find out. Same wording as the canvas buttons. */}
             <div className="flex shrink-0 gap-2 border-b border-subtle px-3 py-2">
-                <SheetButton label="Reuse parameters" onClick={props.onReuse} />
-                {props.canUseAsInit && <SheetButton label="Use as init" onClick={props.onUseAsInit} />}
+                <SheetButton label={t('history.reuseParameters')} onClick={props.onReuse} />
+                {props.canUseAsInit && (
+                    <SheetButton label={t('history.useAsInit')} onClick={props.onUseAsInit} />
+                )}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -475,7 +477,7 @@ function ImageSheet(props: {
                     alt=""
                     className="mb-3 w-full rounded border border-subtle"
                 />
-                <MetadataView metadata={props.entry.metadata} empty="No metadata recorded." />
+                <MetadataView metadata={props.entry.metadata} empty={t('history.noMetadata')} />
             </div>
         </aside>
     );

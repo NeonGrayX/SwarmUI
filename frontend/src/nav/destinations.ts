@@ -40,7 +40,8 @@ export type SectionId = 'generate' | 'library' | 'tools' | 'server' | 'settings'
 
 export interface Section {
     id: SectionId;
-    label: string;
+    /** Translation identifier for the display name. Resolve with `t(labelKey)`. */
+    labelKey: string;
     icon: LucideIcon;
     /** Permission required to see the section at all. */
     permission?: PermissionRequirement;
@@ -50,25 +51,28 @@ export interface Destination {
     /** Stable id, also the route param within its section. */
     id: string;
     section: SectionId;
-    label: string;
+    /** Translation identifier for the display name. Resolve with `t(labelKey)`. */
+    labelKey: string;
     icon: LucideIcon;
     /** Full route path, eg '/library/models'. */
     path: string;
     /** Permission required, matched against the session's permission list.
      *  An array means any one of them is enough. */
     permission?: PermissionRequirement;
-    /** Extra search terms for the command palette (legacy names, synonyms). */
+    /** Extra search terms for the command palette (legacy names, synonyms).
+     *  Kept in English: they are aliases people type, not text anyone reads. The palette also
+     *  matches the translated label, so search works in the active language regardless. */
     keywords?: string[];
     /** Set until the screen is actually implemented, so placeholders are honest. */
     placeholder?: boolean;
 }
 
 export const SECTIONS: Section[] = [
-    { id: 'generate', label: 'Generate', icon: Sparkles },
-    { id: 'library', label: 'Library', icon: Boxes },
-    { id: 'tools', label: 'Tools', icon: Wrench, permission: 'utilities_tab' },
-    { id: 'server', label: 'Server', icon: Server, permission: 'view_server_tab' },
-    { id: 'settings', label: 'Settings', icon: Settings, permission: 'user_tab' }
+    { id: 'generate', labelKey: 'nav.section.generate', icon: Sparkles },
+    { id: 'library', labelKey: 'nav.section.library', icon: Boxes },
+    { id: 'tools', labelKey: 'nav.section.tools', icon: Wrench, permission: 'utilities_tab' },
+    { id: 'server', labelKey: 'nav.section.server', icon: Server, permission: 'view_server_tab' },
+    { id: 'settings', labelKey: 'nav.section.settings', icon: Settings, permission: 'user_tab' }
 ];
 
 export const DESTINATIONS: Destination[] = [
@@ -76,7 +80,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'workspace',
         section: 'generate',
-        label: 'Workspace',
+        labelKey: 'nav.destination.workspace',
         icon: Wand2,
         path: '/generate',
         keywords: ['text2image', 't2i', 'prompt', 'create', 'txt2img'],
@@ -87,7 +91,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'history',
         section: 'library',
-        label: 'History',
+        labelKey: 'nav.destination.history',
         icon: Images,
         path: '/library/history',
         keywords: ['outputs', 'gallery', 'previous', 'generated'],
@@ -96,7 +100,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'models',
         section: 'library',
-        label: 'Models',
+        labelKey: 'nav.destination.models',
         icon: Package,
         path: '/library/models',
         keywords: ['checkpoint', 'sd', 'stable diffusion', 'safetensors'],
@@ -105,7 +109,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'loras',
         section: 'library',
-        label: 'LoRAs',
+        labelKey: 'nav.destination.loras',
         icon: Layers,
         path: '/library/loras',
         keywords: ['lora', 'lycoris', 'adapter'],
@@ -114,7 +118,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'vaes',
         section: 'library',
-        label: 'VAEs',
+        labelKey: 'nav.destination.vaes',
         icon: Shapes,
         path: '/library/vaes',
         keywords: ['vae', 'autoencoder'],
@@ -123,7 +127,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'embeddings',
         section: 'library',
-        label: 'Embeddings',
+        labelKey: 'nav.destination.embeddings',
         icon: Type,
         path: '/library/embeddings',
         keywords: ['textual inversion', 'ti', 'embedding'],
@@ -132,7 +136,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'controlnets',
         section: 'library',
-        label: 'ControlNets',
+        labelKey: 'nav.destination.controlnets',
         icon: ListTree,
         path: '/library/controlnets',
         keywords: ['controlnet', 'control net', 'guidance'],
@@ -141,7 +145,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'wildcards',
         section: 'library',
-        label: 'Wildcards',
+        labelKey: 'nav.destination.wildcards',
         icon: Shapes,
         path: '/library/wildcards',
         keywords: ['wildcard', 'random', 'dynamic prompt'],
@@ -150,7 +154,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'presets',
         section: 'library',
-        label: 'Presets',
+        labelKey: 'nav.destination.presets',
         icon: Palette,
         path: '/library/presets',
         keywords: ['preset', 'saved settings', 'style'],
@@ -161,7 +165,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'tokenizer',
         section: 'tools',
-        label: 'CLIP Tokenization',
+        labelKey: 'nav.destination.tokenizer',
         icon: Type,
         path: '/tools/tokenizer',
         permission: 'use_tokenizer',
@@ -171,7 +175,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'downloader',
         section: 'tools',
-        label: 'Model Downloader',
+        labelKey: 'nav.destination.downloader',
         icon: Package,
         path: '/tools/downloader',
         permission: 'download_models',
@@ -181,7 +185,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'pickle2safetensors',
         section: 'tools',
-        label: 'Pickle To Safetensors',
+        labelKey: 'nav.destination.pickle2safetensors',
         icon: Package,
         path: '/tools/pickle-to-safetensors',
         permission: 'pickle2safetensors',
@@ -191,7 +195,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'lora-extractor',
         section: 'tools',
-        label: 'LoRA Extractor',
+        labelKey: 'nav.destination.lora-extractor',
         icon: Layers,
         path: '/tools/lora-extractor',
         permission: 'extra_loras',
@@ -201,7 +205,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'metadata',
         section: 'tools',
-        label: 'Metadata Utilities',
+        labelKey: 'nav.destination.metadata',
         icon: FileText,
         path: '/tools/metadata',
         permission: 'reset_metadata',
@@ -213,7 +217,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'info',
         section: 'server',
-        label: 'Server Info',
+        labelKey: 'nav.destination.info',
         icon: Gauge,
         path: '/server/info',
         permission: 'read_server_info_panels',
@@ -223,7 +227,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'backends',
         section: 'server',
-        label: 'Backends',
+        labelKey: 'nav.destination.backends',
         icon: Server,
         path: '/server/backends',
         permission: 'view_backends_list',
@@ -233,7 +237,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'configuration',
         section: 'server',
-        label: 'Configuration',
+        labelKey: 'nav.destination.configuration',
         icon: SlidersHorizontal,
         path: '/server/configuration',
         permission: 'read_server_settings',
@@ -243,7 +247,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'users',
         section: 'server',
-        label: 'Users',
+        labelKey: 'nav.destination.users',
         icon: Users,
         path: '/server/users',
         permission: ['manage_users', 'configure_roles'],
@@ -253,7 +257,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'extensions',
         section: 'server',
-        label: 'Extensions',
+        labelKey: 'nav.destination.extensions',
         icon: Puzzle,
         path: '/server/extensions',
         permission: 'manage_extensions',
@@ -263,7 +267,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'logs',
         section: 'server',
-        label: 'Logs',
+        labelKey: 'nav.destination.logs',
         icon: ScrollText,
         path: '/server/logs',
         permission: 'view_logs',
@@ -275,7 +279,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'account',
         section: 'settings',
-        label: 'Account',
+        labelKey: 'nav.destination.account',
         icon: KeyRound,
         path: '/settings/account',
         keywords: ['user info', 'password', 'api key', 'auth token', 'profile'],
@@ -284,7 +288,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'preferences',
         section: 'settings',
-        label: 'Preferences',
+        labelKey: 'nav.destination.preferences',
         icon: SlidersHorizontal,
         path: '/settings/preferences',
         permission: 'read_user_settings',
@@ -294,7 +298,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'parameters',
         section: 'settings',
-        label: 'Parameter Configuration',
+        labelKey: 'nav.destination.parameters',
         icon: ListTree,
         path: '/settings/parameters',
         permission: 'edit_params',
@@ -304,7 +308,7 @@ export const DESTINATIONS: Destination[] = [
     {
         id: 'appearance',
         section: 'settings',
-        label: 'Appearance',
+        labelKey: 'nav.destination.appearance',
         icon: Image,
         path: '/settings/appearance',
         keywords: ['theme', 'layout', 'density', 'dark', 'light'],

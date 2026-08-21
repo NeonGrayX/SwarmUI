@@ -1,6 +1,7 @@
 import { MediaField } from '@/components/form/MediaField';
 import { useParamSchema } from '@/params/schema';
 import { useParamStore, valueOf } from '@/params/store';
+import { useTranslation } from '@/i18n';
 
 /** Images attached to the prompt itself, for models that read reference images (`promptimages`).
  *
@@ -9,6 +10,7 @@ import { useParamStore, valueOf } from '@/params/store';
  * button (addPromptMediaToInput, src/wwwroot/js/genpage/gentab/params.js:973). Same idea here, with
  * one control that also accepts drops and clicks. */
 export function PromptAttachments() {
+    const { t } = useTranslation();
     const schema = useParamSchema();
     const values = useParamStore(s => s.values);
     const setValue = useParamStore(s => s.setValue);
@@ -25,7 +27,7 @@ export function PromptAttachments() {
                 value={valueOf(param, values)}
                 onChange={next => setValue(param.id, next)}
                 inputId="composer-promptimages"
-                emptyLabel="Attach image to prompt"
+                emptyLabel={t('generate.attachImage')}
             />
         </div>
     );

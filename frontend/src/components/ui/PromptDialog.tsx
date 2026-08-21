@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { useTranslation } from '@/i18n';
 
 /** Single-text-input dialog, used for rename-style actions.
  *  Replaces the browser `prompt()` calls the legacy UI uses for renames. */
@@ -13,6 +14,7 @@ export function PromptDialog(props: {
     onConfirm: (value: string) => void;
     onCancel: () => void;
 }) {
+    const { t } = useTranslation();
     const [value, setValue] = useState(props.initialValue);
 
     useEffect(() => {
@@ -54,7 +56,7 @@ export function PromptDialog(props: {
                                 type="button"
                                 className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </button>
                         </Dialog.Close>
                         <button

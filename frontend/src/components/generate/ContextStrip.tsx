@@ -5,6 +5,7 @@ import { ModelOptionList, ModelPicker } from '@/components/form/ModelPicker';
 import { isArchCompatible, subtypeNoun, useCurrentModel, useModelCatalog } from '@/library/catalog';
 import { useLoraSelection } from '@/params/loras';
 import { useParamStore } from '@/params/store';
+import { useTranslation } from '@/i18n';
 
 /** Id of the model picker, so the composer's "no model selected" notice can jump to it. */
 export const MODEL_SELECT_ID = 'context-model';
@@ -16,6 +17,7 @@ export const MODEL_SELECT_ID = 'context-model';
  * panel uses, so what is on screen and what will be generated cannot drift apart.
  */
 export function ContextStrip() {
+    const { t } = useTranslation();
     const model = useCurrentModel();
     const selection = useLoraSelection();
     const setValue = useParamStore(s => s.setValue);
@@ -24,7 +26,7 @@ export function ContextStrip() {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-subtle bg-surface px-3 py-1.5 text-xs">
             <span className="flex min-w-0 items-center gap-1.5">
                 <label className="text-fg-soft" htmlFor={MODEL_SELECT_ID}>
-                    Model
+                    {t('context.model')}
                 </label>
                 <span className="w-64 max-w-full">
                     <ModelPicker
@@ -39,8 +41,8 @@ export function ContextStrip() {
             </span>
 
             <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <span className="text-fg-soft">LoRAs</span>
-                {selection.selected.length === 0 && <span className="text-fg-soft">none</span>}
+                <span className="text-fg-soft">{t('context.loras')}</span>
+                {selection.selected.length === 0 && <span className="text-fg-soft">{t('context.none')}</span>}
                 {selection.selected.map(lora => (
                     <LoraChip
                         key={lora.name}
@@ -58,6 +60,7 @@ export function ContextStrip() {
 /** One applied LoRA. The weight is on the chip because it is the number people change most, and
  *  reading it back is otherwise a trip into the parameter panel. */
 function LoraChip(props: { name: string; weight: string; onRemove: () => void }) {
+    const { t } = useTranslation();
     const catalog = useModelCatalog('LoRA');
     const current = useCurrentModel();
     const option = catalog.byName.get(props.name);
@@ -72,7 +75,10 @@ function LoraChip(props: { name: string; weight: string; onRemove: () => void })
         >
             {incompatible && (
                 <span
-                    title={`Built for ${option?.shortCode ?? 'another base model'}, but the selected model is ${current.label ?? 'a different family'}. This LoRA will not apply correctly.`}
+                    title={t('lora.incompatible', {
+                        builtFor: option?.shortCode ?? t('lora.otherBaseModel'),
+                        current: current.label ?? t('lora.differentFamily')
+                    })}
                     style={{ color: 'var(--backend-errored)' }}
                 >
                     <AlertTriangle size={10} aria-hidden />
@@ -83,7 +89,7 @@ function LoraChip(props: { name: string; weight: string; onRemove: () => void })
             <button
                 type="button"
                 onClick={props.onRemove}
-                aria-label={`Remove ${props.name}`}
+                aria-label={t('lora.remove', { name: props.name })}
                 className="rounded-full p-0.5 hover:bg-black/20"
             >
                 <X size={10} aria-hidden />
@@ -93,18 +99,19 @@ function LoraChip(props: { name: string; weight: string; onRemove: () => void })
 }
 
 function AddLoraButton(props: { selected: string[]; onToggle: (name: string, weight?: number | null) => void }) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
             <Popover.Trigger asChild>
                 <button
                     type="button"
-                    aria-label="Add a LoRA"
-                    title="Add a LoRA"
+                    aria-label={t('context.addLora')}
+                    title={t('context.addLora')}
                     className="inline-flex items-center gap-0.5 rounded-full border border-default px-1.5 py-0.5 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
                 >
                     <Plus size={11} aria-hidden />
-                    Add
+                    {t('common.add')}
                 </button>
             </Popover.Trigger>
             <Popover.Portal>

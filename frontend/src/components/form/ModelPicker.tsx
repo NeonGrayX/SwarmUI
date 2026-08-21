@@ -14,6 +14,7 @@ import {
 } from '@/library/catalog';
 import { useToggleStar } from '@/library/hooks';
 import type { ViewMode } from '@/library/types';
+import { t as translate, useTranslation } from '@/i18n';
 
 /** Model pickers, replacing the plain `<select>` the legacy UI gives every model parameter.
  *
@@ -82,6 +83,7 @@ export function ModelPicker(props: {
      *  is not a file, so it must not be read as a model this server is missing. */
     emptyValue?: string;
 }) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     // Metadata is fetched from the first open onward: closing must not drop it, or every reopen
     // would flash empty thumbnails.
@@ -123,16 +125,16 @@ export function ModelPicker(props: {
                         {hasValue
                             ? (option?.title ?? props.value)
                             : catalog.options.length === 0
-                              ? `(no ${noun} installed)`
-                              : '(none selected)'}
+                              ? t('modelPicker.noneInstalled', { noun })
+                              : t('modelPicker.noneSelected')}
                     </span>
                     {missing && (
                         <span
-                            title={`"${props.value}" is not installed on this server.`}
+                            title={t('modelPicker.missingTitle', { name: props.value })}
                             className="shrink-0 text-xs"
                             style={{ color: 'var(--backend-errored)' }}
                         >
-                            missing
+                            {t('modelPicker.missing')}
                         </span>
                     )}
                     <ShortCode option={option} />
@@ -180,6 +182,7 @@ export function ModelOptionList(props: {
     onClear?: () => void;
     noun: string;
 }) {
+    const { t } = useTranslation();
     const [search, setSearch] = useState('');
     const [arch, setArch] = useState('all');
     const [folder, setFolder] = useState('all');
@@ -265,7 +268,7 @@ export function ModelOptionList(props: {
     }, [options]);
 
     return (
-        <Command shouldFilter={false} loop label={`Choose ${props.noun}`}>
+        <Command shouldFilter={false} loop label={t('modelPicker.chooseLabel', { noun: props.noun })}>
             <div className="border-b border-subtle p-2">
                 <div className="relative">
                     <Search
@@ -276,14 +279,14 @@ export function ModelOptionList(props: {
                     <Command.Input
                         value={search}
                         onValueChange={setSearch}
-                        placeholder={`Search ${props.noun}…`}
+                        placeholder={t('modelPicker.searchPlaceholder', { noun: props.noun })}
                         className="w-full rounded border border-default bg-surface-sunken py-1.5 pl-7 pr-7 text-sm text-fg outline-none focus:border-[var(--emphasis)] placeholder:text-fg-soft"
                     />
                     {search && (
                         <button
                             type="button"
                             onClick={() => setSearch('')}
-                            aria-label="Clear search"
+                            aria-label={t('common.clearSearch')}
                             className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
                         >
                             <X size={13} aria-hidden />
@@ -297,7 +300,10 @@ export function ModelOptionList(props: {
                             type="button"
                             onClick={() => prefs.setFits(props.subtype, !fits)}
                             aria-pressed={fits}
-                            title={`Show only ${props.noun} built for ${current.label ?? current.compatClass}. Others are trained on a different base model and will not apply correctly.`}
+                            title={t('modelPicker.fitsHint', {
+                                noun: props.noun,
+                                model: current.label ?? current.compatClass ?? ''
+                            })}
                             className={[
                                 CHIP_CLASS,
                                 fits
@@ -305,14 +311,14 @@ export function ModelOptionList(props: {
                                     : 'border-default text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg'
                             ].join(' ')}
                         >
-                            Fits {current.label ?? 'model'}
+                            {t('modelPicker.fitsChip', { model: current.label ?? t('modelPicker.fitsFallback') })}
                         </button>
                     )}
                     <button
                         type="button"
                         onClick={() => prefs.setStarredOnly(!prefs.starredOnly)}
                         aria-pressed={prefs.starredOnly}
-                        title="Show only starred entries"
+                        title={t('modelPicker.starredOnlyHint')}
                         className={[
                             CHIP_CLASS,
                             'inline-flex items-center gap-1',
@@ -326,16 +332,16 @@ export function ModelOptionList(props: {
                             aria-hidden
                             fill={prefs.starredOnly ? 'currentColor' : 'none'}
                         />
-                        Starred
+                        {t('modelPicker.starred')}
                     </button>
                     {archOptions.length > 1 && (
                         <select
                             value={arch}
                             onChange={e => setArch(e.target.value)}
-                            aria-label="Filter by architecture"
+                            aria-label={t('modelPicker.filterByArchitecture')}
                             className={SELECT_CLASS}
                         >
-                            <option value="all">All architectures</option>
+                            <option value="all">{t('modelPicker.allArchitectures')}</option>
                             {archOptions.map(([id, label]) => (
                                 <option key={id} value={id}>
                                     {label}
@@ -347,10 +353,10 @@ export function ModelOptionList(props: {
                         <select
                             value={folder}
                             onChange={e => setFolder(e.target.value)}
-                            aria-label="Filter by folder"
+                            aria-label={t('modelPicker.filterByFolder')}
                             className={SELECT_CLASS}
                         >
-                            <option value="all">All folders</option>
+                            <option value="all">{t('modelPicker.allFolders')}</option>
                             {folderOptions.map(name => (
                                 <option key={name} value={name}>
                                     {name}
@@ -362,17 +368,17 @@ export function ModelOptionList(props: {
                     <div className="flex overflow-hidden rounded border border-default">
                         {(
                             [
-                                ['grid', Grid3x3, 'Grid view'],
-                                ['list', List, 'List view']
+                                ['grid', Grid3x3, 'view.grid'],
+                                ['list', List, 'view.list']
                             ] as const
-                        ).map(([mode, Icon, label]) => (
+                        ).map(([mode, Icon, labelKey]) => (
                             <button
                                 key={mode}
                                 type="button"
                                 onClick={() => prefs.setView(mode)}
                                 aria-pressed={prefs.view === mode}
-                                aria-label={label}
-                                title={label}
+                                aria-label={t(labelKey)}
+                                title={t(labelKey)}
                                 className={[
                                     'p-1 transition-colors',
                                     prefs.view === mode
@@ -391,8 +397,8 @@ export function ModelOptionList(props: {
                 {matches.length === 0 && (
                     <p className="px-2 py-6 text-center text-sm text-fg-soft">
                         {options.length === 0
-                            ? `No ${props.noun} are installed.`
-                            : `No ${props.noun} match these filters.`}
+                            ? t('modelPicker.noneInstalledLong', { noun: props.noun })
+                            : t('modelPicker.noFilterMatches', { noun: props.noun })}
                     </p>
                 )}
 
@@ -430,20 +436,18 @@ export function ModelOptionList(props: {
             </Command.List>
 
             <div className="flex items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
-                <span>
-                    {matches.length} of {options.length}
-                </span>
+                <span>{t('modelPicker.countOf', { shown: matches.length, total: options.length })}</span>
                 {hiddenByCompat > 0 && (
                     <button
                         type="button"
                         onClick={() => prefs.setFits(props.subtype, false)}
                         className="rounded px-1.5 py-0.5 hover:bg-[var(--sw-hover)] hover:text-fg"
                     >
-                        Show {hiddenByCompat} that {hiddenByCompat === 1 ? 'does' : 'do'} not fit
+                        {t('modelPicker.showNonFitting', { count: hiddenByCompat })}
                     </button>
                 )}
                 <div className="flex-1" />
-                {catalog.loadingDetails && <span>Loading details…</span>}
+                {catalog.loadingDetails && <span>{t('modelPicker.loadingDetails')}</span>}
                 {/* Clearing lives here rather than as a row in the list: cmdk keeps the first item
                     highlighted, so a "none" row at the top would be what Enter picks after a
                     search - the one result nobody typing a model name is looking for. */}
@@ -454,7 +458,7 @@ export function ModelOptionList(props: {
                         className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-[var(--sw-hover)] hover:text-fg"
                     >
                         <X size={11} aria-hidden />
-                        Clear selection
+                        {t('modelPicker.clearSelection')}
                     </button>
                 )}
             </div>
@@ -582,7 +586,7 @@ function ShortCode(props: { option: ModelOption | undefined; incompatible?: bool
 function LoadedDot() {
     return (
         <span
-            title="Loaded on a backend"
+            title={translate('modelPicker.loadedOnBackend')}
             className="size-1.5 shrink-0 rounded-full"
             style={{ background: 'var(--backend-running)' }}
         />
@@ -595,7 +599,7 @@ function StarToggle(props: { starred: boolean; onStar?: () => void; overlay?: bo
     if (!props.onStar) {
         return null;
     }
-    const label = props.starred ? 'Unstar' : 'Star';
+    const label = props.starred ? translate('common.unstar') : translate('common.star');
     return (
         <button
             type="button"
@@ -631,10 +635,10 @@ function describe(option: ModelOption, incompatible: boolean): string {
         lines.push(option.className);
     }
     if (option.triggerPhrase) {
-        lines.push(`Trigger: ${option.triggerPhrase}`);
+        lines.push(translate('modelPicker.trigger', { phrase: option.triggerPhrase }));
     }
     if (incompatible) {
-        lines.push('Built for a different base model - it will not apply correctly.');
+        lines.push(translate('modelPicker.incompatible'));
     }
     return lines.join('\n');
 }

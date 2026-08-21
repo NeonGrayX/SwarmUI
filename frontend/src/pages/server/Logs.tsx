@@ -4,6 +4,7 @@ import { useSearch } from '@tanstack/react-router';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Check, Copy, Pause, Play, Upload, X } from 'lucide-react';
 import { api } from '@/api/client';
+import { useTranslation } from '@/i18n';
 
 interface LogType {
     /** The key used everywhere: request `types`, the `data` map, and `last_sequence_ids`. */
@@ -31,6 +32,7 @@ interface LogsResponse {
  * The legacy Logs tab renders a single pre block with a type dropdown; this keeps the type set as
  * toggleable chips so several streams can be watched at once, and colours each line by its type. */
 export function LogsPage() {
+    const { t, tDynamic } = useTranslation();
     // ?types=<name> deep-links a single tracker, which is how a backend card opens its own process
     // log. The default set is the built-in severity levels (Logs.cs:216 keys those by level name).
     const search = useSearch({ strict: false }) as { types?: string };
@@ -109,7 +111,7 @@ export function LogsPage() {
                                         : { borderColor: 'var(--border-color)', color: 'var(--sw-fg-soft)' }
                                 }
                             >
-                                {type.name}
+                                {tDynamic(type.name)}
                             </button>
                         );
                     })}
@@ -119,21 +121,23 @@ export function LogsPage() {
                     type="search"
                     value={filter}
                     onChange={e => setFilter(e.target.value)}
-                    placeholder="Filter lines…"
-                    aria-label="Filter log lines"
+                    placeholder={t('logs.filterPlaceholder')}
+                    aria-label={t('logs.filterLabel')}
                     className="min-w-40 max-w-xs flex-1 rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                 />
 
                 <div className="flex-1" />
 
-                <span className="text-xs text-fg-soft tabular-nums">{lines.length} lines</span>
+                <span className="text-xs text-fg-soft tabular-nums">
+                    {t('logs.lineCount', { count: lines.length })}
+                </span>
                 <button
                     type="button"
                     onClick={() => setPastebinOpen(true)}
                     className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                 >
                     <Upload size={12} aria-hidden />
-                    Pastebin
+                    {t('logs.pastebin')}
                 </button>
                 <button
                     type="button"
@@ -142,7 +146,7 @@ export function LogsPage() {
                     className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                 >
                     {paused ? <Play size={12} aria-hidden /> : <Pause size={12} aria-hidden />}
-                    {paused ? 'Resume' : 'Pause'}
+                    {paused ? t('logs.resume') : t('logs.pause')}
                 </button>
             </div>
 
@@ -155,19 +159,19 @@ export function LogsPage() {
                 className="min-h-0 flex-1 overflow-auto bg-surface-sunken p-2 font-mono text-[11px] leading-relaxed"
             >
                 {selected.length === 0 ? (
-                    <p className="p-4 text-center text-fg-soft">Select at least one log type above.</p>
+                    <p className="p-4 text-center text-fg-soft">{t('logs.selectType')}</p>
                 ) : logs.isPending ? (
-                    <p className="p-4 text-center text-fg-soft">Loading logs…</p>
+                    <p className="p-4 text-center text-fg-soft">{t('logs.loading')}</p>
                 ) : lines.length === 0 ? (
                     <p className="p-4 text-center text-fg-soft">
-                        {filter ? `No lines match "${filter.trim()}".` : 'No log messages yet.'}
+                        {filter ? t('logs.noMatches', { filter: filter.trim() }) : t('logs.noMessages')}
                     </p>
                 ) : (
                     lines.map(line => (
                         <div key={`${line.type}-${line.sequence_id}`} className="flex gap-2 whitespace-pre-wrap">
                             <span className="shrink-0 text-fg-soft opacity-60">{line.time}</span>
                             <span className="shrink-0" style={{ color: colorFor(line.type) }}>
-                                [{line.type}]
+                                [{tDynamic(line.type)}]
                             </span>
                             <span className="min-w-0 break-words text-fg">{line.message}</span>
                         </div>
@@ -192,6 +196,7 @@ const PASTE_SERVICE = 'https://paste.denizenscript.com/New/Swarm';
  *  support. Mirrors the legacy "Pastebin" modal (ServerTab.cshtml:185), warnings included - the
  *  paste is public and not easily deletable, so the user has to read that before submitting. */
 function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
+    const { t } = useTranslation();
     const [level, setLevel] = useState('debug');
     const [copied, setCopied] = useState(false);
 
@@ -209,12 +214,12 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                     <div className="mb-3 flex items-center gap-2">
                         <Upload size={16} className="text-fg-soft" aria-hidden />
                         <Dialog.Title className="flex-1 text-base font-medium text-fg-strong">
-                            Submit logs to pastebin
+                            {t('logs.pastebinTitle')}
                         </Dialog.Title>
                         <Dialog.Close asChild>
                             <button
                                 type="button"
-                                aria-label="Close"
+                                aria-label={t('common.close')}
                                 className="rounded p-1 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                             >
                                 <X size={15} aria-hidden />
@@ -225,7 +230,7 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                     <Dialog.Description asChild>
                         <div className="mb-3 space-y-2 text-sm text-fg-soft">
                             <p>
-                                This uploads the text of your server logs to a{' '}
+                                {t('logs.pastebinIntro1')}{' '}
                                 <a
                                     href={PASTE_SERVICE}
                                     target="_blank"
@@ -233,9 +238,9 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                                     className="underline"
                                     style={{ color: 'var(--emphasis)' }}
                                 >
-                                    public pastebin service
+                                    {t('logs.pastebinServiceLink')}
                                 </a>
-                                , to make sharing debug logs easy when getting support on the{' '}
+                                {t('logs.pastebinIntro2')}{' '}
                                 <a
                                     href="https://discord.gg/q2y38cqjNw"
                                     target="_blank"
@@ -243,17 +248,13 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                                     className="underline"
                                     style={{ color: 'var(--emphasis)' }}
                                 >
-                                    SwarmUI Discord
+                                    {t('logs.pastebinDiscordLink')}
                                 </a>
-                                .
+                                {t('logs.pastebinIntro3')}
                             </p>
-                            <p className="text-fg">
-                                Once submitted the logs are public and not easily deletable. Check that they
-                                hold no private information (eg personal prompts) first - if they do, restart,
-                                reproduce the problem, and submit those logs instead.
-                            </p>
+                            <p className="text-fg">{t('logs.pastebinWarning')}</p>
                             <p>
-                                You can also{' '}
+                                {t('logs.pastebinManual1')}{' '}
                                 <a
                                     href={PASTE_SERVICE}
                                     target="_blank"
@@ -261,15 +262,15 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                                     className="underline"
                                     style={{ color: 'var(--emphasis)' }}
                                 >
-                                    paste manually
+                                    {t('logs.pastebinManualLink')}
                                 </a>{' '}
-                                to edit the content first, just don't delete anything important.
+                                {t('logs.pastebinManual2')}
                             </p>
                         </div>
                     </Dialog.Description>
 
                     <label className="mb-4 flex items-center gap-2 text-sm text-fg">
-                        Minimum log level
+                        {t('logs.minimumLevel')}
                         <select
                             value={level}
                             disabled={submit.isPending || Boolean(url)}
@@ -278,7 +279,7 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                         >
                             {PASTEBIN_LEVELS.map(option => (
                                 <option key={option} value={option}>
-                                    {option}
+                                    {t(`logs.level.${option}`)}
                                 </option>
                             ))}
                         </select>
@@ -298,8 +299,8 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                                 </a>
                                 <button
                                     type="button"
-                                    aria-label="Copy paste URL"
-                                    title="Copy paste URL"
+                                    aria-label={t('logs.copyPasteUrl')}
+                                    title={t('logs.copyPasteUrl')}
                                     onClick={() => {
                                         navigator.clipboard.writeText(url).then(
                                             () => {
@@ -314,16 +315,13 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                                     {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
                                 </button>
                             </div>
-                            <p className="mt-1 text-xs text-fg-soft">
-                                Share this link in the Discord help forum, alongside a description of your
-                                problem and any screenshots.
-                            </p>
+                            <p className="mt-1 text-xs text-fg-soft">{t('logs.pastebinShareHint')}</p>
                         </div>
                     )}
 
                     {submit.error && (
                         <p className="mb-4 text-sm" style={{ color: 'var(--danger-button-background)' }}>
-                            Failed to submit: {submit.error.message}
+                            {t('logs.submitFailed', { error: submit.error.message })}
                         </p>
                     )}
 
@@ -333,7 +331,7 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                                 type="button"
                                 className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
                             >
-                                {url ? 'Close' : 'Cancel'}
+                                {url ? t('common.close') : t('common.cancel')}
                             </button>
                         </Dialog.Close>
                         {!url && (
@@ -344,7 +342,7 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                                 className="rounded px-3 py-1.5 text-sm disabled:opacity-60"
                                 style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                             >
-                                {submit.isPending ? 'Submitting…' : 'Submit'}
+                                {submit.isPending ? t('logs.submitting') : t('logs.submit')}
                             </button>
                         )}
                     </div>

@@ -12,6 +12,7 @@
  * editing a user's access means either editing their role list or editing a role.
  */
 
+import { t } from '@/i18n';
 import type { SettingsTree } from '@/settings/types';
 
 export interface RoleInfo {
@@ -58,37 +59,39 @@ export const ROLES_SETTING_KEY = 'Roles';
 /** How the settings tree serializes a List<string> (AdminAPI.AutoConfigToParamData). */
 export const LIST_SEPARATOR = ' || ';
 
-export const PERMISSION_DEFAULT_LABEL: Record<string, string> = {
-    NOBODY: 'Nobody',
-    ADMINS: 'Admins',
-    POWERUSERS: 'Power users',
-    USER: 'Users',
-    GUEST: 'Guests'
+/** Display name for a PermissionDefault, or the raw enum name when it is one we don't know. */
+export function permissionDefaultLabel(value: string): string {
+    return PERMISSION_DEFAULTS.has(value) ? t(`permissions.default.${value}`) : value;
+}
+
+const PERMISSION_DEFAULTS = new Set(['NOBODY', 'ADMINS', 'POWERUSERS', 'USER', 'GUEST']);
+
+/** Safety levels, worst first — how much trust a permission demands of whoever holds it.
+ *  `danger` is presentation only; the label and note are looked up per language. */
+const SAFETY_DANGER: Record<string, boolean> = {
+    POWERFUL: true,
+    RISKY: true,
+    UNTESTED: false,
+    SAFE: false
 };
 
-/** Safety levels, worst first — how much trust a permission demands of whoever holds it. */
-export const SAFETY_LEVELS: Record<string, { label: string; note: string; danger: boolean }> = {
-    POWERFUL: {
-        label: 'Powerful',
-        note: 'Intentionally powerful. Only give this to admins you trust completely.',
-        danger: true
-    },
-    RISKY: {
-        label: 'Risky',
-        note: 'Not meant to be powerful, but may be abusable. Only give this to trusted users.',
-        danger: true
-    },
-    UNTESTED: {
-        label: 'Untested',
-        note: 'Expected to be safe, but has not been reviewed by a security professional.',
-        danger: false
-    },
-    SAFE: {
-        label: 'Safe',
-        note: 'Reviewed and considered safe to hand to untrusted users.',
-        danger: false
+export interface SafetyLevel {
+    label: string;
+    note: string;
+    danger: boolean;
+}
+
+/** Safety level presentation for a PermSafetyLevel name, or null when it is one we don't know. */
+export function safetyLevel(level: string): SafetyLevel | null {
+    if (!(level in SAFETY_DANGER)) {
+        return null;
     }
-};
+    return {
+        label: t(`permissions.safety.${level}.label`),
+        note: t(`permissions.safety.${level}.note`),
+        danger: SAFETY_DANGER[level]
+    };
+}
 
 /** The editable half of a role, as the form holds it. Mirrors the arguments AdminEditRole takes. */
 export interface RoleDraft {

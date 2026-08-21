@@ -5,6 +5,7 @@ import type { ParamValue } from '@/params/store';
 import { MediaField } from './MediaField';
 import { LoraPicker } from './LoraPicker';
 import { ModelPicker } from './ModelPicker';
+import { useTranslation } from '@/i18n';
 
 export interface ControlProps {
     param: ParamSchema;
@@ -32,6 +33,7 @@ const INPUT_CLASS =
  * `view_min`/`view_max` bound the track while `min`/`max` bound what can be typed - the schema
  * distinguishes these (T2IParamTypes.cs ViewMin/ViewMax) and the legacy UI honors it too. */
 export function SliderField(props: ControlProps & { big?: boolean }) {
+    const { t, tDynamic } = useTranslation();
     const { param } = props;
     const numeric = Number(props.value ?? param.min);
     const trackMin = param.view_min || param.min;
@@ -41,7 +43,7 @@ export function SliderField(props: ControlProps & { big?: boolean }) {
         <div className="flex flex-1 min-w-0 items-center gap-2">
             <input
                 type="range"
-                aria-label={`${param.name} slider`}
+                aria-label={t('control.slider', { label: tDynamic(param.name) })}
                 min={trackMin}
                 max={trackMax}
                 step={param.step || 1}
@@ -68,6 +70,7 @@ export function SliderField(props: ControlProps & { big?: boolean }) {
 /** Power-of-two slider, used for width/height. The track moves in exponent space so each notch
  *  doubles, matching linearToPot/potToLinear in the legacy util.js. */
 export function PowerOfTwoSlider(props: ControlProps) {
+    const { t, tDynamic } = useTranslation();
     const { param } = props;
     const numeric = Number(props.value ?? param.min);
     const toExp = (n: number) => Math.log2(Math.max(n, 1));
@@ -78,7 +81,7 @@ export function PowerOfTwoSlider(props: ControlProps) {
         <div className="flex items-center gap-2">
             <input
                 type="range"
-                aria-label={`${param.name} slider`}
+                aria-label={t('control.slider', { label: tDynamic(param.name) })}
                 min={min}
                 max={max}
                 step={0.0001}
@@ -125,6 +128,7 @@ export function NumberField(props: ControlProps) {
 
 /** Seed input with randomize (-1) and reroll actions, replacing the legacy pair of glyph buttons. */
 export function SeedField(props: ControlProps) {
+    const { t } = useTranslation();
     const numeric = Number(props.value ?? -1);
     return (
         <div className="flex items-center gap-1">
@@ -140,7 +144,7 @@ export function SeedField(props: ControlProps) {
                 className={`${INPUT_CLASS} flex-1 min-w-0`}
             />
             <IconButton
-                label="Randomize each run (-1)"
+                label={t('control.seed.randomize')}
                 active={numeric === -1}
                 disabled={props.disabled}
                 onClick={() => props.onChange(-1)}
@@ -148,7 +152,7 @@ export function SeedField(props: ControlProps) {
                 <Dices size={14} aria-hidden />
             </IconButton>
             <IconButton
-                label="Pick a new random seed now"
+                label={t('control.seed.reroll')}
                 disabled={props.disabled}
                 onClick={() => props.onChange(Math.floor(Math.random() * 2 ** 31))}
             >
@@ -160,12 +164,15 @@ export function SeedField(props: ControlProps) {
 
 /** Frame count that can also be read as seconds. The legacy makeVideoFramesInput shows both. */
 export function VideoFramesField(props: ControlProps) {
+    const { t } = useTranslation();
     const numeric = Number(props.value ?? props.param.min);
     const seconds = numeric > 0 ? (numeric / 24).toFixed(2) : '0';
     return (
         <div className="flex items-center gap-2">
             <SliderField {...props} />
-            <span className="shrink-0 text-xs text-fg-soft tabular-nums">~{seconds}s</span>
+            <span className="shrink-0 text-xs text-fg-soft tabular-nums">
+                {t('control.videoFrames.seconds', { seconds })}
+            </span>
         </div>
     );
 }
@@ -207,6 +214,7 @@ export function PromptField(props: ControlProps) {
  * ------------------------------------------------------------------------------------------- */
 
 export function BooleanField(props: ControlProps) {
+    const { t } = useTranslation();
     const on = props.value === true || props.value === 'true';
     return (
         <label className="inline-flex items-center gap-2 cursor-pointer">
@@ -218,12 +226,13 @@ export function BooleanField(props: ControlProps) {
                 onChange={e => props.onChange(e.target.checked)}
                 className="accent-[var(--emphasis)]"
             />
-            <span className="text-sm text-fg-soft">{on ? 'On' : 'Off'}</span>
+            <span className="text-sm text-fg-soft">{on ? t('common.on') : t('common.off')}</span>
         </label>
     );
 }
 
 export function DropdownField(props: ControlProps) {
+    const { tDynamic } = useTranslation();
     const { param } = props;
     const values = param.values ?? [];
     const names = param.value_names ?? [];
@@ -237,7 +246,9 @@ export function DropdownField(props: ControlProps) {
         >
             {values.map((option, i) => (
                 <option key={option} value={option}>
-                    {names[i] || option}
+                    {/* Option names are defined server-side, so they translate by source text.
+                        The raw value is a wire identifier and is left as-is. */}
+                    {names[i] ? tDynamic(names[i]) : option}
                 </option>
             ))}
         </select>

@@ -9,6 +9,8 @@
  * owner never sees the raw password a user reuses across sites; it is not a substitute for TLS.
  */
 
+import { t } from '@/i18n/store';
+
 const PREHASH_PREFIX = 'swarmclientpw';
 /** Marker that asks the server to do the prehash itself, so http and https agree on the result. */
 const SERVER_SIDE_MARKER = '__swarmdoprehash:';
@@ -24,7 +26,7 @@ function toHex(bytes: Uint8Array): string {
 /** Prehashes `password` for `userId`. Always await this before sending a password to the API. */
 export async function prehashPassword(userId: string, password: string): Promise<string> {
     if (!userId) {
-        throw new Error('Password handling failed, no user id given.');
+        throw new Error(t('api.noUserId'));
     }
     const salted = `${PREHASH_PREFIX}:${userId}:${password}`;
     // crypto.subtle only exists in secure contexts, so a plain-http server has to fall back.

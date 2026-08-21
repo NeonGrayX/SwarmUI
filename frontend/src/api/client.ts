@@ -10,6 +10,8 @@
  * This replaces genericRequest/makeWSRequest in src/wwwroot/js/site.js.
  */
 
+import { t } from '@/i18n/store';
+import { readCookie, writeCookie } from './cookies';
 import type { ApiError, SessionData } from './types';
 
 /** Thrown for any API-level failure. Carries the server's error_id when there was one. */
@@ -28,22 +30,6 @@ export class SwarmApiError extends Error {
 const SESSION_COOKIE = 'session_id';
 /** Matches the legacy retry ceiling in site.js so a broken session can't loop forever. */
 const MAX_RETRY_DEPTH = 3;
-
-function readCookie(name: string): string | null {
-    const prefix = `${name}=`;
-    for (const part of document.cookie.split(';')) {
-        const trimmed = part.trimStart();
-        if (trimmed.startsWith(prefix)) {
-            return decodeURIComponent(trimmed.slice(prefix.length));
-        }
-    }
-    return null;
-}
-
-function writeCookie(name: string, value: string, days: number): void {
-    const expires = new Date(Date.now() + days * 864e5).toUTCString();
-    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
-}
 
 /** Holds the active session and serializes concurrent attempts to establish one. */
 class SessionStore {
@@ -150,13 +136,13 @@ export class SwarmApiClient {
             payload = (await response.json()) as T & ApiError;
         }
         catch {
-            throw new SwarmApiError(route, `Server returned unreadable response (HTTP ${response.status}).`);
+            throw new SwarmApiError(route, t('api.unreadableResponse', { status: response.status }));
         }
         if (payload === null) {
-            throw new SwarmApiError(route, 'Server returned an empty response.');
+            throw new SwarmApiError(route, t('api.emptyResponse'));
         }
         if (payload.error || payload.error_id) {
-            const message = payload.error ?? `Request failed (${payload.error_id}).`;
+            const message = payload.error ?? t('api.requestFailed', { id: payload.error_id ?? '' });
             throw new SwarmApiError(route, message, payload.error_id);
         }
         return payload;
@@ -204,7 +190,7 @@ export class SwarmApiClient {
         socket.onmessage = event => {
             const data = JSON.parse(event.data) as T & ApiError;
             if (data.error || data.error_id) {
-                const message = data.error ?? `Stream failed (${data.error_id}).`;
+                const message = data.error ?? t('api.streamFailed', { id: data.error_id ?? '' });
                 handlers.onError?.(new SwarmApiError(route, message, data.error_id));
                 return;
             }
@@ -212,7 +198,7 @@ export class SwarmApiClient {
         };
         socket.onerror = () => {
             if (!closed) {
-                handlers.onError?.(new SwarmApiError(route, 'WebSocket connection failed.'));
+                handlers.onError?.(new SwarmApiError(route, t('api.socketFailed')));
             }
         };
         socket.onclose = () => {

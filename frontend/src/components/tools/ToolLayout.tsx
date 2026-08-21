@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { AlertTriangle, ChevronRight, Loader2, X } from 'lucide-react';
 import { useJobStore, type Job } from '@/tools/jobs';
+import { useTranslation } from '@/i18n';
 
 /** Standard shell for a tool screen.
  *
@@ -18,6 +19,7 @@ export function ToolLayout(props: {
     children: ReactNode;
     action?: ReactNode;
 }) {
+    const { t } = useTranslation();
     const [showAbout, setShowAbout] = useState(false);
 
     return (
@@ -62,7 +64,7 @@ export function ToolLayout(props: {
                                     aria-hidden
                                     className={`transition-transform ${showAbout ? 'rotate-90' : ''}`}
                                 />
-                                About this tool
+                                {t('tools.aboutThisTool')}
                             </button>
                             {showAbout && (
                                 <div className="mt-1.5 space-y-2 rounded-lg border border-subtle bg-surface p-3 text-sm text-fg-soft">
@@ -81,6 +83,7 @@ export function ToolLayout(props: {
 
 /** Progress for every running/finished job, shared across all tools. */
 export function JobPanel() {
+    const { t } = useTranslation();
     const jobs = useJobStore(s => s.jobs);
     const clearFinished = useJobStore(s => s.clearFinished);
 
@@ -91,7 +94,7 @@ export function JobPanel() {
     return (
         <div className="max-h-64 shrink-0 overflow-y-auto border-t border-subtle bg-surface-raised">
             <div className="flex items-center gap-2 px-4 py-1.5">
-                <h2 className="text-xs font-medium text-fg-strong">Tasks</h2>
+                <h2 className="text-xs font-medium text-fg-strong">{t('tools.tasks')}</h2>
                 <span className="text-xs text-fg-soft">{jobs.length}</span>
                 <div className="flex-1" />
                 {jobs.some(job => job.status !== 'running') && (
@@ -100,7 +103,7 @@ export function JobPanel() {
                         onClick={clearFinished}
                         className="rounded px-1.5 py-0.5 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                     >
-                        Clear finished
+                        {t('tools.clearFinished')}
                     </button>
                 )}
             </div>
@@ -121,6 +124,7 @@ const STATUS_COLOR: Record<Job['status'], string> = {
 };
 
 function JobRow(props: { job: Job }) {
+    const { t } = useTranslation();
     const { job } = props;
     const cancel = useJobStore(s => s.cancel);
     const dismiss = useJobStore(s => s.dismiss);
@@ -147,7 +151,7 @@ function JobRow(props: { job: Job }) {
                     {job.title}
                 </button>
                 <span className="shrink-0 text-xs tabular-nums text-fg-soft">
-                    {job.status === 'running' ? `${percent}%` : job.status}
+                    {job.status === 'running' ? `${percent}%` : t(`tools.jobStatus.${job.status}`)}
                 </span>
                 {job.status === 'running' ? (
                     <button
@@ -155,13 +159,13 @@ function JobRow(props: { job: Job }) {
                         onClick={() => cancel(job.id)}
                         className="shrink-0 rounded px-1.5 py-0.5 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                     >
-                        Cancel
+                        {t('common.cancel')}
                     </button>
                 ) : (
                     <button
                         type="button"
                         onClick={() => dismiss(job.id)}
-                        aria-label="Dismiss"
+                        aria-label={t('common.dismiss')}
                         className="shrink-0 rounded p-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                     >
                         <X size={12} aria-hidden />

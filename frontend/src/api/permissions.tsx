@@ -6,6 +6,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { useTranslation } from '@/i18n';
 import { useSession } from './hooks';
 
 /** One permission id, or several of which any one suffices. */
@@ -59,19 +60,20 @@ export function RequirePermission(props: {
 }
 
 function PermissionDenied(props: { perm?: PermissionRequirement }) {
+    const { t } = useTranslation();
     const names = props.perm === undefined ? [] : Array.isArray(props.perm) ? props.perm : [props.perm];
     return (
         <div className="p-8">
-            <h2 className="text-lg font-medium text-fg-strong mb-1">Not available</h2>
+            <h2 className="text-lg font-medium text-fg-strong mb-1">{t('permissionDenied.title')}</h2>
             <p className="text-fg-soft">
-                Your account doesn't have the{' '}
+                {t('permissionDenied.before')}{' '}
                 {names.map((name, index) => (
                     <span key={name}>
-                        {index > 0 && (index === names.length - 1 ? ' or ' : ', ')}
+                        {index > 0 && (index === names.length - 1 ? t('common.orSeparator') : ', ')}
                         <code className="font-mono text-fg">{name}</code>
                     </span>
                 ))}{' '}
-                permission.
+                {t('permissionDenied.after', { count: names.length })}
             </p>
         </div>
     );

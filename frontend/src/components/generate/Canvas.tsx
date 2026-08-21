@@ -4,9 +4,11 @@ import { imageUrl, useGenerateStore } from '@/generate/store';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
 import { MetadataView } from '../ui/MetadataView';
 import { ZoomableImage } from './ZoomableImage';
+import { useTranslation } from '@/i18n';
 
 /** The main image view, plus a collapsible metadata panel. */
 export function Canvas() {
+    const { t } = useTranslation();
     const batch = useGenerateStore(s => s.batch);
     const selected = useGenerateStore(s => s.selected);
     const error = useGenerateStore(s => s.error);
@@ -27,8 +29,10 @@ export function Canvas() {
         setReuse(null);
         mediaParam
             .set(paramId, src)
-            .then(() => setReuse(`Sent to ${label}.`))
-            .catch((e: unknown) => setReuse(e instanceof Error ? e.message : `Could not set ${label}.`));
+            .then(() => setReuse(t('canvas.sentTo', { target: label })))
+            .catch((e: unknown) =>
+                setReuse(e instanceof Error ? e.message : t('canvas.sendFailed', { target: label }))
+            );
     }
 
     // The confirmation is a nicety, not a state the user has to dismiss.
@@ -57,34 +61,37 @@ export function Canvas() {
                 {src ? (
                     <ZoomableImage
                         src={src}
-                        alt={current?.isPreview ? 'Generation preview' : 'Generated image'}
+                        alt={current?.isPreview ? t('canvas.previewAlt') : t('canvas.imageAlt')}
                         isPreview={current?.isPreview}
                         resetKey={current?.id}
                     />
                 ) : (
                     <div className="text-center text-fg-soft">
                         <ImageIcon size={40} className="mx-auto mb-3 opacity-40" aria-hidden />
-                        <p>No image yet.</p>
-                        <p className="mt-1 text-sm">Write a prompt below and hit Generate.</p>
+                        <p>{t('canvas.noImage')}</p>
+                        <p className="mt-1 text-sm">{t('canvas.noImageHint')}</p>
                     </div>
                 )}
 
                 {current && (
                     <div className="absolute right-3 top-3 flex items-center gap-1.5">
                         {canReuse && mediaParam.available('initimage') && (
-                            <ReuseButton label="Use as init image" onClick={() => sendTo('initimage', 'init image')} />
+                            <ReuseButton
+                                label={t('canvas.useAsInitImage')}
+                                onClick={() => sendTo('initimage', t('canvas.target.initImage'))}
+                            />
                         )}
                         {canReuse && mediaParam.available('promptimages') && (
                             <ReuseButton
-                                label="Use as image prompt"
-                                onClick={() => sendTo('promptimages', 'image prompt')}
+                                label={t('canvas.useAsImagePrompt')}
+                                onClick={() => sendTo('promptimages', t('canvas.target.imagePrompt'))}
                             />
                         )}
                         <button
                             type="button"
                             onClick={() => setShowMetadata(o => !o)}
                             aria-pressed={showMetadata}
-                            title="Image metadata"
+                            title={t('canvas.imageMetadata')}
                             className="rounded border border-default bg-surface p-1.5 text-fg-soft hover:text-fg"
                         >
                             <Info size={15} aria-hidden />
@@ -101,8 +108,8 @@ export function Canvas() {
 
             {showMetadata && current && (
                 <aside className="w-80 shrink-0 overflow-auto border-l border-subtle bg-surface p-3">
-                    <h2 className="mb-2 text-sm font-medium text-fg-strong">Metadata</h2>
-                    <MetadataView metadata={current.metadata} empty="No metadata for this image." />
+                    <h2 className="mb-2 text-sm font-medium text-fg-strong">{t('canvas.metadata')}</h2>
+                    <MetadataView metadata={current.metadata} empty={t('canvas.noMetadata')} />
                 </aside>
             )}
         </div>

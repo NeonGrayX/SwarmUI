@@ -5,8 +5,10 @@ import { useSession, useT2IParams } from '@/api/hooks';
 import { Field } from '@/components/form/Field';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useTranslation } from '@/i18n';
 
 export function PickleToSafetensorsPage() {
+    const { t } = useTranslation();
     const session = useSession();
     const params = useT2IParams(session.isSuccess);
     const [type, setType] = useState('Stable-Diffusion');
@@ -16,35 +18,23 @@ export function PickleToSafetensorsPage() {
 
     const convert = useMutation({
         mutationFn: () => api.post<{ success?: boolean }>('Pickle2SafeTensor', { type, fp16 }),
-        onSuccess: () => setResult('Conversion finished. Check the server logs for per-file detail.'),
-        onError: (e: unknown) => setResult(e instanceof Error ? e.message : 'Conversion failed.')
+        onSuccess: () => setResult(t('pickle2st.finished')),
+        onError: (e: unknown) => setResult(e instanceof Error ? e.message : t('pickle2st.failed'))
     });
 
     const modelTypes = Object.keys(params.data?.models ?? {});
 
     return (
         <ToolLayout
-            title="Pickle To Safetensors"
-            summary="Convert legacy .ckpt pickle models in a folder to the safer .safetensors format."
+            title={t('nav.destination.pickle2safetensors')}
+            summary={t('pickle2st.summary')}
             about={
                 <>
-                    <p>
-                        Pickle files can execute arbitrary code when loaded. Safetensors is a plain
-                        data format that cannot, so converting is a security improvement as well as
-                        a speed one.
-                    </p>
-                    <p>
-                        This scans every configured folder for the selected model type and converts
-                        all pickle files it finds. It can take a long while for large collections.
-                    </p>
+                    <p>{t('pickle2st.about1')}</p>
+                    <p>{t('pickle2st.about2')}</p>
                 </>
             }
-            warning={
-                <>
-                    This converts <strong>every</strong> pickle model of the selected type, not a
-                    single file. Converting to fp16 halves file size but discards precision.
-                </>
-            }
+            warning={t('pickle2st.warning')}
             action={
                 <button
                     type="button"
@@ -53,11 +43,11 @@ export function PickleToSafetensorsPage() {
                     className="rounded px-3 py-1.5 text-sm disabled:opacity-50"
                     style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                 >
-                    {convert.isPending ? 'Converting…' : 'Convert models'}
+                    {convert.isPending ? t('pickle2st.converting') : t('pickle2st.convertModels')}
                 </button>
             }
         >
-            <Field id="p2s-type" label="Model type" density="compact">
+            <Field id="p2s-type" label={t('pickle2st.modelType')} density="compact">
                 <select
                     id="p2s-type"
                     value={type}
@@ -74,8 +64,8 @@ export function PickleToSafetensorsPage() {
 
             <Field
                 id="p2s-fp16"
-                label="Convert to fp16"
-                description="Halves file size. Leave off to keep the original weight precision."
+                label={t('pickle2st.convertToFp16')}
+                description={t('pickle2st.convertToFp16Help')}
                 density="compact"
             >
                 <input
@@ -93,15 +83,15 @@ export function PickleToSafetensorsPage() {
 
             <ConfirmDialog
                 open={confirming}
-                title="Convert all pickle models?"
+                title={t('pickle2st.confirmTitle')}
                 body={
                     <>
-                        Every pickle model of type <strong className="text-fg">{type}</strong> will be
-                        converted{fp16 ? ' to fp16 safetensors' : ' to safetensors'}. This rewrites
-                        files on disk and may take a long time.
+                        {t('pickle2st.confirmBefore')}{' '}
+                        <strong className="text-fg">{type}</strong>{' '}
+                        {fp16 ? t('pickle2st.confirmAfterFp16') : t('pickle2st.confirmAfter')}
                     </>
                 }
-                confirmLabel="Convert"
+                confirmLabel={t('pickle2st.convert')}
                 onConfirm={() => {
                     setConfirming(false);
                     setResult(null);

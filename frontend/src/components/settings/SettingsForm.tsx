@@ -9,6 +9,7 @@ import {
     type SettingsGroup,
     type SettingsTree
 } from '@/settings/types';
+import { t as translate, useTranslation } from '@/i18n';
 
 const INPUT =
     'rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]';
@@ -38,6 +39,7 @@ export function SettingsForm(props: {
     /** Dotted key of a setting to jump to, as sent by the command palette's ?focus= link. */
     focusKey?: string;
 }) {
+    const { t, tDynamic } = useTranslation();
     const { rootSettings, groups, all } = useMemo(() => organizeSettings(props.tree), [props.tree]);
     const [edits, setEdits] = useState<Record<string, unknown>>({});
     const [search, setSearch] = useState('');
@@ -85,7 +87,8 @@ export function SettingsForm(props: {
         if (!query) {
             return true;
         }
-        return `${setting.key} ${setting.node.name} ${setting.node.description}`
+        // Match the translated text too, so searching works in the active language.
+        return `${setting.key} ${tDynamic(setting.node.name)} ${tDynamic(setting.node.description)}`
             .toLowerCase()
             .includes(query);
     }
@@ -119,7 +122,7 @@ export function SettingsForm(props: {
             setEdits({});
         }
         catch (e) {
-            setError(e instanceof Error ? e.message : 'Failed to save settings.');
+            setError(e instanceof Error ? e.message : t('settings.saveFailed'));
         }
     }
 
@@ -140,11 +143,11 @@ export function SettingsForm(props: {
             >
                 <Field
                     id={`setting-${key}`}
-                    label={node.name}
+                    label={tDynamic(node.name)}
                     description={
                         node.description
-                            ? `${node.description}\n\nKey: ${key}`
-                            : `Key: ${key}`
+                            ? `${tDynamic(node.description)}\n\n${t('settings.key', { key })}`
+                            : t('settings.key', { key })
                     }
                     density="compact"
                     modified={changed}
@@ -174,7 +177,7 @@ export function SettingsForm(props: {
                         id={`setting-${key}`}
                         type={revealed[key] ? 'text' : 'password'}
                         value={key in edits ? String(value ?? '') : ''}
-                        placeholder={isSet ? '(set — type to replace)' : '(not set)'}
+                        placeholder={isSet ? t('settings.secretSet') : t('settings.secretUnset')}
                         disabled={disabled}
                         onChange={e => set(e.target.value)}
                         className={`${INPUT} min-w-0 flex-1`}
@@ -182,7 +185,7 @@ export function SettingsForm(props: {
                     <button
                         type="button"
                         onClick={() => setRevealed(r => ({ ...r, [key]: !r[key] }))}
-                        aria-label={revealed[key] ? 'Hide value' : 'Show value'}
+                        aria-label={revealed[key] ? t('settings.hideValue') : t('settings.showValue')}
                         className="shrink-0 rounded border border-default p-1.5 text-fg-soft hover:text-fg"
                     >
                         {revealed[key] ? <EyeOff size={13} aria-hidden /> : <Eye size={13} aria-hidden />}
@@ -202,7 +205,7 @@ export function SettingsForm(props: {
                 >
                     {node.values.map((option, i) => (
                         <option key={option} value={option}>
-                            {node.value_names?.[i] || option}
+                            {node.value_names?.[i] ? tDynamic(node.value_names[i]) : option}
                         </option>
                     ))}
                 </select>
@@ -222,7 +225,7 @@ export function SettingsForm(props: {
                             className="accent-[var(--emphasis)]"
                         />
                         <span className="text-sm text-fg-soft">
-                            {value === true || value === 'true' ? 'On' : 'Off'}
+                            {value === true || value === 'true' ? t('common.on') : t('common.off')}
                         </span>
                     </label>
                 );
@@ -251,7 +254,7 @@ export function SettingsForm(props: {
                         value={Array.isArray(value) ? value.join(LIST_SEPARATOR) : String(value ?? '')}
                         disabled={disabled}
                         onChange={e => set(splitList(e.target.value))}
-                        placeholder="Separate entries with ||"
+                        placeholder={t('settings.listPlaceholder')}
                         className={`${INPUT} w-full resize-y font-mono text-xs`}
                     />
                 );
@@ -272,11 +275,11 @@ export function SettingsForm(props: {
     return (
         <div className="flex h-full min-h-0" style={{ ['--sw-field-label-width' as string]: '14rem' }}>
             <nav
-                aria-label="Settings groups"
+                aria-label={t('settings.groupsLabel')}
                 className="w-56 shrink-0 overflow-y-auto border-r border-subtle p-2"
             >
                 <GroupButton
-                    label="General"
+                    label={t('settings.general')}
                     active={activeGroup === ''}
                     count={countDirty(rootSettings, edits)}
                     onClick={() => setActiveGroup('')}
@@ -304,15 +307,15 @@ export function SettingsForm(props: {
                             type="search"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            placeholder="Search all settings…"
-                            aria-label="Search settings"
+                            placeholder={t('settings.searchPlaceholder')}
+                            aria-label={t('settings.searchLabel')}
                             className={`${INPUT} w-full pl-7 pr-7`}
                         />
                         {search && (
                             <button
                                 type="button"
                                 onClick={() => setSearch('')}
-                                aria-label="Clear search"
+                                aria-label={t('common.clearSearch')}
                                 className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-soft hover:text-fg"
                             >
                                 <X size={13} aria-hidden />
@@ -325,12 +328,12 @@ export function SettingsForm(props: {
                     {query ? (
                         searchResults.length === 0 ? (
                             <p className="py-6 text-center text-sm text-fg-soft">
-                                No settings match "{search.trim()}".
+                                {t('settings.noMatches', { search: search.trim() })}
                             </p>
                         ) : (
                             <>
                                 <p className="mb-2 text-xs text-fg-soft">
-                                    {searchResults.length} matching {searchResults.length === 1 ? 'setting' : 'settings'}
+                                    {t('settings.matchCount', { count: searchResults.length })}
                                 </p>
                                 {searchResults.map(renderSetting)}
                             </>
@@ -339,7 +342,7 @@ export function SettingsForm(props: {
                         <GroupBody group={visibleGroup} renderSetting={renderSetting} />
                     ) : (
                         <>
-                            <h2 className="mb-2 text-sm font-medium text-fg-strong">General</h2>
+                            <h2 className="mb-2 text-sm font-medium text-fg-strong">{t('settings.general')}</h2>
                             {rootSettings.map(renderSetting)}
                         </>
                     )}
@@ -354,7 +357,7 @@ export function SettingsForm(props: {
                         )}
                         <div className="flex items-center gap-3">
                             <span className="text-sm text-fg">
-                                {dirtyKeys.length} unsaved {dirtyKeys.length === 1 ? 'change' : 'changes'}
+                                {t('settings.unsavedCount', { count: dirtyKeys.length })}
                             </span>
                             <div className="flex-1" />
                             <button
@@ -363,7 +366,7 @@ export function SettingsForm(props: {
                                 disabled={props.saving}
                                 className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
                             >
-                                Discard
+                                {t('common.discard')}
                             </button>
                             <button
                                 type="button"
@@ -372,7 +375,7 @@ export function SettingsForm(props: {
                                 className="rounded px-3 py-1.5 text-sm disabled:opacity-50"
                                 style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                             >
-                                {props.saving ? 'Saving…' : 'Save changes'}
+                                {props.saving ? t('common.saving') : t('settings.saveChanges')}
                             </button>
                         </div>
                     </div>
@@ -383,11 +386,14 @@ export function SettingsForm(props: {
 }
 
 function GroupBody(props: { group: SettingsGroup; renderSetting: (s: FlatSetting) => React.ReactNode }) {
+    const { tDynamic } = useTranslation();
     return (
         <section className="mb-4">
-            <h2 className="text-sm font-medium text-fg-strong">{props.group.name}</h2>
+            <h2 className="text-sm font-medium text-fg-strong">{tDynamic(props.group.name)}</h2>
             {props.group.description && (
-                <p className="mb-2 whitespace-pre-wrap text-xs text-fg-soft">{props.group.description}</p>
+                <p className="mb-2 whitespace-pre-wrap text-xs text-fg-soft">
+                    {tDynamic(props.group.description)}
+                </p>
             )}
             {props.group.settings.map(props.renderSetting)}
             {props.group.children.map(child => (
@@ -406,11 +412,12 @@ function GroupTree(props: {
     onSelect: (key: string) => void;
     depth?: number;
 }) {
+    const { tDynamic } = useTranslation();
     const depth = props.depth ?? 0;
     return (
         <>
             <GroupButton
-                label={props.group.name}
+                label={tDynamic(props.group.name)}
                 active={props.activeGroup === props.group.key}
                 count={countDirty(props.group.settings, props.edits)}
                 depth={depth}
@@ -453,7 +460,7 @@ function GroupButton(props: {
             <span className="min-w-0 flex-1 truncate">{props.label}</span>
             {props.count > 0 && (
                 <span
-                    title={`${props.count} unsaved`}
+                    title={translate('settings.unsavedShort', { count: props.count })}
                     className="shrink-0 rounded-full px-1.5 text-[10px] leading-4 text-fg-strong"
                     style={{ background: 'var(--sw-chip-bg)' }}
                 >

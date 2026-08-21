@@ -7,6 +7,7 @@
  * that gate, generalized.
  */
 
+import { t } from '@/i18n';
 import type { NormalizedSchema } from '@/params/schema';
 
 export interface GenIssue {
@@ -36,8 +37,8 @@ export function validateGenInput(
             paramId: 'model',
             message:
                 installed.length === 0
-                    ? 'No model is installed. Download or add a model before generating.'
-                    : 'No model selected. Pick one before generating.'
+                    ? t('validate.noModelInstalled')
+                    : t('validate.noModelSelected')
         };
     }
     // A model can come from reused metadata or a saved preset, so it need not exist here.
@@ -49,7 +50,7 @@ export function validateGenInput(
     }
 
     if (!Number.isFinite(images) || images < 1) {
-        return { paramId: 'images', message: 'Images must be at least 1.' };
+        return { paramId: 'images', message: t('validate.imagesAtLeastOne') };
     }
 
     return null;

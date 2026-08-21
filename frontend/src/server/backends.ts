@@ -7,6 +7,8 @@
  *     SaveAllWithoutSecretValues so secrets arrive as a sentinel rather than the real value.
  */
 
+import { hasTranslation, t } from '@/i18n';
+
 /** What the server sends in place of a secret, and what it accepts back to mean "leave it alone"
  *  (BackendHandler.EditById calls ExcludeSecretValuesThatMatch with exactly this string). */
 export const SECRET_SENTINEL = '\t<secret>';
@@ -47,6 +49,13 @@ export interface Backend {
     time_since_used: string;
     can_load_models?: boolean;
     current_model?: string;
+}
+
+/** Display name for a backend status. The six known states have identifiers; anything an
+ *  extension reports falls back to the raw value, which is already a readable word. */
+export function statusLabel(status: string): string {
+    const key = `backends.status.${status}`;
+    return hasTranslation(key) ? t(key) : status;
 }
 
 /** Backend status maps onto the --backend-* theme variables the legacy CSS already defines. */

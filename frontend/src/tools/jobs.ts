@@ -8,6 +8,7 @@
 
 import { create } from 'zustand';
 import { api, SwarmApiError } from '@/api/client';
+import { t } from '@/i18n';
 
 export type JobStatus = 'running' | 'done' | 'failed' | 'cancelled';
 
@@ -80,18 +81,18 @@ export const useJobStore = create<JobStore>((set, get) => ({
                 }
                 if (message.success) {
                     patch({ status: 'done', overallPercent: 1, currentPercent: 1 });
-                    appendLog('Completed.');
+                    appendLog(t('jobs.completed'));
                 }
             },
             onError: (error: SwarmApiError) => {
                 patch({ status: 'failed', error: error.message });
-                appendLog(`Error: ${error.message}`);
+                appendLog(t('jobs.errorLine', { error: error.message }));
             },
             onClose: () => {
                 const job = get().jobs.find(j => j.id === id);
                 if (job?.status === 'running') {
                     // The socket closing without a success message means it ended early.
-                    patch({ status: 'failed', error: 'Connection closed before the task finished.' });
+                    patch({ status: 'failed', error: t('jobs.connectionClosed') });
                 }
             }
         });

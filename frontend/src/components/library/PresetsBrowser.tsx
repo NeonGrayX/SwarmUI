@@ -10,9 +10,11 @@ import { BrowserToolbar, EmptyState } from './BrowserChrome';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
+import { useTranslation } from '@/i18n';
 
 /** Saved parameter sets. These come down with GetMyUserData rather than a list endpoint. */
 export function PresetsBrowser() {
+    const { t } = useTranslation();
     const [search, setSearch] = useState('');
     const [view, setView] = useState<ViewMode>('grid');
     const [reverse, setReverse] = useState(false);
@@ -62,11 +64,11 @@ export function PresetsBrowser() {
     /** Everything one preset can do, for its right-click menu. */
     function actionsFor(preset: PresetEntry): MenuAction[] {
         const actions: MenuAction[] = [
-            { label: 'Apply parameters', onSelect: () => apply(preset.param_map) }
+            { label: t('presets.applyParameters'), onSelect: () => apply(preset.param_map) }
         ];
         if (canManage) {
             actions.push({
-                label: 'Duplicate',
+                label: t('common.duplicate'),
                 separated: true,
                 onSelect: async () => {
                     await api.post('DuplicatePreset', { preset: preset.title });
@@ -74,7 +76,7 @@ export function PresetsBrowser() {
                 }
             });
             actions.push({
-                label: 'Delete…',
+                label: t('modelBrowser.action.delete'),
                 destructive: true,
                 onSelect: () => setPendingDelete(preset.title)
             });
@@ -104,7 +106,7 @@ export function PresetsBrowser() {
                 >
                     {canManage && (
                         <SelectionButton
-                            label="Delete"
+                            label={t('common.delete')}
                             destructive
                             onClick={() => setPendingBulkDelete(true)}
                         >
@@ -116,15 +118,15 @@ export function PresetsBrowser() {
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 {userData.isPending ? (
-                    <EmptyState title="Loading presets…" />
+                    <EmptyState title={t('presets.loading')} />
                 ) : shown.length === 0 ? (
                     <EmptyState
-                        title={search ? `No presets match "${search.trim()}".` : 'No presets saved.'}
-                        hint={
+                        title={
                             search
-                                ? undefined
-                                : 'Set up parameters on the Generate tab, then save them as a preset.'
+                                ? t('presets.noSearchMatches', { search: search.trim() })
+                                : t('presets.noneSaved')
                         }
+                        hint={search ? undefined : t('presets.noneSavedHint')}
                     />
                 ) : view === 'grid' ? (
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3">
@@ -144,7 +146,7 @@ export function PresetsBrowser() {
                                         overlay
                                         checked={selection.isSelected(preset.title)}
                                         onToggle={() => selection.toggle(preset.title)}
-                                        label={`Select ${preset.title}`}
+                                        label={t('browser.selectEntry', { name: preset.title })}
                                     />
                                 </span>
                                 <button
@@ -152,7 +154,7 @@ export function PresetsBrowser() {
                                     onClick={event =>
                                         selection.click(event, preset.title, () => apply(preset.param_map))
                                     }
-                                    title={`Apply "${preset.title}"\nRight-click for actions`}
+                                    title={`${t('presets.applyTitle', { title: preset.title })}\n${t('browser.rightClickForActions')}`}
                                     className="block w-full text-left"
                                 >
                                     <div className="flex aspect-video items-center justify-center bg-surface-sunken">
@@ -173,14 +175,16 @@ export function PresetsBrowser() {
                                             <p className="line-clamp-2 text-xs text-fg-soft">{preset.description}</p>
                                         )}
                                         <p className="mt-1 text-[10px] text-fg-soft">
-                                            {Object.keys(preset.param_map ?? {}).length} parameters
+                                            {t('presets.parameterCount', {
+                                                count: Object.keys(preset.param_map ?? {}).length
+                                            })}
                                         </p>
                                     </div>
                                 </button>
                                 {canManage && (
                                     <div className="flex justify-end gap-1 border-t border-subtle px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                                         <IconButton
-                                            label="Duplicate"
+                                            label={t('common.duplicate')}
                                             onClick={async () => {
                                                 await api.post('DuplicatePreset', { preset: preset.title });
                                                 await refresh();
@@ -189,7 +193,7 @@ export function PresetsBrowser() {
                                             <Copy size={13} aria-hidden />
                                         </IconButton>
                                         <IconButton
-                                            label="Delete"
+                                            label={t('common.delete')}
                                             destructive
                                             onClick={() => setPendingDelete(preset.title)}
                                         >
@@ -211,14 +215,14 @@ export function PresetsBrowser() {
                                 <SelectionCheckbox
                                     checked={selection.isSelected(preset.title)}
                                     onToggle={() => selection.toggle(preset.title)}
-                                    label={`Select ${preset.title}`}
+                                    label={t('browser.selectEntry', { name: preset.title })}
                                 />
                                 <button
                                     type="button"
                                     onClick={event =>
                                         selection.click(event, preset.title, () => apply(preset.param_map))
                                     }
-                                    title={`Apply "${preset.title}"\nRight-click for actions`}
+                                    title={`${t('presets.applyTitle', { title: preset.title })}\n${t('browser.rightClickForActions')}`}
                                     className="min-w-0 flex-1 text-left"
                                 >
                                     <p className="truncate text-sm text-fg">{preset.title}</p>
@@ -227,7 +231,9 @@ export function PresetsBrowser() {
                                     )}
                                 </button>
                                 <span className="shrink-0 text-xs text-fg-soft">
-                                    {Object.keys(preset.param_map ?? {}).length} params
+                                    {t('presets.paramCountShort', {
+                                        count: Object.keys(preset.param_map ?? {}).length
+                                    })}
                                 </span>
                             </li>
                         ))}
@@ -237,14 +243,15 @@ export function PresetsBrowser() {
 
             <ConfirmDialog
                 open={pendingDelete !== null}
-                title="Delete preset?"
+                title={t('presets.deleteTitle')}
                 body={
                     <>
-                        The preset <strong className="text-fg">{pendingDelete}</strong> will be removed.
-                        This cannot be undone.
+                        {t('presets.deleteBodyBefore')}{' '}
+                        <strong className="text-fg">{pendingDelete}</strong>{' '}
+                        {t('presets.deleteBodyAfter')}
                     </>
                 }
-                confirmLabel="Delete"
+                confirmLabel={t('common.delete')}
                 destructive
                 onConfirm={async () => {
                     if (pendingDelete) {
@@ -258,14 +265,9 @@ export function PresetsBrowser() {
 
             <ConfirmDialog
                 open={pendingBulkDelete}
-                title={`Delete ${selection.count} presets?`}
-                body={
-                    <>
-                        All <strong className="text-fg">{selection.count}</strong> selected presets will
-                        be removed. This cannot be undone.
-                    </>
-                }
-                confirmLabel="Delete"
+                title={t('presets.bulkDeleteTitle', { count: selection.count })}
+                body={t('presets.bulkDeleteBody', { count: selection.count })}
+                confirmLabel={t('common.delete')}
                 destructive
                 onConfirm={() => {
                     setPendingBulkDelete(false);

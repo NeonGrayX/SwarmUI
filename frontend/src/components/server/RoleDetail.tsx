@@ -13,6 +13,7 @@ import {
     type RoleDraft,
     type RoleInfo
 } from '@/server/users';
+import { useTranslation } from '@/i18n';
 
 const INPUT =
     'rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]';
@@ -29,6 +30,7 @@ export function RoleDetail(props: {
     readOnly?: boolean;
     onDeleted: () => void;
 }) {
+    const { t } = useTranslation();
     const queryClient = useQueryClient();
     const [draft, setDraft] = useState<RoleDraft>(() => draftFromRole(props.role));
     const [error, setError] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export function RoleDetail(props: {
             setError(null);
             invalidate();
         },
-        onError: (e: unknown) => setError(e instanceof Error ? e.message : 'Failed to save role.')
+        onError: (e: unknown) => setError(e instanceof Error ? e.message : t('roleDetail.saveFailed'))
     });
     const remove = useMutation({
         mutationFn: () => api.post('AdminDeleteRole', { name: props.roleId }),
@@ -56,7 +58,7 @@ export function RoleDetail(props: {
             invalidate();
             props.onDeleted();
         },
-        onError: (e: unknown) => setError(e instanceof Error ? e.message : 'Failed to delete role.')
+        onError: (e: unknown) => setError(e instanceof Error ? e.message : t('roleDetail.deleteFailed'))
     });
 
     const edits = countRoleEdits(props.role, draft);
@@ -77,7 +79,7 @@ export function RoleDetail(props: {
                         style={{ color: 'var(--backend-errored)' }}
                     >
                         <Trash2 size={12} aria-hidden />
-                        Delete role
+                        {t('roleDetail.deleteRole')}
                     </button>
                 )}
             </div>
@@ -88,15 +90,14 @@ export function RoleDetail(props: {
             >
                 {props.role.is_auto_generated && (
                     <p className="mb-3 rounded border border-default bg-surface-sunken px-2 py-1.5 text-xs text-fg-soft">
-                        Built-in role. It cannot be deleted, and newly registered permissions are
-                        added to it automatically based on their default audience.
+                        {t('roleDetail.builtIn')}
                     </p>
                 )}
 
                 <Field
                     id="role-description"
-                    label="Description"
-                    description={'Human-readable notes for whoever picks roles later.\nSay when a user should get this role and roughly what it unlocks.'}
+                    label={t('roleDetail.description')}
+                    description={t('roleDetail.descriptionHelp')}
                     density="compact"
                 >
                     <textarea
@@ -111,8 +112,8 @@ export function RoleDetail(props: {
 
                 <Field
                     id="role-outpath-depth"
-                    label="Max OutPath depth"
-                    description={'How many directories deep a custom OutPath may go. Default 5.\nA guard against filesystem corruption; higher values are usually fine.\nA user gets the highest value across all of their roles.'}
+                    label={t('roleDetail.maxOutpathDepth')}
+                    description={t('roleDetail.maxOutpathDepthHelp')}
                     density="compact"
                 >
                     <input
@@ -129,8 +130,8 @@ export function RoleDetail(props: {
 
                 <Field
                     id="role-max-t2i"
-                    label="Max simultaneous generations"
-                    description={'How many images a user may have generating at once. Default 32.\nAlso capped by the number of available backends.\nThis stops one user taking every backend at once — lower it if you have few backends and many users.\nA user gets the highest value across all of their roles.'}
+                    label={t('roleDetail.maxSimultaneous')}
+                    description={t('roleDetail.maxSimultaneousHelp')}
                     density="compact"
                 >
                     <input
@@ -147,8 +148,8 @@ export function RoleDetail(props: {
 
                 <Field
                     id="role-unsafe-outpaths"
-                    label="Allow unsafe OutPaths"
-                    description={"Whether '.' may appear in an OutPath. Enabling this lets users escape their output folder and cause filesystem problems."}
+                    label={t('roleDetail.allowUnsafeOutpaths')}
+                    description={t('roleDetail.allowUnsafeOutpathsHelp')}
                     density="compact"
                 >
                     <label className="inline-flex cursor-pointer items-center gap-2">
@@ -161,15 +162,15 @@ export function RoleDetail(props: {
                             className="accent-[var(--emphasis)]"
                         />
                         <span className="text-sm text-fg-soft">
-                            {draft.allow_unsafe_outpaths ? 'Allowed' : 'Blocked'}
+                            {draft.allow_unsafe_outpaths ? t('roleDetail.allowed') : t('roleDetail.blocked')}
                         </span>
                     </label>
                 </Field>
 
                 <Field
                     id="role-whitelist"
-                    label="Model whitelist"
-                    description={"Allowed models, as a comma-separated list of path prefixes, eg 'sdxl/, flux/'.\nEmpty means no whitelist is applied.\nWhitelists from a user's roles add together."}
+                    label={t('roleDetail.modelWhitelist')}
+                    description={t('roleDetail.modelWhitelistHelp')}
                     density="compact"
                 >
                     <input
@@ -177,7 +178,7 @@ export function RoleDetail(props: {
                         type="text"
                         value={draft.model_whitelist}
                         disabled={props.readOnly}
-                        placeholder="eg sdxl/, flux/"
+                        placeholder={t('roleDetail.whitelistPlaceholder')}
                         onChange={e => set('model_whitelist', e.target.value)}
                         className={`${INPUT} w-full`}
                     />
@@ -185,8 +186,8 @@ export function RoleDetail(props: {
 
                 <Field
                     id="role-blacklist"
-                    label="Model blacklist"
-                    description={"Forbidden models, as a comma-separated list of path prefixes.\nEmpty means no blacklist is applied.\nThe blacklist wins over the whitelist.\nBlacklists from a user's roles add together."}
+                    label={t('roleDetail.modelBlacklist')}
+                    description={t('roleDetail.modelBlacklistHelp')}
                     density="compact"
                 >
                     <input
@@ -194,13 +195,15 @@ export function RoleDetail(props: {
                         type="text"
                         value={draft.model_blacklist}
                         disabled={props.readOnly}
-                        placeholder="eg experimental/"
+                        placeholder={t('roleDetail.blacklistPlaceholder')}
                         onChange={e => set('model_blacklist', e.target.value)}
                         className={`${INPUT} w-full`}
                     />
                 </Field>
 
-                <h3 className="mb-2 mt-4 text-sm font-medium text-fg-strong">Permissions</h3>
+                <h3 className="mb-2 mt-4 text-sm font-medium text-fg-strong">
+                    {t('users.tab.permissions')}
+                </h3>
                 <PermissionPicker
                     ordered={props.permissionsOrdered}
                     info={props.permissionsInfo}
@@ -227,7 +230,7 @@ export function RoleDetail(props: {
                     {edits > 0 && (
                         <div className="flex items-center gap-3">
                             <span className="text-sm text-fg">
-                                {edits} unsaved {edits === 1 ? 'change' : 'changes'}
+                                {t('settings.unsavedCount', { count: edits })}
                             </span>
                             <div className="flex-1" />
                             <button
@@ -236,7 +239,7 @@ export function RoleDetail(props: {
                                 disabled={save.isPending}
                                 className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
                             >
-                                Discard
+                                {t('common.discard')}
                             </button>
                             <button
                                 type="button"
@@ -245,7 +248,7 @@ export function RoleDetail(props: {
                                 className="rounded px-3 py-1.5 text-sm disabled:opacity-50"
                                 style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                             >
-                                {save.isPending ? 'Saving…' : 'Save changes'}
+                                {save.isPending ? t('common.saving') : t('settings.saveChanges')}
                             </button>
                         </div>
                     )}
@@ -254,15 +257,14 @@ export function RoleDetail(props: {
 
             <ConfirmDialog
                 open={pendingDelete}
-                title="Delete role?"
+                title={t('roleDetail.deleteTitle')}
                 body={
                     <>
-                        <strong className="text-fg">{props.role.name || props.roleId}</strong> will be
-                        removed. Users holding it lose whatever access only it granted. This cannot be
-                        undone.
+                        <strong className="text-fg">{props.role.name || props.roleId}</strong>{' '}
+                        {t('roleDetail.deleteBody')}
                     </>
                 }
-                confirmLabel="Delete role"
+                confirmLabel={t('roleDetail.deleteRole')}
                 destructive
                 onConfirm={() => {
                     setPendingDelete(false);

@@ -4,8 +4,10 @@ import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useTranslation } from '@/i18n';
 
 export function MetadataUtilitiesPage() {
+    const { t } = useTranslation();
     const queryClient = useQueryClient();
     const canReset = usePermission('reset_metadata');
     const [confirming, setConfirming] = useState(false);
@@ -14,46 +16,31 @@ export function MetadataUtilitiesPage() {
     const wipe = useMutation({
         mutationFn: () => api.post('WipeMetadata', {}),
         onSuccess: () => {
-            setResult({ ok: true, text: 'Metadata databases reset. They will rebuild from source files.' });
+            setResult({ ok: true, text: t('metadataTool.resetDone') });
             queryClient.invalidateQueries({ queryKey: ['models'] });
         },
         onError: (e: unknown) =>
-            setResult({ ok: false, text: e instanceof Error ? e.message : 'Failed to reset metadata.' })
+            setResult({ ok: false, text: e instanceof Error ? e.message : t('metadataTool.resetFailed') })
     });
 
     return (
         <ToolLayout
-            title="Metadata Utilities"
-            summary="Rebuild Swarm's model and image metadata databases."
+            title={t('nav.destination.metadata')}
+            summary={t('metadataTool.summary')}
             about={
                 <>
+                    <p>{t('metadataTool.about1')}</p>
+                    <p>{t('metadataTool.about2')}</p>
                     <p>
-                        Swarm keeps a database of model and image metadata so it doesn't have to
-                        re-read every file constantly. Resetting clears that database; it rebuilds
-                        from the source files on next use.
-                    </p>
-                    <p>
-                        This is useful if you've edited model or image files outside of Swarm and
-                        want its tracking to catch up. It does not modify the files themselves —
-                        only Swarm's index of them.
-                    </p>
-                    <p>
-                        Civitai metadata scanning, which the legacy interface offers here, is not
-                        yet ported. Use{' '}
+                        {t('metadataTool.about3Before')}{' '}
                         <a href="/Text2Image" className="underline" style={{ color: 'var(--emphasis)' }}>
                             /Text2Image
                         </a>{' '}
-                        for that.
+                        {t('metadataTool.about3After')}
                     </p>
                 </>
             }
-            warning={
-                <>
-                    If you have <strong>manually edited</strong> model metadata inside Swarm, resetting
-                    discards those edits — they live in the database, not the model files. There is no
-                    undo.
-                </>
-            }
+            warning={t('metadataTool.warning')}
             action={
                 <button
                     type="button"
@@ -65,19 +52,17 @@ export function MetadataUtilitiesPage() {
                         color: 'var(--danger-button-foreground)'
                     }}
                 >
-                    {wipe.isPending ? 'Resetting…' : 'Reset all metadata'}
+                    {wipe.isPending ? t('metadataTool.resetting') : t('metadataTool.resetAll')}
                 </button>
             }
         >
-            <p className="text-sm text-fg-soft">
-                Clears the model and image metadata datastores. Everything is re-read from the
-                original files afterwards, so the first browse after a reset is slower than usual.
-            </p>
+            <p className="text-sm text-fg-soft">{t('metadataTool.body')}</p>
 
             {!canReset && (
                 <p className="mt-2 text-sm" style={{ color: 'var(--status-bar-warn-color-start-end)' }}>
-                    Your account doesn't have the <code className="font-mono">reset_metadata</code>{' '}
-                    permission.
+                    {t('metadataTool.noPermissionBefore')}{' '}
+                    <code className="font-mono">reset_metadata</code>{' '}
+                    {t('metadataTool.noPermissionAfter')}
                 </p>
             )}
 
@@ -92,15 +77,9 @@ export function MetadataUtilitiesPage() {
 
             <ConfirmDialog
                 open={confirming}
-                title="Reset all metadata?"
-                body={
-                    <>
-                        Swarm's model and image metadata databases will be cleared and rebuilt from
-                        source files. Any metadata you edited inside Swarm will be lost. This cannot
-                        be undone.
-                    </>
-                }
-                confirmLabel="Reset metadata"
+                title={t('metadataTool.confirmTitle')}
+                body={t('metadataTool.confirmBody')}
+                confirmLabel={t('metadataTool.resetMetadata')}
                 destructive
                 onConfirm={() => {
                     setConfirming(false);

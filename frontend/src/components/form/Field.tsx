@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Info, RotateCcw } from 'lucide-react';
+import { useTranslation } from '@/i18n';
 
 export type FieldDensity = 'comfortable' | 'compact' | 'inline';
 
 export interface FieldProps {
     id: string;
+    /** Display text, already translated by the caller — it is as often a server-supplied parameter
+     *  name as it is a fixed identifier, so this component cannot resolve it itself. */
     label: string;
     /** Long-form help. Rendered in a tooltip behind the info affordance. */
     description?: string;
@@ -36,6 +39,7 @@ export interface FieldProps {
  * The legacy `?` glyph becomes a real info tooltip, so descriptions are readable rather than
  * hover-only tooltips on a 9px character. */
 export function Field(props: FieldProps) {
+    const { t } = useTranslation();
     const density = props.density ?? 'comfortable';
     const hasHelp = Boolean(props.description || props.examples?.length);
     // The toggle is what switches a row back on, so it never dims with the row it controls — but it
@@ -58,7 +62,7 @@ export function Field(props: FieldProps) {
                         checked={props.toggle.on}
                         onChange={e => props.toggle?.onChange(e.target.checked)}
                         disabled={props.toggleBlocked}
-                        aria-label={`Enable ${props.label}`}
+                        aria-label={t('field.enable', { label: props.label })}
                         className={['shrink-0 accent-[var(--emphasis)]', props.toggleBlocked ? dim : ''].join(' ')}
                     />
                 )}
@@ -73,8 +77,8 @@ export function Field(props: FieldProps) {
                     {hasHelp && <HelpTip label={props.label} description={props.description} examples={props.examples} />}
                     {props.modified && (
                         <span
-                            aria-label="Modified"
-                            title="Changed from default"
+                            aria-label={t('field.modified')}
+                            title={t('field.changedFromDefault')}
                             className="shrink-0 size-1.5 rounded-full"
                             style={{ background: 'var(--sw-modified)' }}
                         />
@@ -83,8 +87,8 @@ export function Field(props: FieldProps) {
                         <button
                             type="button"
                             onClick={props.onReset}
-                            title="Reset to default"
-                            aria-label={`Reset ${props.label} to default`}
+                            title={t('field.resetToDefault')}
+                            aria-label={t('field.resetLabelToDefault', { label: props.label })}
                             className="shrink-0 rounded p-0.5 text-fg-soft opacity-0 group-hover/field:opacity-100 focus-visible:opacity-100 hover:text-fg hover:bg-[var(--sw-hover)]"
                         >
                             <RotateCcw size={12} aria-hidden />
@@ -100,12 +104,13 @@ export function Field(props: FieldProps) {
 /** Help shown on hover (and on keyboard focus), never needing a click. The content stays hoverable
  * so long descriptions and examples can be read and copied. */
 function HelpTip(props: { label: string; description?: string; examples?: string[] | null }) {
+    const { t } = useTranslation();
     return (
         <Tooltip.Root>
             <Tooltip.Trigger asChild>
                 <button
                     type="button"
-                    aria-label={`About ${props.label}`}
+                    aria-label={t('field.about', { label: props.label })}
                     onClick={e => e.preventDefault()}
                     className="shrink-0 rounded p-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                 >
@@ -126,7 +131,9 @@ function HelpTip(props: { label: string; description?: string; examples?: string
                     )}
                     {props.examples && props.examples.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-subtle">
-                            <p className="text-[10px] uppercase tracking-wide text-fg-soft mb-1">Examples</p>
+                            <p className="text-[10px] uppercase tracking-wide text-fg-soft mb-1">
+                                {t('field.examples')}
+                            </p>
                             <ul className="space-y-0.5">
                                 {props.examples.slice(0, 6).map(example => (
                                     <li key={example} className="font-mono text-[11px] text-fg break-words">

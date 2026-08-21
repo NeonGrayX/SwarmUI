@@ -4,8 +4,10 @@ import { api } from '@/api/client';
 import { queryKeys, useServerSettings } from '@/api/hooks';
 import { usePermission } from '@/api/permissions';
 import { SettingsForm } from '@/components/settings/SettingsForm';
+import { useTranslation } from '@/i18n';
 
 export function ServerConfigurationPage() {
+    const { t } = useTranslation();
     const queryClient = useQueryClient();
     const canEdit = usePermission('edit_server_settings');
     // The command palette deep-links a single setting here, eg /server/configuration?focus=Paths.ModelRoot.
@@ -20,12 +22,12 @@ export function ServerConfigurationPage() {
     });
 
     if (settings.isPending) {
-        return <p className="p-6 text-sm text-fg-soft">Loading server settings…</p>;
+        return <p className="p-6 text-sm text-fg-soft">{t('serverConfig.loading')}</p>;
     }
     if (settings.isError || !settings.data) {
         return (
             <p className="p-6 text-sm" style={{ color: 'var(--backend-errored)' }}>
-                {settings.error instanceof Error ? settings.error.message : 'Failed to load server settings.'}
+                {settings.error instanceof Error ? settings.error.message : t('serverConfig.loadFailed')}
             </p>
         );
     }

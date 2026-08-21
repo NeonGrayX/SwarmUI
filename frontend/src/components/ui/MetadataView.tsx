@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { parseImageMetadata, type MetadataEntry } from '@/params/metadata';
 import { useParamSchema } from '@/params/schema';
+import { useTranslation } from '@/i18n';
 
 /** An image's metadata as a readable list of labelled rows.
  *
@@ -9,6 +10,7 @@ import { useParamSchema } from '@/params/schema';
  * bookkeeping in its own group at the bottom. The JSON is still one click away for anyone who
  * wants to copy the whole thing back into a tool. */
 export function MetadataView(props: { metadata: string | null | undefined; empty: string }) {
+    const { t } = useTranslation();
     const schema = useParamSchema();
     const parsed = useMemo(() => parseImageMetadata(props.metadata, schema), [props.metadata, schema]);
     const [showRaw, setShowRaw] = useState(false);
@@ -19,7 +21,7 @@ export function MetadataView(props: { metadata: string | null | undefined; empty
     if (parsed.unreadable) {
         return (
             <>
-                <p className="mb-2 text-sm text-fg-soft">Metadata isn't in a format this panel can list.</p>
+                <p className="mb-2 text-sm text-fg-soft">{t('metadata.unreadable')}</p>
                 <RawBlock text={parsed.raw} />
             </>
         );
@@ -28,8 +30,10 @@ export function MetadataView(props: { metadata: string | null | undefined; empty
     return (
         <div>
             {parsed.sections.map(section => (
-                <section key={section.title} className="mb-3 last:mb-0">
-                    <h3 className="mb-1 text-xs uppercase tracking-wide text-fg-soft">{section.title}</h3>
+                <section key={section.titleKey} className="mb-3 last:mb-0">
+                    <h3 className="mb-1 text-xs uppercase tracking-wide text-fg-soft">
+                        {t(section.titleKey)}
+                    </h3>
                     <dl className="space-y-0.5 border-t border-subtle pt-1.5 text-xs">
                         {section.entries.map(entry => (
                             <Row key={entry.id} entry={entry} />
@@ -44,7 +48,7 @@ export function MetadataView(props: { metadata: string | null | undefined; empty
                 aria-expanded={showRaw}
                 className="mt-1 text-xs text-fg-soft underline decoration-dotted hover:text-fg"
             >
-                {showRaw ? 'Hide raw JSON' : 'Show raw JSON'}
+                {showRaw ? t('metadata.hideRawJson') : t('metadata.showRawJson')}
             </button>
             {showRaw && (
                 <div className="mt-2">
@@ -97,12 +101,13 @@ function RawBlock(props: { text: string }) {
 }
 
 function CopyButton(props: { text: string; label: string }) {
+    const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
     return (
         <button
             type="button"
-            aria-label={`Copy ${props.label}`}
-            title={`Copy ${props.label}`}
+            aria-label={t('metadata.copy', { label: props.label })}
+            title={t('metadata.copy', { label: props.label })}
             onClick={() => {
                 navigator.clipboard.writeText(props.text).then(
                     () => {

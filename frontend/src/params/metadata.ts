@@ -11,6 +11,7 @@
  * and prep/generation times merge into one row.
  */
 
+import { hasTranslation, t, tDynamic } from '@/i18n';
 import { isMediaListType, isMediaType } from './media';
 import type { NormalizedSchema } from './schema';
 
@@ -26,7 +27,8 @@ export interface MetadataEntry {
 }
 
 export interface MetadataSection {
-    title: string;
+    /** Translation identifier for the heading, resolved by the view that renders it. */
+    titleKey: string;
     entries: MetadataEntry[];
 }
 
@@ -39,20 +41,14 @@ export interface ParsedMetadata {
 }
 
 /** Labels for keys we synthesize ourselves, or that must still read well when the param schema
- *  hasn't loaded. Anything else takes the schema's name, then falls back to humanize(). */
-const LABELS: Record<string, string> = {
-    prompt: 'Prompt',
-    negativeprompt: 'Negative prompt',
-    original_prompt: 'Original prompt',
-    cfgscale: 'CFG scale',
-    loras: 'LoRAs',
-    resolution: 'Resolution',
-    swarm_version: 'Swarm version',
-    generation_time: 'Generation time',
-    prep_time: 'Prep time',
-    unused_parameters: 'Unused parameters',
-    parser_warnings: 'Parser warnings'
-};
+ *  hasn't loaded. Anything else takes the schema's name, then falls back to humanize().
+ *
+ *  Keys not listed here resolve through `metadata.label.<key>` when a translation exists, which is
+ *  how an extension's own metadata key can be named without touching this list. */
+function labelFor(key: string): string | undefined {
+    const id = `metadata.label.${key}`;
+    return hasTranslation(id) ? t(id) : undefined;
+}
 
 /** Params worth reading first, in this order. The rest keep the order the image recorded them in. */
 const TOP_KEYS = ['model', 'loras', 'resolution', 'seed', 'steps', 'cfgscale', 'images'];
@@ -92,7 +88,7 @@ function humanize(key: string): string {
 
 function formatScalar(value: unknown): string {
     if (typeof value === 'boolean') {
-        return value ? 'Yes' : 'No';
+        return value ? t('common.yes') : t('common.no');
     }
     if (typeof value === 'number') {
         // Float params come back with trailing noise (7.000000001); nobody wants to read that.
@@ -100,7 +96,7 @@ function formatScalar(value: unknown): string {
     }
     const text = String(value);
     // Inline media is megabytes of base64. The filename row beside it is the useful part.
-    return text.startsWith('data:') ? '(inline file data)' : text;
+    return text.startsWith('data:') ? t('metadata.inlineFileData') : text;
 }
 
 function formatValue(value: unknown): string[] {
@@ -135,8 +131,10 @@ function makeEntry(
     }
     return {
         id: key,
-        label: param?.name ?? LABELS[key] ?? humanize(key),
-        description: param?.description || undefined,
+        // Schema names come from the server, so they translate by source text; our own synthesized
+        // keys have identifiers instead.
+        label: param?.name ? tDynamic(param.name) : (labelFor(key) ?? humanize(key)),
+        description: param?.description ? tDynamic(param.description) : undefined,
         value: formatValue(shown),
         long: long || undefined
     };
@@ -229,7 +227,7 @@ function combineLoras(params: Record<string, unknown>): void {
         let text = `${lora} : ${weights[index] ?? '?'}`;
         const section = Array.isArray(confinement) ? Number(confinement[index]) : 0;
         if (section > 0) {
-            text += ` (section ${section})`;
+            text += ` (${t('metadata.loraSection', { section })})`;
         }
         return text;
     });
@@ -242,7 +240,10 @@ function combineTimings(extra: Record<string, unknown>): void {
     if (isEmpty(extra.prep_time) || isEmpty(extra.generation_time)) {
         return;
     }
-    const value = `${extra.prep_time} prep, ${extra.generation_time} gen`;
+    const value = t('metadata.timings', {
+        prep: String(extra.prep_time),
+        generation: String(extra.generation_time)
+    });
     delete extra.prep_time;
     delete extra.generation_time;
     extra.generation_time = value;
@@ -268,11 +269,14 @@ function modelEntries(models: unknown, schema: NormalizedSchema | null): Metadat
             byParam.set(param, [`${model.name}${hash}`]);
         }
     }
-    return [...byParam].map(([param, lines]) => ({
-        id: `model:${param}`,
-        label: schema?.byId.get(param)?.name ?? LABELS[param] ?? humanize(param),
-        value: lines
-    }));
+    return [...byParam].map(([param, lines]) => {
+        const name = schema?.byId.get(param)?.name;
+        return {
+            id: `model:${param}`,
+            label: name ? tDynamic(name) : (labelFor(param) ?? humanize(param)),
+            value: lines
+        };
+    });
 }
 
 export function parseImageMetadata(
@@ -334,10 +338,10 @@ export function parseImageMetadata(
     ];
 
     const sections: MetadataSection[] = [
-        { title: 'Prompt', entries: prompts },
-        { title: 'Parameters', entries: entriesFor(params, paramKeys, schema) },
-        { title: 'Models', entries: modelEntries(data.sui_models, schema) },
-        { title: 'Details', entries: entriesFor(extra, Object.keys(extra), schema) }
+        { titleKey: 'metadata.section.prompt', entries: prompts },
+        { titleKey: 'metadata.section.parameters', entries: entriesFor(params, paramKeys, schema) },
+        { titleKey: 'metadata.section.models', entries: modelEntries(data.sui_models, schema) },
+        { titleKey: 'metadata.section.details', entries: entriesFor(extra, Object.keys(extra), schema) }
     ].filter(section => section.entries.length > 0);
 
     return { sections, raw: pretty, unreadable: sections.length === 0 };

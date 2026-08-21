@@ -17,8 +17,16 @@ import {
     type MediaMeta
 } from '@/params/media';
 import type { ControlProps } from './controls';
+import { t as translate, useTranslation } from '@/i18n';
 
 const NO_META: MediaMeta[] = [];
+
+/** Media prose has to name the kind ("paste an image" / "paste a video"), and the article that
+ *  goes with it is not something a `{kind}` placeholder can carry across languages. So each kind
+ *  gets its own identifier and the whole phrase is translated as one unit. */
+function kindKey(prefix: string, kind: MediaKind): string {
+    return `${prefix}.${kind}`;
+}
 
 /** File input for image / audio / video params, single or list.
  *
@@ -31,6 +39,7 @@ const NO_META: MediaMeta[] = [];
  * (T2IParamTypes.cs:1113). Server-side paths (`inputs/…`, `raw/…`) set from elsewhere are kept
  * as-is, since those are reusable across sessions and far cheaper to send. */
 export function MediaField(props: ControlProps & { emptyLabel?: string }) {
+    const { t, tDynamic } = useTranslation();
     const { param } = props;
     const kind = mediaKindOf(param.type);
     const multiple = isMediaListType(param.type);
@@ -57,7 +66,7 @@ export function MediaField(props: ControlProps & { emptyLabel?: string }) {
         const incoming = [...files];
         const accepted = incoming.filter(file => acceptsFile(kind, file));
         if (accepted.length === 0) {
-            setError(incoming.length > 0 ? `Not a usable ${kind} file.` : null);
+            setError(incoming.length > 0 ? t(kindKey('media.notUsable', kind)) : null);
             return;
         }
         setError(null);
@@ -80,7 +89,7 @@ export function MediaField(props: ControlProps & { emptyLabel?: string }) {
             }
         }
         catch (e) {
-            setError(e instanceof Error ? e.message : 'Could not read that file.');
+            setError(e instanceof Error ? e.message : t('media.readFailed'));
         }
     }
 
@@ -122,7 +131,7 @@ export function MediaField(props: ControlProps & { emptyLabel?: string }) {
             onDrop={onDrop}
             onPaste={event => void addFiles(event.clipboardData?.files)}
             tabIndex={props.disabled ? -1 : 0}
-            aria-label={`${param.name}: drop or paste ${article(kind)} ${kind}`}
+            aria-label={`${tDynamic(param.name)}: ${t(kindKey('media.dropOrPaste', kind))}`}
             className={[
                 'rounded border outline-none transition-colors',
                 dragging ? 'border-[var(--emphasis)] bg-[var(--sw-hover)]' : 'border-transparent',
@@ -169,7 +178,7 @@ export function MediaField(props: ControlProps & { emptyLabel?: string }) {
                         <button
                             type="button"
                             onClick={() => fileRef.current?.click()}
-                            title={`Add ${kind}`}
+                            title={t(kindKey('media.add', kind))}
                             className="flex aspect-square items-center justify-center rounded border border-dashed border-default text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                         >
                             <Plus size={16} aria-hidden />
@@ -207,7 +216,7 @@ function EmptyZone(props: { kind: MediaKind; label?: string; disabled?: boolean;
             className="flex w-full items-center justify-center gap-2 rounded border border-dashed border-default px-2 py-3 text-xs text-fg-soft transition-colors hover:text-fg hover:bg-[var(--sw-hover)] disabled:cursor-not-allowed"
         >
             <ImagePlus size={14} aria-hidden />
-            {props.label ?? `Upload, drop, or paste ${article(props.kind)} ${props.kind}`}
+            {props.label ?? translate(kindKey('media.uploadDropPaste', props.kind))}
         </button>
     );
 }
@@ -231,7 +240,7 @@ function Single(props: PreviewProps & { onReplace: () => void }) {
             </div>
             <div className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-xs text-fg-soft" title={props.meta?.name}>
-                    {describeMedia(props.meta) || 'Loading…'}
+                    {describeMedia(props.meta) || translate('common.loading')}
                 </span>
                 {!props.disabled && (
                     <button
@@ -239,7 +248,7 @@ function Single(props: PreviewProps & { onReplace: () => void }) {
                         onClick={props.onReplace}
                         className="shrink-0 rounded px-1.5 py-0.5 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                     >
-                        Replace
+                        {translate('media.replace')}
                     </button>
                 )}
             </div>
@@ -295,7 +304,7 @@ function Preview(props: PreviewProps & { className: string }) {
     return (
         <img
             src={src}
-            alt={props.meta?.name ?? 'Input preview'}
+            alt={props.meta?.name ?? translate('media.inputPreview')}
             onLoad={event =>
                 props.onLoaded({
                     width: event.currentTarget.naturalWidth,
@@ -312,8 +321,8 @@ function RemoveButton(props: { onClick: () => void }) {
         <button
             type="button"
             onClick={props.onClick}
-            aria-label="Remove"
-            title="Remove"
+            aria-label={translate('common.remove')}
+            title={translate('common.remove')}
             className="absolute right-1 top-1 rounded bg-surface/90 p-0.5 text-fg-soft hover:text-fg"
             style={{ border: '1px solid var(--light-border)' }}
         >
@@ -332,13 +341,9 @@ function filledMetas(values: string[], metas: MediaMeta[], fallback: MediaKind):
     );
 }
 
-function article(kind: MediaKind): string {
-    return kind === 'video' ? 'a' : 'an';
-}
-
 function inferName(value: string): string {
     if (value.startsWith('data:')) {
-        return 'pasted data';
+        return translate('media.pastedData');
     }
     return value.slice(value.lastIndexOf('/') + 1);
 }

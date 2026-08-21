@@ -6,6 +6,7 @@ import { usePermission, usePermitted } from '@/api/permissions';
 import { useServerSettings, useSession, useT2IParams, useUserSettings } from '@/api/hooks';
 import { DESTINATIONS, findSection } from '@/nav/destinations';
 import { organizeSettings, type SettingsTree } from '@/settings/types';
+import { t, tDynamic, useTranslation } from '@/i18n';
 
 /** Item values are "<label><TAB><extra search terms>". Splitting on tab rather than a space keeps
  *  multi-word labels intact for scoring. */
@@ -58,7 +59,7 @@ interface SettingEntry {
     /** Group display path within its tree, eg 'Paths'. Empty for root-level settings. */
     groupPath: string;
     /** Which screen owns it, for the trailing label. */
-    scope: 'Preferences' | 'Server';
+    scope: 'preferences' | 'server';
     /** Route of that screen. */
     path: string;
 }
@@ -72,13 +73,23 @@ function collect(
     for (const setting of organizeSettings(tree).all) {
         into.push({
             key: setting.key,
-            name: setting.node.name,
-            description: setting.node.description,
-            groupPath: setting.groupPath,
+            // Setting names and descriptions come from the server, so they translate by source
+            // text. Indexing the translated form is what lets search work in the active language.
+            name: tDynamic(setting.node.name),
+            description: tDynamic(setting.node.description),
+            groupPath: setting.groupPath
+                .split(' › ')
+                .map(part => tDynamic(part))
+                .join(' › '),
             scope,
             path
         });
     }
+}
+
+/** Display name for the screen a setting lives on. */
+function scopeLabel(scope: SettingEntry['scope']): string {
+    return scope === 'server' ? t('nav.section.server') : t('nav.destination.preferences');
 }
 
 /** Same tiering as scoreItem, but over the fields a setting actually has. Ranked here rather than
@@ -110,6 +121,7 @@ function rankSetting(entry: SettingEntry, query: string): number {
  * example) "Pickle To Safetensors" lives under Utilities, or which of the two settings screens owns
  * "Model Root". The legacy UI offered no search of any kind across its ~25 screens. */
 export function CommandPalette() {
+    const { t, tDynamic } = useTranslation();
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const navigate = useNavigate();
@@ -143,25 +155,25 @@ export function CommandPalette() {
         return params.data.list
             .filter(
                 p =>
-                    p.name.toLowerCase().includes(query) ||
+                    tDynamic(p.name).toLowerCase().includes(query) ||
                     p.id.toLowerCase().includes(query) ||
-                    p.description.toLowerCase().includes(query)
+                    tDynamic(p.description).toLowerCase().includes(query)
             )
             .slice(0, 8);
-    }, [search, params.data]);
+    }, [search, params.data, tDynamic]);
 
     // Every setting from both screens, flattened once per tree, so a legacy setting name typed from
     // memory ("Model Root", "OutPath Builder") lands on the exact row that owns it.
     const settingsIndex = useMemo<SettingEntry[]>(() => {
         const entries: SettingEntry[] = [];
         if (userSettings.data) {
-            collect(entries, userSettings.data.settings, 'Preferences', '/settings/preferences');
+            collect(entries, userSettings.data.settings, 'preferences', '/settings/preferences');
         }
         if (serverSettings.data) {
-            collect(entries, serverSettings.data.settings, 'Server', '/server/configuration');
+            collect(entries, serverSettings.data.settings, 'server', '/server/configuration');
         }
         return entries;
-    }, [userSettings.data, serverSettings.data]);
+    }, [userSettings.data, serverSettings.data, tDynamic]);
 
     const settingMatches = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -186,7 +198,7 @@ export function CommandPalette() {
         <Command.Dialog
             open={open}
             onOpenChange={setOpen}
-            label="Command palette"
+            label={t('palette.label')}
             filter={scoreItem}
             className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/50"
         >
@@ -196,32 +208,34 @@ export function CommandPalette() {
                     <Command.Input
                         value={search}
                         onValueChange={setSearch}
-                        placeholder="Search screens, parameters and settings..."
+                        placeholder={t('palette.searchPlaceholder')}
                         className="flex-1 bg-transparent py-3 text-sm text-fg outline-none placeholder:text-fg-soft"
                     />
                 </div>
                 <Command.List className="max-h-80 overflow-y-auto p-2">
                     <Command.Empty className="px-2 py-6 text-center text-sm text-fg-soft">
-                        No matches.
+                        {t('palette.noMatches')}
                     </Command.Empty>
 
                     <Command.Group
-                        heading="Go to"
+                        heading={t('palette.group.goTo')}
                         className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-fg-soft"
                     >
                         {destinations.map(dest => {
                             const Icon = dest.icon;
                             const section = findSection(dest.section);
+                            const label = t(dest.labelKey);
+                            const sectionLabel = section ? t(section.labelKey) : undefined;
                             return (
                                 <Command.Item
                                     key={dest.path}
-                                    value={itemValue(dest.label, section?.label, dest.keywords?.join(' '))}
+                                    value={itemValue(label, sectionLabel, dest.keywords?.join(' '))}
                                     onSelect={() => go(dest.path)}
                                     className="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-fg cursor-pointer data-[selected=true]:bg-[var(--sw-active)]"
                                 >
                                     <Icon size={15} className="text-fg-soft shrink-0" aria-hidden />
-                                    <span>{dest.label}</span>
-                                    <span className="ml-auto text-xs text-fg-soft">{section?.label}</span>
+                                    <span>{label}</span>
+                                    <span className="ml-auto text-xs text-fg-soft">{sectionLabel}</span>
                                 </Command.Item>
                             );
                         })}
@@ -229,19 +243,19 @@ export function CommandPalette() {
 
                     {paramMatches.length > 0 && (
                         <Command.Group
-                            heading="Parameters"
+                            heading={t('palette.group.parameters')}
                             className="mt-1 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-fg-soft"
                         >
                             {paramMatches.map(param => (
                                 <Command.Item
                                     key={param.id}
-                                    value={itemValue(param.name, param.id, param.group)}
+                                    value={itemValue(tDynamic(param.name), param.id, param.group)}
                                     onSelect={() => go('/generate', { focus: param.id })}
                                     className="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-fg cursor-pointer data-[selected=true]:bg-[var(--sw-active)]"
                                 >
-                                    <span className="truncate">{param.name}</span>
+                                    <span className="truncate">{tDynamic(param.name)}</span>
                                     <span className="ml-auto shrink-0 font-mono text-xs text-fg-soft">
-                                        {param.group ?? 'ungrouped'}
+                                        {param.group ? tDynamic(param.group) : t('params.ungrouped')}
                                     </span>
                                 </Command.Item>
                             ))}
@@ -250,20 +264,28 @@ export function CommandPalette() {
 
                     {settingMatches.length > 0 && (
                         <Command.Group
-                            heading="Settings"
+                            heading={t('palette.group.settings')}
                             className="mt-1 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-fg-soft"
                         >
                             {settingMatches.map(entry => (
                                 <Command.Item
                                     key={`${entry.path}:${entry.key}`}
-                                    value={itemValue(entry.name, entry.scope, entry.key, entry.groupPath, entry.description)}
+                                    value={itemValue(
+                                        entry.name,
+                                        scopeLabel(entry.scope),
+                                        entry.key,
+                                        entry.groupPath,
+                                        entry.description
+                                    )}
                                     onSelect={() => go(entry.path, { focus: entry.key })}
                                     className="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-fg cursor-pointer data-[selected=true]:bg-[var(--sw-active)]"
                                 >
                                     <SlidersHorizontal size={15} className="text-fg-soft shrink-0" aria-hidden />
                                     <span className="truncate">{entry.name}</span>
                                     <span className="ml-auto shrink-0 truncate text-xs text-fg-soft">
-                                        {entry.groupPath ? `${entry.scope} › ${entry.groupPath}` : entry.scope}
+                                        {entry.groupPath
+                                            ? `${scopeLabel(entry.scope)} › ${entry.groupPath}`
+                                            : scopeLabel(entry.scope)}
                                     </span>
                                 </Command.Item>
                             ))}
@@ -277,6 +299,7 @@ export function CommandPalette() {
 
 /** The hint chip in the header that tells people the palette exists. */
 export function CommandPaletteHint() {
+    const { t } = useTranslation();
     const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
     return (
         <button
@@ -294,7 +317,7 @@ export function CommandPaletteHint() {
             className="flex items-center gap-2 rounded border border-default bg-surface px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
         >
             <Search size={13} aria-hidden />
-            <span>Search</span>
+            <span>{t('palette.hint.search')}</span>
             <kbd className="font-mono text-[10px] border border-subtle rounded px-1">
                 {isMac ? 'Cmd' : 'Ctrl'}K
             </kbd>

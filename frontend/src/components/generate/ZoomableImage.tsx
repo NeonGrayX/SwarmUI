@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { useTranslation } from '@/i18n';
 
 /** Scale 1 is "fits the viewport", matching the legacy viewer's zoom of 1. */
 const MIN_SCALE = 1;
@@ -193,6 +194,7 @@ export function ZoomableImage(props: {
         }
     }
 
+    const { t } = useTranslation();
     const zoomed = view.scale > 1.001;
 
     return (
@@ -201,7 +203,7 @@ export function ZoomableImage(props: {
                 ref={viewportRef}
                 tabIndex={0}
                 role="group"
-                aria-label="Image view. Scroll to zoom, drag to pan, 0 to fit."
+                aria-label={t('zoom.viewHint')}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
@@ -225,21 +227,21 @@ export function ZoomableImage(props: {
             </div>
 
             <div className="absolute bottom-0 left-0 flex items-center gap-1 rounded border border-default bg-surface p-1 text-fg-soft">
-                <ZoomButton label="Zoom out" onClick={() => zoom(scale => scale / 1.25)} disabled={!zoomed}>
+                <ZoomButton label={t('zoom.out')} onClick={() => zoom(scale => scale / 1.25)} disabled={!zoomed}>
                     <ZoomOut size={15} aria-hidden />
                 </ZoomButton>
                 <button
                     type="button"
                     onClick={() => toggleNative()}
-                    title={zoomed ? 'Fit to view' : 'Zoom to full size'}
+                    title={zoomed ? t('zoom.fit') : t('zoom.fullSize')}
                     className="min-w-12 rounded px-1 text-xs tabular-nums hover:text-fg hover:bg-[var(--sw-hover)]"
                 >
                     {Math.round(view.scale * 100)}%
                 </button>
-                <ZoomButton label="Zoom in" onClick={() => zoom(scale => scale * 1.25)} disabled={view.scale >= MAX_SCALE}>
+                <ZoomButton label={t('zoom.in')} onClick={() => zoom(scale => scale * 1.25)} disabled={view.scale >= MAX_SCALE}>
                     <ZoomIn size={15} aria-hidden />
                 </ZoomButton>
-                <ZoomButton label="Fit to view" onClick={() => setView(FIT)} disabled={!zoomed}>
+                <ZoomButton label={t('zoom.fit')} onClick={() => setView(FIT)} disabled={!zoomed}>
                     <Maximize2 size={15} aria-hidden />
                 </ZoomButton>
             </div>

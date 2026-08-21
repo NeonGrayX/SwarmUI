@@ -9,6 +9,7 @@ import { PermissionCatalog } from '@/components/server/PermissionCatalog';
 import { RoleDetail } from '@/components/server/RoleDetail';
 import { UserDetail } from '@/components/server/UserDetail';
 import type { PermissionInfo, RoleInfo } from '@/server/users';
+import { useTranslation } from '@/i18n';
 
 const INPUT =
     'rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]';
@@ -29,6 +30,7 @@ function errorText(error: unknown): string {
  * Two permissions are in play and neither implies the other: manage_users covers the accounts,
  * configure_roles covers roles and the permission catalog. */
 export function UsersPage() {
+    const { t, tDynamic } = useTranslation();
     const queryClient = useQueryClient();
     const canManageUsers = usePermission('manage_users');
     const canConfigureRoles = usePermission('configure_roles');
@@ -74,9 +76,9 @@ export function UsersPage() {
     const roleList = useMemo(
         () =>
             Object.entries(roleMap).filter(([id, role]) =>
-                `${id} ${role.name} ${role.description}`.toLowerCase().includes(query)
+                `${id} ${role.name} ${tDynamic(role.description)}`.toLowerCase().includes(query)
             ),
-        [roleMap, query]
+        [roleMap, query, tDynamic]
     );
 
     // A selection can disappear underneath us — the account was deleted, or the role was.
@@ -92,9 +94,9 @@ export function UsersPage() {
     }, [roles.data, selectedRole]);
 
     const tabs: { id: Tab; label: string; visible: boolean }[] = [
-        { id: 'users', label: 'Users', visible: canManageUsers },
-        { id: 'roles', label: 'Roles', visible: canConfigureRoles },
-        { id: 'permissions', label: 'Permissions', visible: canConfigureRoles }
+        { id: 'users', label: t('users.tab.users'), visible: canManageUsers },
+        { id: 'roles', label: t('users.tab.roles'), visible: canConfigureRoles },
+        { id: 'permissions', label: t('users.tab.permissions'), visible: canConfigureRoles }
     ];
     const visibleTabs = tabs.filter(t => t.visible);
     // Permissions read false until the session resolves, so the stored tab can briefly name one the
@@ -139,15 +141,21 @@ export function UsersPage() {
                             type="search"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            placeholder={activeTab === 'users' ? 'Search users…' : 'Search roles…'}
-                            aria-label={activeTab === 'users' ? 'Search users' : 'Search roles'}
+                            placeholder={
+                                activeTab === 'users'
+                                    ? t('users.searchUsersPlaceholder')
+                                    : t('users.searchRolesPlaceholder')
+                            }
+                            aria-label={
+                                activeTab === 'users' ? t('users.searchUsers') : t('users.searchRoles')
+                            }
                             className={`${INPUT} w-full py-1 pl-7 pr-6`}
                         />
                         {search && (
                             <button
                                 type="button"
                                 onClick={() => setSearch('')}
-                                aria-label="Clear search"
+                                aria-label={t('common.clearSearch')}
                                 className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-soft hover:text-fg"
                             >
                                 <X size={12} aria-hidden />
@@ -165,7 +173,7 @@ export function UsersPage() {
                         className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
                     >
                         <Plus size={12} aria-hidden />
-                        Add user
+                        {t('users.addUser')}
                     </button>
                 )}
                 {activeTab === 'roles' && canConfigureRoles && (
@@ -175,14 +183,14 @@ export function UsersPage() {
                         className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
                     >
                         <Plus size={12} aria-hidden />
-                        Add role
+                        {t('users.addRole')}
                     </button>
                 )}
             </div>
 
             {activeTab === 'permissions' ? (
                 permissions.isPending ? (
-                    <p className="p-4 text-sm text-fg-soft">Loading permissions…</p>
+                    <p className="p-4 text-sm text-fg-soft">{t('users.loadingPermissions')}</p>
                 ) : permissions.isError || !permissions.data ? (
                     <p className="p-4 text-sm" style={{ color: 'var(--backend-errored)' }}>
                         {errorText(permissions.error)}
@@ -197,19 +205,19 @@ export function UsersPage() {
             ) : (
                 <div className="flex min-h-0 flex-1">
                     <nav
-                        aria-label={activeTab === 'users' ? 'User accounts' : 'Roles'}
+                        aria-label={activeTab === 'users' ? t('users.accountsLabel') : t('users.tab.roles')}
                         className="w-60 shrink-0 overflow-y-auto border-r border-subtle p-2"
                     >
                         {activeTab === 'users' ? (
                             users.isPending ? (
-                                <p className="p-2 text-sm text-fg-soft">Loading…</p>
+                                <p className="p-2 text-sm text-fg-soft">{t('common.loading')}</p>
                             ) : users.isError ? (
                                 <p className="p-2 text-sm" style={{ color: 'var(--backend-errored)' }}>
                                     {errorText(users.error)}
                                 </p>
                             ) : userList.length === 0 ? (
                                 <p className="p-2 text-sm text-fg-soft">
-                                    {query ? 'No matching users.' : 'No user accounts.'}
+                                    {query ? t('users.noMatchingUsers') : t('users.noAccounts')}
                                 </p>
                             ) : (
                                 userList.map(name => (
@@ -223,14 +231,14 @@ export function UsersPage() {
                                 ))
                             )
                         ) : roles.isPending ? (
-                            <p className="p-2 text-sm text-fg-soft">Loading…</p>
+                            <p className="p-2 text-sm text-fg-soft">{t('common.loading')}</p>
                         ) : roles.isError ? (
                             <p className="p-2 text-sm" style={{ color: 'var(--backend-errored)' }}>
                                 {errorText(roles.error)}
                             </p>
                         ) : roleList.length === 0 ? (
                             <p className="p-2 text-sm text-fg-soft">
-                                {query ? 'No matching roles.' : 'No roles defined.'}
+                                {query ? t('users.noMatchingRoles') : t('users.noRoles')}
                             </p>
                         ) : (
                             roleList.map(([id, role]) => (
@@ -238,8 +246,10 @@ export function UsersPage() {
                                     key={id}
                                     icon={<Shield size={13} aria-hidden />}
                                     label={role.name || id}
-                                    sublabel={`${role.permissions.length} permission(s)`}
-                                    title={role.description}
+                                    sublabel={t('users.permissionCount', {
+                                        count: role.permissions.length
+                                    })}
+                                    title={tDynamic(role.description)}
                                     active={selectedRole === id}
                                     onClick={() => setSelectedRole(id)}
                                 />
@@ -257,11 +267,11 @@ export function UsersPage() {
                                     rolesKnown={canConfigureRoles}
                                 />
                             ) : (
-                                <Empty text="Select an account to manage it." />
+                                <Empty text={t('users.selectAccount')} />
                             )
                         ) : selectedRole && roleMap[selectedRole] ? (
                             permissions.isPending || !permissions.data ? (
-                                <p className="p-4 text-sm text-fg-soft">Loading permissions…</p>
+                                <p className="p-4 text-sm text-fg-soft">{t('users.loadingPermissions')}</p>
                             ) : (
                                 <RoleDetail
                                     key={selectedRole}
@@ -273,7 +283,7 @@ export function UsersPage() {
                                 />
                             )
                         ) : (
-                            <Empty text="Select a role to edit its limits and permissions." />
+                            <Empty text={t('users.selectRole')} />
                         )}
                     </div>
                 </div>
@@ -358,6 +368,7 @@ function AddUserDialog(props: {
     onClose: () => void;
     onAdded: (name: string) => void;
 }) {
+    const { t, tDynamic } = useTranslation();
     const [name, setName] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState('user');
@@ -398,15 +409,14 @@ function AddUserDialog(props: {
                 <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
                 <Dialog.Content className="fixed left-1/2 top-1/3 z-50 w-[min(28rem,90vw)] -translate-x-1/2 rounded-lg border border-default bg-surface-raised p-4 shadow-2xl">
                     <Dialog.Title className="mb-1 text-base font-medium text-fg-strong">
-                        Add user
+                        {t('users.addUser')}
                     </Dialog.Title>
                     <Dialog.Description className="mb-3 text-sm text-fg-soft">
-                        The account is created with the password you set here, and the user is asked to
-                        change it when they first log in.
+                        {t('users.addUserHint')}
                     </Dialog.Description>
 
                     <label className="mb-1 block text-xs text-fg-soft" htmlFor="new-user-name">
-                        Username
+                        {t('users.username')}
                     </label>
                     <input
                         id="new-user-name"
@@ -414,22 +424,23 @@ function AddUserDialog(props: {
                         autoFocus
                         value={name}
                         onChange={e => setName(e.target.value)}
-                        placeholder="at least 3 characters, a-z 0-9"
+                        placeholder={t('users.namePlaceholder')}
                         className={`${INPUT} w-full font-mono`}
                     />
                     {cleaned !== name.toLowerCase() && cleaned.length > 0 && (
                         <p className="mt-1 text-xs text-fg-soft">
-                            Will be created as <span className="font-mono text-fg">{cleaned}</span>.
+                            {t('users.willBeCreatedAs')}{' '}
+                            <span className="font-mono text-fg">{cleaned}</span>.
                         </p>
                     )}
                     {name.length > 0 && cleaned.length < 3 && (
                         <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
-                            Needs at least 3 usable characters.
+                            {t('users.needsUsableCharacters')}
                         </p>
                     )}
 
                     <label className="mb-1 mt-2 block text-xs text-fg-soft" htmlFor="new-user-pw">
-                        Password
+                        {t('users.password')}
                     </label>
                     <input
                         id="new-user-pw"
@@ -441,12 +452,12 @@ function AddUserDialog(props: {
                     />
                     {password.length > 0 && password.length < MIN_PASSWORD_LENGTH && (
                         <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
-                            Must be at least {MIN_PASSWORD_LENGTH} characters.
+                            {t('account.passwordTooShort', { count: MIN_PASSWORD_LENGTH })}
                         </p>
                     )}
 
                     <label className="mb-1 mt-2 block text-xs text-fg-soft" htmlFor="new-user-role">
-                        Initial role
+                        {t('users.initialRole')}
                     </label>
                     <select
                         id="new-user-role"
@@ -455,16 +466,13 @@ function AddUserDialog(props: {
                         className={`${INPUT} w-full`}
                     >
                         {options.map(([id, label]) => (
-                            <option key={id} value={id} title={props.roles[id]?.description}>
+                            <option key={id} value={id} title={tDynamic(props.roles[id]?.description)}>
                                 {label}
                             </option>
                         ))}
                     </select>
                     {!props.rolesKnown && (
-                        <p className="mt-1 text-xs text-fg-soft">
-                            Showing the built-in roles only — listing every role needs the
-                            configure_roles permission. The role can be changed after creation.
-                        </p>
+                        <p className="mt-1 text-xs text-fg-soft">{t('users.fallbackRolesNote')}</p>
                     )}
 
                     {add.isError && (
@@ -479,7 +487,7 @@ function AddUserDialog(props: {
                                 type="button"
                                 className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </button>
                         </Dialog.Close>
                         <button
@@ -489,7 +497,7 @@ function AddUserDialog(props: {
                             className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
                             style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                         >
-                            {add.isPending ? 'Creating…' : 'Create user'}
+                            {add.isPending ? t('common.creating') : t('users.createUser')}
                         </button>
                     </div>
                 </Dialog.Content>
@@ -499,6 +507,7 @@ function AddUserDialog(props: {
 }
 
 function AddRoleDialog(props: { open: boolean; onClose: () => void; onAdded: () => void }) {
+    const { t } = useTranslation();
     const [name, setName] = useState('');
 
     useEffect(() => {
@@ -526,14 +535,14 @@ function AddRoleDialog(props: { open: boolean; onClose: () => void; onAdded: () 
                 <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
                 <Dialog.Content className="fixed left-1/2 top-1/3 z-50 w-[min(28rem,90vw)] -translate-x-1/2 rounded-lg border border-default bg-surface-raised p-4 shadow-2xl">
                     <Dialog.Title className="mb-1 text-base font-medium text-fg-strong">
-                        Add role
+                        {t('users.addRole')}
                     </Dialog.Title>
                     <Dialog.Description className="mb-3 text-sm text-fg-soft">
-                        The new role starts with no permissions. Grant them after creating it.
+                        {t('users.addRoleHint')}
                     </Dialog.Description>
 
                     <label className="mb-1 block text-xs text-fg-soft" htmlFor="new-role-name">
-                        Role name
+                        {t('users.roleName')}
                     </label>
                     <input
                         id="new-role-name"
@@ -546,17 +555,17 @@ function AddRoleDialog(props: { open: boolean; onClose: () => void; onAdded: () 
                                 add.mutate();
                             }
                         }}
-                        placeholder="at least 3 characters, a-z 0-9"
+                        placeholder={t('users.namePlaceholder')}
                         className={`${INPUT} w-full`}
                     />
                     {cleaned.length > 0 && (
                         <p className="mt-1 text-xs text-fg-soft">
-                            Looked up as <span className="font-mono text-fg">{cleaned}</span>.
+                            {t('users.lookedUpAs')} <span className="font-mono text-fg">{cleaned}</span>.
                         </p>
                     )}
                     {name.length > 0 && cleaned.length < 3 && (
                         <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
-                            Needs at least 3 usable characters.
+                            {t('users.needsUsableCharacters')}
                         </p>
                     )}
 
@@ -572,7 +581,7 @@ function AddRoleDialog(props: { open: boolean; onClose: () => void; onAdded: () 
                                 type="button"
                                 className="rounded border border-default px-3 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </button>
                         </Dialog.Close>
                         <button
@@ -582,7 +591,7 @@ function AddRoleDialog(props: { open: boolean; onClose: () => void; onAdded: () 
                             className="rounded px-3 py-1.5 text-sm disabled:opacity-40"
                             style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                         >
-                            {add.isPending ? 'Creating…' : 'Create role'}
+                            {add.isPending ? t('common.creating') : t('users.createRole')}
                         </button>
                     </div>
                 </Dialog.Content>

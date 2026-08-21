@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Field } from '@/components/form/Field';
 import { ToolLayout } from '@/components/tools/ToolLayout';
+import { t as translate, useTranslation } from '@/i18n';
 
 interface Token {
     id: number;
@@ -18,19 +19,19 @@ const WORD_END = '</w>';
 const TINT_WORD_END = 'color-mix(in srgb, var(--sw-surface) 70%, var(--green))';
 const TINT_WORD_PIECE = 'color-mix(in srgb, var(--sw-surface) 70%, var(--yellow))';
 
-const WEIGHTING_EXAMPLES = [
-    'a (cat:1.5) on a mat  →  on: 5 tokens (cat @1.5) / off: 11 tokens',
-    '((detailed)) sky  →  on: 2 tokens (detailed @1.21) / off: 4 tokens'
-];
+/** Worked examples for the two toggles. The prompts themselves are literal input text, so only
+ *  the "on/off" commentary around them is translated. */
+const WEIGHTING_EXAMPLES = ['tokenizer.example.weighting1', 'tokenizer.example.weighting2'];
 
 const SKIP_EXAMPLES = [
-    'a cat <lora:add_detail:0.8>  →  on: 2 tokens / off: 14 tokens',
-    'a <random:red|bright blue> car  →  on: 4 tokens / off: 10 tokens',
-    'a cat <segment:face> a face  →  on: 2 tokens / off: 11 tokens'
+    'tokenizer.example.skip1',
+    'tokenizer.example.skip2',
+    'tokenizer.example.skip3'
 ];
 
 export function TokenizerPage() {
-    const [text, setText] = useState('a photorealistic portrait of a tabby cat');
+    const { t } = useTranslation();
+    const [text, setText] = useState(translate('tokenizer.defaultText'));
     const [weighting, setWeighting] = useState(true);
     const [skipPromptSyntax, setSkipPromptSyntax] = useState(false);
 
@@ -51,32 +52,20 @@ export function TokenizerPage() {
 
     return (
         <ToolLayout
-            title="CLIP Tokenization"
-            summary="See exactly how a text encoder splits your prompt into tokens."
+            title={t('nav.destination.tokenizer')}
+            summary={t('tokenizer.summary')}
             about={
                 <>
+                    <p>{t('tokenizer.about1')}</p>
                     <p>
-                        Text encoders don't read words, they read tokens. A prompt that looks short
-                        can use more tokens than expected, and anything past a chunk boundary is
-                        processed separately. Every current Stable Diffusion model shares this same
-                        CLIP token set, so the result applies to all of them.
+                        {t('tokenizer.about2a')} <code className="font-mono">{WORD_END}</code>{' '}
+                        {t('tokenizer.about2b')}
                     </p>
-                    <p>
-                        Each block shows the text-piece and, below it, its numeric token ID — the
-                        actual value handed to the encoder. Green blocks end a word (the encoder's{' '}
-                        <code className="font-mono">{WORD_END}</code> marker, meaning a space or
-                        punctuation follows); yellow blocks are word-pieces that run straight into
-                        the next block.
-                    </p>
-                    <p>
-                        Token IDs are useful for spotting when a word you thought was one concept is
-                        really several unrelated pieces, and for matching a token against embedding
-                        or vocabulary tooling that works in IDs rather than text.
-                    </p>
+                    <p>{t('tokenizer.about3')}</p>
                 </>
             }
         >
-            <Field id="tok-text" label="Text" density="compact">
+            <Field id="tok-text" label={t('tokenizer.text')} density="compact">
                 <textarea
                     id="tok-text"
                     rows={3}
@@ -88,10 +77,10 @@ export function TokenizerPage() {
 
             <Field
                 id="tok-weight"
-                label="Parse weighting"
+                label={t('tokenizer.parseWeighting')}
                 density="compact"
-                description="On, (word:1.5) syntax is read as a weight: the parentheses and the number vanish from the token stream and the word carries the weight instead. Off, every one of those characters is tokenized as literal text, which is what a model without weighting support would see."
-                examples={WEIGHTING_EXAMPLES}
+                description={t('tokenizer.parseWeightingHelp')}
+                examples={WEIGHTING_EXAMPLES.map(key => t(key))}
             >
                 <input
                     id="tok-weight"
@@ -104,10 +93,10 @@ export function TokenizerPage() {
 
             <Field
                 id="tok-skip"
-                label="Strip prompt syntax"
+                label={t('tokenizer.stripSyntax')}
                 density="compact"
-                description="On, SwarmUI's own <...> prompt syntax is resolved before tokenizing: <lora:>, <embed:> and similar drop out entirely, <random:> and <wildcard:> collapse to their longest option, and everything from <segment:>, <object:>, <region:>, <clear:> or <extend:> onward is cut, since those are separate passes. Off, all of it is tokenized as plain text. Turn this on to see the count your model will actually receive."
-                examples={SKIP_EXAMPLES}
+                description={t('tokenizer.stripSyntaxHelp')}
+                examples={SKIP_EXAMPLES.map(key => t(key))}
             >
                 <input
                     id="tok-skip"
@@ -120,22 +109,26 @@ export function TokenizerPage() {
 
             <div className="mt-3 border-t border-subtle pt-3">
                 <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-                    <span className="text-fg-strong tabular-nums">{list.length} tokens</span>
-                    <span className="text-fg-soft">
-                        {chunks} chunk{chunks === 1 ? '' : 's'} of 75
+                    <span className="text-fg-strong tabular-nums">
+                        {t('tokenizer.tokenCount', { count: list.length })}
                     </span>
-                    {tokens.isFetching && <span className="text-xs text-fg-soft">updating…</span>}
+                    <span className="text-fg-soft">
+                        {t('tokenizer.chunkCount', { count: chunks, size: 75 })}
+                    </span>
+                    {tokens.isFetching && (
+                        <span className="text-xs text-fg-soft">{t('tokenizer.updating')}</span>
+                    )}
                     <div className="flex-1" />
-                    <Legend tint={TINT_WORD_END} label="word end" />
-                    <Legend tint={TINT_WORD_PIECE} label="word piece" />
+                    <Legend tint={TINT_WORD_END} label={t('tokenizer.wordEnd')} />
+                    <Legend tint={TINT_WORD_PIECE} label={t('tokenizer.wordPiece')} />
                 </div>
 
                 {tokens.isError ? (
                     <p className="text-sm" style={{ color: 'var(--backend-errored)' }}>
-                        {tokens.error instanceof Error ? tokens.error.message : 'Tokenization failed.'}
+                        {tokens.error instanceof Error ? tokens.error.message : t('tokenizer.failed')}
                     </p>
                 ) : list.length === 0 ? (
-                    <p className="text-sm text-fg-soft">Type something above to tokenize it.</p>
+                    <p className="text-sm text-fg-soft">{t('tokenizer.typeSomething')}</p>
                 ) : (
                     <div className="flex flex-wrap gap-1">
                         {list.map((token, i) => (
@@ -149,6 +142,7 @@ export function TokenizerPage() {
 }
 
 function TokenBlock(props: { token: Token }) {
+    const { t } = useTranslation();
     const { token } = props;
     const isWordEnd = token.text.endsWith(WORD_END);
     const weight = Math.round(token.weight * 100) / 100;
@@ -156,9 +150,7 @@ function TokenBlock(props: { token: Token }) {
     return (
         <span
             title={
-                isWordEnd
-                    ? 'Ends a word — a word break (space or punctuation) follows this token.'
-                    : 'Word-piece — no word break after it, it connects directly to the next token.'
+                isWordEnd ? t('tokenizer.wordEndHint') : t('tokenizer.wordPieceHint')
             }
             className="rounded-lg px-1.5 py-0.5 text-center font-mono text-xs leading-tight text-fg"
             style={{ background: isWordEnd ? TINT_WORD_END : TINT_WORD_PIECE }}

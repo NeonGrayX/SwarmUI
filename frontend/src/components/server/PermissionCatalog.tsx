@@ -3,10 +3,11 @@ import { Search, X } from 'lucide-react';
 import { SafetyTag } from '@/components/server/PermissionPicker';
 import {
     groupPermissions,
-    PERMISSION_DEFAULT_LABEL,
+    permissionDefaultLabel,
     type PermissionInfo,
     type RoleInfo
 } from '@/server/users';
+import { useTranslation } from '@/i18n';
 
 /** Read-only reference for every registered permission.
  *
@@ -18,6 +19,7 @@ export function PermissionCatalog(props: {
     info: Record<string, PermissionInfo>;
     roles: Record<string, RoleInfo>;
 }) {
+    const { t, tDynamic } = useTranslation();
     const [search, setSearch] = useState('');
     const query = search.trim().toLowerCase();
 
@@ -42,13 +44,13 @@ export function PermissionCatalog(props: {
                 ...group,
                 ids: group.ids.filter(id => {
                     const perm = props.info[id];
-                    return `${id} ${perm.name} ${perm.description} ${group.name}`
+                    return `${id} ${tDynamic(perm.name)} ${tDynamic(perm.description)} ${tDynamic(group.name)}`
                         .toLowerCase()
                         .includes(query);
                 })
             }))
             .filter(group => group.ids.length > 0);
-    }, [props.ordered, props.info, query]);
+    }, [props.ordered, props.info, query, tDynamic]);
 
     const matchCount = groups.reduce((sum, group) => sum + group.ids.length, 0);
 
@@ -65,15 +67,15 @@ export function PermissionCatalog(props: {
                         type="search"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        placeholder="Search permissions…"
-                        aria-label="Search permissions"
+                        placeholder={t('permissions.searchPlaceholder')}
+                        aria-label={t('permissions.searchLabel')}
                         className="w-full rounded border border-default bg-surface-sunken py-1 pl-7 pr-6 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                     />
                     {search && (
                         <button
                             type="button"
                             onClick={() => setSearch('')}
-                            aria-label="Clear search"
+                            aria-label={t('common.clearSearch')}
                             className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-soft hover:text-fg"
                         >
                             <X size={12} aria-hidden />
@@ -81,25 +83,26 @@ export function PermissionCatalog(props: {
                     )}
                 </div>
                 <span className="text-xs text-fg-soft">
-                    {query ? `${matchCount} of ${props.ordered.length}` : `${props.ordered.length} registered`}
+                    {query
+                        ? t('permissions.matchCountOf', { count: matchCount, total: props.ordered.length })
+                        : t('permissions.registeredCount', { count: props.ordered.length })}
                 </span>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                <p className="mb-3 text-xs text-fg-soft">
-                    Permissions are granted through roles, not to users directly. Edit a role to change
-                    who holds one.
-                </p>
+                <p className="mb-3 text-xs text-fg-soft">{t('permissions.catalogNote')}</p>
 
                 {query && matchCount === 0 && (
-                    <p className="text-sm text-fg-soft">No permissions match "{search.trim()}".</p>
+                    <p className="text-sm text-fg-soft">
+                        {t('permissions.noMatches', { search: search.trim() })}
+                    </p>
                 )}
 
                 {groups.map(group => (
                     <section key={group.name} className="mb-4 last:mb-0">
-                        <h3 className="text-sm font-medium text-fg-strong">{group.name}</h3>
+                        <h3 className="text-sm font-medium text-fg-strong">{tDynamic(group.name)}</h3>
                         {group.description && (
-                            <p className="mb-1.5 text-xs text-fg-soft">{group.description}</p>
+                            <p className="mb-1.5 text-xs text-fg-soft">{tDynamic(group.description)}</p>
                         )}
                         <ul className="rounded-lg border border-default bg-surface divide-y divide-[var(--light-border)]">
                             {group.ids.map(id => {
@@ -108,28 +111,30 @@ export function PermissionCatalog(props: {
                                 return (
                                     <li key={id} className="px-3 py-2">
                                         <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm text-fg-strong">
-                                            {perm.name}
+                                            {tDynamic(perm.name)}
                                             <span className="font-mono text-[11px] text-fg-soft">{id}</span>
                                             <SafetyTag level={perm.safety_level} />
                                             <span className="text-[11px] text-fg-soft">
-                                                default: {PERMISSION_DEFAULT_LABEL[perm.default] ?? perm.default}
+                                                {t('permissions.defaultAudience', {
+                                                    audience: permissionDefaultLabel(perm.default)
+                                                })}
                                             </span>
                                         </p>
                                         <p className="whitespace-pre-wrap text-xs text-fg-soft">
-                                            {perm.description}
+                                            {tDynamic(perm.description)}
                                         </p>
                                         {perm.alt_safety_text && (
                                             <p
                                                 className="mt-0.5 text-xs"
                                                 style={{ color: 'var(--status-bar-warn-color-start-end)' }}
                                             >
-                                                {perm.alt_safety_text}
+                                                {tDynamic(perm.alt_safety_text)}
                                             </p>
                                         )}
                                         <p className="mt-0.5 text-xs text-fg-soft opacity-80">
                                             {holders.length > 0
-                                                ? `Held by: ${holders.join(', ')}`
-                                                : 'Held by no role.'}
+                                                ? t('permissions.heldBy', { roles: holders.join(', ') })
+                                                : t('permissions.heldByNone')}
                                         </p>
                                     </li>
                                 );

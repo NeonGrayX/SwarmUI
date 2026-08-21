@@ -17,10 +17,10 @@ export interface PaneSizes {
     batch: number;
 }
 
-export const PRESETS: Record<LayoutPreset, { label: string; sizes: PaneSizes }> = {
-    default: { label: 'Default', sizes: { params: 352, batch: 200 } },
-    'wide-canvas': { label: 'Wide canvas', sizes: { params: 264, batch: 132 } },
-    'params-focus': { label: 'Params focus', sizes: { params: 520, batch: 160 } }
+export const PRESETS: Record<LayoutPreset, { labelKey: string; sizes: PaneSizes }> = {
+    default: { labelKey: 'layout.preset.default', sizes: { params: 352, batch: 200 } },
+    'wide-canvas': { labelKey: 'layout.preset.wideCanvas', sizes: { params: 264, batch: 132 } },
+    'params-focus': { labelKey: 'layout.preset.paramsFocus', sizes: { params: 520, batch: 160 } }
 };
 
 const MIN = { params: 220, batch: 108 };

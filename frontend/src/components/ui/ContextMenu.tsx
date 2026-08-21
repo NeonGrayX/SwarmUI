@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import * as Popover from '@radix-ui/react-popover';
+import { t } from '@/i18n';
 
 /** One row of a context menu. */
 export interface MenuAction {
@@ -92,7 +93,7 @@ export function useContextMenu(): ContextMenuHandle {
                     align="start"
                     sideOffset={2}
                     collisionPadding={8}
-                    aria-label="Item actions"
+                    aria-label={t('contextMenu.label')}
                     onKeyDown={moveWithArrows}
                     onPointerDownOutside={() => {
                         dismissedOutside.current = true;

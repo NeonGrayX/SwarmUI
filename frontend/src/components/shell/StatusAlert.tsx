@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { useCurrentStatus, useSession } from '@/api/hooks';
+import { useTranslation } from '@/i18n';
 
 /** Backend health, rendered as a dismissible alert *inside* the content flow.
  *
@@ -8,6 +9,7 @@ import { useCurrentStatus, useSession } from '@/api/hooks';
  * strip — in the running instance it visually clips the tab labels and intercepts their clicks.
  * Keeping this in normal flow removes that class of bug entirely. */
 export function StatusAlert() {
+    const { t, tDynamic } = useTranslation();
     const session = useSession();
     const status = useCurrentStatus(session.isSuccess);
     const [dismissed, setDismissed] = useState<string | null>(null);
@@ -42,11 +44,12 @@ export function StatusAlert() {
                 style={{ color: isError ? 'var(--backend-errored)' : 'var(--status-bar-warn-color-start-end)' }}
                 aria-hidden
             />
-            <p className="flex-1 text-fg">{backend.message}</p>
+            {/* Backend status messages are server-authored, so they translate by source text. */}
+            <p className="flex-1 text-fg">{tDynamic(backend.message)}</p>
             <button
                 type="button"
                 onClick={() => setDismissed(backend.message)}
-                aria-label="Dismiss"
+                aria-label={t('common.dismiss')}
                 className="shrink-0 rounded p-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
             >
                 <X size={14} aria-hidden />
@@ -57,6 +60,7 @@ export function StatusAlert() {
 
 /** Compact live generation counters for the header. */
 export function GenerationCounters() {
+    const { t } = useTranslation();
     const session = useSession();
     const status = useCurrentStatus(session.isSuccess);
     const stats = status.data?.status;
@@ -71,8 +75,8 @@ export function GenerationCounters() {
         <span className="flex items-center gap-1.5 text-xs text-fg-soft">
             <Loader2 size={12} className="animate-spin" aria-hidden />
             {stats.loading_models > 0
-                ? `Loading ${stats.loading_models} model${stats.loading_models === 1 ? '' : 's'}`
-                : `${stats.live_gens} running, ${stats.waiting_gens} queued`}
+                ? t('status.loadingModels', { count: stats.loading_models })
+                : t('status.generations', { running: stats.live_gens, queued: stats.waiting_gens })}
         </span>
     );
 }

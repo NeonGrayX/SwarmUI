@@ -8,22 +8,27 @@ import { CommandPalette, CommandPaletteHint } from '../CommandPalette';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { useSession } from '@/api/hooks';
 import { useThemes } from '@/theme/useTheme';
+import { useTranslation, useTranslationSync } from '@/i18n';
 
 /** The whole-app chrome: rail (level 1) + section nav (level 2) + content.
  *  Nothing nests deeper than this. */
 export function AppShell() {
+    const { t } = useTranslation();
     const session = useSession();
     const section = useActiveSection();
     // Applied at the shell so the theme is reconciled on every screen, not only in Appearance.
     useThemes();
+    // Likewise for translations: this pulls the server-side string table and honours the language
+    // stored in the user's profile, on every screen rather than only in Settings.
+    useTranslationSync();
 
     if (session.isPending) {
-        return <Splash>Connecting to SwarmUI…</Splash>;
+        return <Splash>{t('shell.connecting')}</Splash>;
     }
     if (session.isError) {
         return (
             <Splash tone="error">
-                Couldn't reach the SwarmUI server.
+                {t('shell.unreachable')}
                 <div className="mt-2 text-sm text-fg-soft">
                     {session.error instanceof Error ? session.error.message : String(session.error)}
                 </div>

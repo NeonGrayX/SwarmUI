@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Search } from 'lucide-react';
 import { api } from '@/api/client';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useTranslation } from '@/i18n';
 
 interface InstalledExtension {
     name: string;
@@ -38,6 +39,7 @@ const DANGER_TAGS = new Set(['lowquality', 'conflicts', 'beta']);
  * information server-side into Razor markup (src/Pages/_Generate/ServerTab.cshtml), which an SPA
  * cannot consume. The legacy layout is two bare full-bleed <table>s with 30+ rows and no search. */
 export function ExtensionsPage() {
+    const { t } = useTranslation();
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
     const [tab, setTab] = useState<'installed' | 'available'>('installed');
@@ -98,15 +100,13 @@ export function ExtensionsPage() {
                         borderColor: 'color-mix(in srgb, var(--status-bar-warn-color-middle) 40%, transparent)'
                     }}
                 >
-                    <span className="flex-1 text-fg">
-                        Extension changes take effect after a server restart.
-                    </span>
+                    <span className="flex-1 text-fg">{t('extensions.restartNeeded')}</span>
                     <button
                         type="button"
                         onClick={() => api.post('UpdateAndRestart', { updateExtensions: false }).catch(() => {})}
                         className="rounded border border-default px-2 py-1 text-xs text-fg hover:bg-[var(--sw-hover)]"
                     >
-                        Restart server
+                        {t('extensions.restartServer')}
                     </button>
                 </div>
             )}
@@ -119,14 +119,16 @@ export function ExtensionsPage() {
                             type="button"
                             onClick={() => setTab(id)}
                             aria-pressed={tab === id}
-                            className="px-3 py-1 text-xs capitalize transition-colors"
+                            className="px-3 py-1 text-xs transition-colors"
                             style={
                                 tab === id
                                     ? { background: 'var(--sw-active)', color: 'var(--text-strong)' }
                                     : { color: 'var(--sw-fg-soft)' }
                             }
                         >
-                            {id} ({id === 'installed' ? installed.length : available.length})
+                            {t(`extensions.tab.${id}`, {
+                                count: id === 'installed' ? installed.length : available.length
+                            })}
                         </button>
                     ))}
                 </div>
@@ -140,8 +142,8 @@ export function ExtensionsPage() {
                         type="search"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        placeholder="Search extensions…"
-                        aria-label="Search extensions"
+                        placeholder={t('extensions.searchPlaceholder')}
+                        aria-label={t('extensions.searchLabel')}
                         className="w-full rounded border border-default bg-surface-sunken py-1 pl-7 pr-2 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                     />
                 </div>
@@ -149,14 +151,16 @@ export function ExtensionsPage() {
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 {extensions.isPending ? (
-                    <p className="text-sm text-fg-soft">Loading extensions…</p>
+                    <p className="text-sm text-fg-soft">{t('extensions.loading')}</p>
                 ) : extensions.isError ? (
                     <p className="text-sm" style={{ color: 'var(--backend-errored)' }}>
-                        {extensions.error instanceof Error ? extensions.error.message : 'Failed to load extensions.'}
+                        {extensions.error instanceof Error ? extensions.error.message : t('extensions.loadFailed')}
                     </p>
                 ) : rows.length === 0 ? (
                     <p className="text-sm text-fg-soft">
-                        {query ? `No extensions match "${search.trim()}".` : `No ${tab} extensions.`}
+                        {query
+                            ? t('extensions.noMatches', { search: search.trim() })
+                            : t(`extensions.none.${tab}`)}
                     </p>
                 ) : (
                     <ul className="space-y-2">
@@ -172,9 +176,13 @@ export function ExtensionsPage() {
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-2">
                                             <span className="text-sm font-medium text-fg-strong">{ext.name}</span>
-                                            {isInstalled && ext.is_core && <Tag label="core" />}
-                                            {isInstalled && ext.is_old_repo && <Tag label="old repo" danger />}
-                                            {!isInstalled && ext.is_disabled && <Tag label="disabled" />}
+                                            {isInstalled && ext.is_core && <Tag label={t('extensions.tag.core')} />}
+                                            {isInstalled && ext.is_old_repo && (
+                                                <Tag label={t('extensions.tag.oldRepo')} danger />
+                                            )}
+                                            {!isInstalled && ext.is_disabled && (
+                                                <Tag label={t('extensions.tag.disabled')} />
+                                            )}
                                             {ext.tags.map(tag => (
                                                 <Tag key={tag} label={tag} danger={DANGER_TAGS.has(tag.toLowerCase())} />
                                             ))}
@@ -187,7 +195,7 @@ export function ExtensionsPage() {
                                         </p>
                                         {danger && !isInstalled && (
                                             <p className="mt-1 text-xs" style={{ color: 'var(--status-bar-warn-color-start-end)' }}>
-                                                Flagged as low-quality, beta, or known to conflict with other extensions.
+                                                {t('extensions.dangerNote')}
                                             </p>
                                         )}
                                     </div>
@@ -200,7 +208,7 @@ export function ExtensionsPage() {
                                                 rel="noreferrer noopener"
                                                 className="flex items-center gap-1 rounded px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                                             >
-                                                Readme
+                                                {t('extensions.readme')}
                                                 <ExternalLink size={11} aria-hidden />
                                             </a>
                                         )}
@@ -208,20 +216,24 @@ export function ExtensionsPage() {
                                             <>
                                                 {ext.can_update && (
                                                     <ActionButton
-                                                        label="Update"
+                                                        label={t('extensions.update')}
                                                         onClick={() => update.mutate(ext.name)}
                                                     />
                                                 )}
                                                 {!ext.is_core && (
                                                     <ActionButton
-                                                        label="Uninstall"
+                                                        label={t('extensions.uninstall')}
                                                         destructive
                                                         onClick={() => setPendingUninstall(ext.name)}
                                                     />
                                                 )}
                                             </>
                                         ) : (
-                                            <ActionButton label="Install" primary onClick={() => install.mutate(ext.name)} />
+                                            <ActionButton
+                                                label={t('extensions.install')}
+                                                primary
+                                                onClick={() => install.mutate(ext.name)}
+                                            />
                                         )}
                                     </div>
                                 </li>
@@ -233,14 +245,14 @@ export function ExtensionsPage() {
 
             <ConfirmDialog
                 open={pendingUninstall !== null}
-                title="Uninstall extension?"
+                title={t('extensions.uninstallTitle')}
                 body={
                     <>
-                        <strong className="text-fg">{pendingUninstall}</strong> will be removed from disk.
-                        A server restart is needed for this to take effect.
+                        <strong className="text-fg">{pendingUninstall}</strong>{' '}
+                        {t('extensions.uninstallBody')}
                     </>
                 }
-                confirmLabel="Uninstall"
+                confirmLabel={t('extensions.uninstall')}
                 destructive
                 onConfirm={() => {
                     if (pendingUninstall) {

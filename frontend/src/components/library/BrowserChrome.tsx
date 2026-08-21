@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, Folder, Grid3x3, List, Search, Star, X } from 'lucide-react';
 import type { SortMode, ViewMode } from '@/library/types';
+import { t as translate, useTranslation } from '@/i18n';
 
 /** Child folder names keyed by their absolute parent path ('' is the root). */
 type FolderTree = ReadonlyMap<string, string[]>;
@@ -67,6 +68,7 @@ export function FolderPane(props: {
     path: string;
     onNavigate: (path: string) => void;
 }) {
+    const { t } = useTranslation();
     const segments = props.path.split('/').filter(Boolean);
     const [tree, setTree] = useState<FolderTree>(() => new Map());
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>());
@@ -107,7 +109,7 @@ export function FolderPane(props: {
     const roots = tree.get('') ?? [];
 
     return (
-        <nav aria-label="Folders" className="w-56 shrink-0 overflow-y-auto border-r border-subtle p-2">
+        <nav aria-label={t('browser.folders')} className="w-56 shrink-0 overflow-y-auto border-r border-subtle p-2">
             <ol className="mb-2 flex flex-wrap items-center gap-0.5 text-xs">
                 <li>
                     <button
@@ -115,7 +117,7 @@ export function FolderPane(props: {
                         onClick={() => props.onNavigate('')}
                         className="rounded px-1 py-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                     >
-                        Root
+                        {t('browser.root')}
                     </button>
                 </li>
                 {segments.map((segment, i) => (
@@ -133,7 +135,7 @@ export function FolderPane(props: {
             </ol>
 
             {roots.length === 0 ? (
-                <p className="px-1 text-xs text-fg-soft">No subfolders.</p>
+                <p className="px-1 text-xs text-fg-soft">{t('browser.noSubfolders')}</p>
             ) : (
                 <ul className="space-y-0.5">
                     {roots.map(folder => (
@@ -189,7 +191,11 @@ function FolderNode(props: {
                         type="button"
                         onClick={() => props.onToggle(props.path, children)}
                         aria-expanded={isOpen}
-                        aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${props.name}`}
+                        aria-label={
+                            isOpen
+                                ? translate('browser.collapseFolder', { name: props.name })
+                                : translate('browser.expandFolder', { name: props.name })
+                        }
                         className="shrink-0 rounded p-0.5 hover:bg-[var(--sw-hover)]"
                     >
                         <ChevronRight
@@ -234,11 +240,11 @@ function FolderNode(props: {
     );
 }
 
-const SORTS: { id: SortMode; label: string }[] = [
-    { id: 'Name', label: 'Name' },
-    { id: 'Title', label: 'Title' },
-    { id: 'DateCreated', label: 'Date created' },
-    { id: 'DateModified', label: 'Date modified' }
+const SORTS: { id: SortMode; labelKey: string }[] = [
+    { id: 'Name', labelKey: 'browser.sort.name' },
+    { id: 'Title', labelKey: 'browser.sort.title' },
+    { id: 'DateCreated', labelKey: 'browser.sort.dateCreated' },
+    { id: 'DateModified', labelKey: 'browser.sort.dateModified' }
 ];
 
 export function BrowserToolbar(props: {
@@ -254,6 +260,7 @@ export function BrowserToolbar(props: {
     total: number;
     children?: React.ReactNode;
 }) {
+    const { t } = useTranslation();
     return (
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle px-3 py-2">
             <div className="relative min-w-48 flex-1 max-w-sm">
@@ -266,15 +273,15 @@ export function BrowserToolbar(props: {
                     type="search"
                     value={props.search}
                     onChange={e => props.onSearch(e.target.value)}
-                    placeholder="Search…"
-                    aria-label="Search"
+                    placeholder={t('common.searchPlaceholder')}
+                    aria-label={t('common.search')}
                     className="w-full rounded border border-default bg-surface-sunken py-1 pl-7 pr-7 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                 />
                 {props.search && (
                     <button
                         type="button"
                         onClick={() => props.onSearch('')}
-                        aria-label="Clear search"
+                        aria-label={t('common.clearSearch')}
                         className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-soft hover:text-fg"
                     >
                         <X size={13} aria-hidden />
@@ -284,7 +291,7 @@ export function BrowserToolbar(props: {
 
             {props.sort && props.onSort && (
                 <label className="flex items-center gap-1.5 text-xs text-fg-soft">
-                    Sort
+                    {t('browser.sort.label')}
                     <select
                         value={props.sort}
                         onChange={e => props.onSort?.(e.target.value as SortMode)}
@@ -292,7 +299,7 @@ export function BrowserToolbar(props: {
                     >
                         {SORTS.map(sort => (
                             <option key={sort.id} value={sort.id}>
-                                {sort.label}
+                                {t(sort.labelKey)}
                             </option>
                         ))}
                     </select>
@@ -306,7 +313,7 @@ export function BrowserToolbar(props: {
                     onChange={e => props.onReverse(e.target.checked)}
                     className="accent-[var(--emphasis)]"
                 />
-                Reverse
+                {t('browser.reverse')}
             </label>
 
             {props.children}
@@ -314,20 +321,22 @@ export function BrowserToolbar(props: {
             <div className="flex-1" />
 
             <span className="text-xs text-fg-soft tabular-nums">
-                {props.count === props.total ? props.total : `${props.count} of ${props.total}`}
+                {props.count === props.total
+                    ? props.total
+                    : t('browser.countOf', { count: props.count, total: props.total })}
             </span>
 
             <div className="flex rounded border border-default overflow-hidden">
                 <ViewButton
                     active={props.view === 'grid'}
-                    label="Grid view"
+                    label={t('view.grid')}
                     onClick={() => props.onView('grid')}
                 >
                     <Grid3x3 size={14} aria-hidden />
                 </ViewButton>
                 <ViewButton
                     active={props.view === 'list'}
-                    label="List view"
+                    label={t('view.list')}
                     onClick={() => props.onView('list')}
                 >
                     <List size={14} aria-hidden />
@@ -370,7 +379,7 @@ export function StarButton(props: {
     variant: 'overlay' | 'plain';
     onClick: () => void;
 }) {
-    const label = props.starred ? 'Unstar' : 'Star';
+    const label = props.starred ? translate('common.unstar') : translate('common.star');
     const overlay = props.variant === 'overlay';
     return (
         <button

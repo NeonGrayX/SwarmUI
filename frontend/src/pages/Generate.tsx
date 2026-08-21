@@ -11,6 +11,7 @@ import { ComfyWorkflow } from '@/components/generate/ComfyWorkflow';
 import { PRESETS, useLayoutStore, type LayoutPreset } from '@/generate/layout';
 import { useGenerateStore } from '@/generate/store';
 import { useStartGenerate } from '@/generate/start';
+import { useTranslation } from '@/i18n';
 
 /** The Generate workspace: parameters, canvas, batch rail, and the prompt composer beneath. */
 /** Comfy Workflow was a sibling top-level tab in the legacy UI; here it is a mode of the Generate
@@ -18,6 +19,7 @@ import { useStartGenerate } from '@/generate/start';
 type WorkspaceMode = 'standard' | 'comfy';
 
 export function GeneratePage() {
+    const { t } = useTranslation();
     const [mode, setMode] = useState<WorkspaceMode>('standard');
     const paramsWidth = useLayoutStore(s => s.params);
     const batchWidth = useLayoutStore(s => s.batch);
@@ -45,14 +47,14 @@ export function GeneratePage() {
                 >
                     <ParamForm />
                 </aside>
-                <Splitter label="Resize parameter panel" onResize={d => resize('params', d)} />
+                <Splitter label={t('layout.resizeParams')} onResize={d => resize('params', d)} />
 
                 <div className="flex min-w-0 flex-1 flex-col">
                     <WorkspaceHeader mode={mode} onMode={setMode} />
                     {mode === 'comfy' ? <ComfyWorkflow /> : <Canvas />}
                 </div>
 
-                <Splitter label="Resize batch panel" invert onResize={d => resize('batch', d)} />
+                <Splitter label={t('layout.resizeBatch')} invert onResize={d => resize('batch', d)} />
                 <aside
                     className="shrink-0 overflow-hidden border-l border-subtle bg-surface"
                     style={{ width: batchWidth }}
@@ -68,13 +70,19 @@ export function GeneratePage() {
 }
 
 function WorkspaceHeader(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceMode) => void }) {
+    const { t } = useTranslation();
     const preset = useLayoutStore(s => s.preset);
     const applyPreset = useLayoutStore(s => s.applyPreset);
 
     return (
         <div className="flex shrink-0 items-center gap-2 border-b border-subtle px-3 py-1">
             <div className="flex overflow-hidden rounded border border-default">
-                {([['standard', 'Standard'], ['comfy', 'Comfy Workflow']] as const).map(([id, label]) => (
+                {(
+                    [
+                        ['standard', 'generate.mode.standard'],
+                        ['comfy', 'generate.mode.comfy']
+                    ] as const
+                ).map(([id, labelKey]) => (
                     <button
                         key={id}
                         type="button"
@@ -87,7 +95,7 @@ function WorkspaceHeader(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceM
                                 : { color: 'var(--sw-fg-soft)' }
                         }
                     >
-                        {label}
+                        {t(labelKey)}
                     </button>
                 ))}
             </div>
@@ -99,7 +107,7 @@ function WorkspaceHeader(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceM
                         className="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                     >
                         <LayoutGrid size={13} aria-hidden />
-                        Layout
+                        {t('layout.title')}
                     </button>
                 </Popover.Trigger>
                 <Popover.Portal>
@@ -119,8 +127,12 @@ function WorkspaceHeader(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceM
                                         preset === id ? 'text-fg-strong' : 'text-fg'
                                     ].join(' ')}
                                 >
-                                    {PRESETS[id].label}
-                                    {preset === id && <span className="ml-2 text-xs text-fg-soft">current</span>}
+                                    {t(PRESETS[id].labelKey)}
+                                    {preset === id && (
+                                        <span className="ml-2 text-xs text-fg-soft">
+                                            {t('layout.current')}
+                                        </span>
+                                    )}
                                 </button>
                             </Popover.Close>
                         ))}

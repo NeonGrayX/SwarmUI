@@ -6,6 +6,7 @@ import { companionParams } from '@/params/loras';
 import { useParamStore, valueOf } from '@/params/store';
 import { Field } from './Field';
 import { ParamControl } from './controls';
+import { useTranslation } from '@/i18n';
 
 interface Props {
     node: GroupNode;
@@ -21,6 +22,7 @@ interface Props {
  * changes without expanding it. In the legacy UI that information only exists once expanded, which
  * is why finding "what did I actually change" means opening all 34 groups one at a time. */
 export function ParamGroup(props: Props) {
+    const { t, tDynamic } = useTranslation();
     const { node, visibility } = props;
     const depth = props.depth ?? 0;
     const openGroups = useParamStore(s => s.openGroups);
@@ -51,10 +53,13 @@ export function ParamGroup(props: Props) {
                         aria-hidden
                         className={`shrink-0 text-fg-soft transition-transform ${isOpen ? 'rotate-90' : ''}`}
                     />
-                    <span className="truncate text-sm font-medium text-fg-strong">{node.group.name}</span>
+                    {/* Group names are defined server-side, so they translate by source text. */}
+                    <span className="truncate text-sm font-medium text-fg-strong">
+                        {tDynamic(node.group.name)}
+                    </span>
                     {alteredCount > 0 && (
                         <span
-                            title={`${alteredCount} changed from default`}
+                            title={t('params.changedFromDefaultCount', { count: alteredCount })}
                             className="shrink-0 rounded-full px-1.5 text-[10px] leading-4 text-fg-strong"
                             style={{ background: 'var(--sw-chip-bg)' }}
                         >
@@ -67,8 +72,8 @@ export function ParamGroup(props: Props) {
                         type="checkbox"
                         checked={groupOn}
                         onChange={e => setGroupToggle(node.group.id, e.target.checked)}
-                        aria-label={`Enable ${node.group.name}`}
-                        title={`Enable ${node.group.name}`}
+                        aria-label={t('field.enable', { label: tDynamic(node.group.name) })}
+                        title={t('field.enable', { label: tDynamic(node.group.name) })}
                         className="shrink-0 accent-[var(--emphasis)]"
                     />
                 )}
@@ -104,6 +109,7 @@ export function ParamField(props: {
     visibility: VisibilityResult;
     groupDisabled?: boolean;
 }) {
+    const { t, tDynamic } = useTranslation();
     const { param, visibility } = props;
     const values = useParamStore(s => s.values);
     const toggles = useParamStore(s => s.toggles);
@@ -120,8 +126,8 @@ export function ParamField(props: {
     return (
         <Field
             id={`param-${param.id}`}
-            label={param.name}
-            description={param.description}
+            label={tDynamic(param.name)}
+            description={tDynamic(param.description)}
             examples={param.examples}
             density="compact"
             modified={visibility.altered.has(param.id)}
@@ -135,9 +141,9 @@ export function ParamField(props: {
             toggleBlocked={blocked}
             disabledReason={
                 unsupported
-                    ? `Requires backend feature: ${param.feature_flag}`
+                    ? t('params.requiresFeature', { feature: param.feature_flag ?? '' })
                     : props.groupDisabled
-                      ? 'This group is switched off'
+                      ? t('params.groupSwitchedOff')
                       : undefined
             }
             toggle={

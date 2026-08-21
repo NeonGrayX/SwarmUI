@@ -8,11 +8,13 @@ import {
     isMultilineText,
     SECRET_SENTINEL,
     settingsPayload,
+    statusLabel,
     STATUS_COLOR,
     type Backend,
     type BackendSettingSchema,
     type BackendType
 } from '@/server/backends';
+import { useTranslation } from '@/i18n';
 
 const INPUT =
     'rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)] disabled:opacity-60';
@@ -57,6 +59,7 @@ export function BackendCard(props: {
     onRestart: () => void;
     onDelete: () => void;
 }) {
+    const { t, tDynamic } = useTranslation();
     const { backend, type, perms } = props;
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState(false);
@@ -120,7 +123,7 @@ export function BackendCard(props: {
                     type="button"
                     onClick={() => setOpen(o => !o)}
                     aria-expanded={open}
-                    aria-label={open ? 'Hide settings' : 'Show settings'}
+                    aria-label={open ? t('backendCard.hideSettings') : t('backendCard.showSettings')}
                     className="mt-0.5 shrink-0 rounded p-1 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
                 >
                     <ChevronDown
@@ -130,31 +133,31 @@ export function BackendCard(props: {
                     />
                 </button>
                 <span
-                    title={backend.status}
+                    title={statusLabel(backend.status)}
                     className="mt-2 size-2.5 shrink-0 rounded-full"
                     style={{ background: STATUS_COLOR[backend.status] ?? 'var(--gray)' }}
                 />
                 <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-fg-strong">
-                        {backend.title || type?.name || backend.type}{' '}
+                        {backend.title || tDynamic(type?.name) || backend.type}{' '}
                         <span className="text-xs text-fg-soft">#{backend.id}</span>
                     </p>
                     <p className="text-xs text-fg-soft">
-                        {type?.name ?? backend.type} · {backend.status}
+                        {type ? tDynamic(type.name) : backend.type} · {statusLabel(backend.status)}
                         {backend.current_model && ` · ${backend.current_model}`}
-                        {` · last used ${backend.time_since_used}`}
+                        {` · ${t('backendCard.lastUsed', { when: backend.time_since_used })}`}
                     </p>
                 </div>
 
                 {perms.restart && (
                     <IconButton
-                        label="Restart backend"
+                        label={t('backendCard.restartBackend')}
                         onClick={props.onRestart}
                         disabled={!canRestart(backend.status)}
                         hint={
                             canRestart(backend.status)
-                                ? 'Restart'
-                                : `Cannot restart while ${backend.status}`
+                                ? t('backends.restart')
+                                : t('backendCard.cannotRestart', { status: statusLabel(backend.status) })
                         }
                     >
                         <RefreshCw size={14} aria-hidden />
@@ -164,21 +167,25 @@ export function BackendCard(props: {
                     <Link
                         to="/server/logs"
                         search={{ types: props.logName }}
-                        title="View this backend's logs"
-                        aria-label="View backend logs"
+                        title={t('backendCard.viewLogsHint')}
+                        aria-label={t('backendCard.viewLogs')}
                         className="shrink-0 rounded border border-default p-1.5 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
                     >
                         <ScrollText size={14} aria-hidden />
                     </Link>
                 ) : (
-                    <IconButton label="View backend logs" disabled hint="No process logs for this backend">
+                    <IconButton
+                        label={t('backendCard.viewLogs')}
+                        disabled
+                        hint={t('backendCard.noProcessLogs')}
+                    >
                         <ScrollText size={14} aria-hidden />
                     </IconButton>
                 )}
                 {perms.edit && (
                     <IconButton
-                        label={editing ? 'Editing settings' : 'Edit settings'}
-                        hint={editing ? 'Editing' : 'Edit settings'}
+                        label={editing ? t('backendCard.editingSettings') : t('backendCard.editSettings')}
+                        hint={editing ? t('backendCard.editing') : t('backendCard.editSettings')}
                         onClick={startEdit}
                         disabled={editing}
                         active={editing}
@@ -188,8 +195,8 @@ export function BackendCard(props: {
                 )}
                 {perms.toggle && (
                     <IconButton
-                        label={live ? 'Disable backend' : 'Enable backend'}
-                        hint={live ? 'Disable' : 'Enable'}
+                        label={live ? t('backendCard.disableBackend') : t('backendCard.enableBackend')}
+                        hint={live ? t('common.disable') : t('common.enable')}
                         onClick={props.onToggle}
                         color={live ? 'var(--backend-running)' : undefined}
                     >
@@ -198,8 +205,8 @@ export function BackendCard(props: {
                 )}
                 {perms.addRemove && (
                     <IconButton
-                        label="Delete backend"
-                        hint="Delete"
+                        label={t('backendCard.deleteBackend')}
+                        hint={t('common.delete')}
                         onClick={props.onDelete}
                         color="var(--backend-errored)"
                     >
@@ -217,12 +224,16 @@ export function BackendCard(props: {
                 >
                     {!type && (
                         <p className="mb-2 text-xs" style={{ color: 'var(--backend-disabled)' }}>
-                            Backend type "{backend.type}" is not registered on this server, so its settings
-                            cannot be described. The stored values are left untouched.
+                            {t('backendCard.unknownType', { type: backend.type })}
                         </p>
                     )}
 
-                    <Field id={`backend-${backend.id}-title`} label="Title" density="compact" description="Display name for this backend.">
+                    <Field
+                        id={`backend-${backend.id}-title`}
+                        label={t('backendCard.field.title')}
+                        density="compact"
+                        description={t('backendCard.field.titleHelp')}
+                    >
                         <input
                             id={`backend-${backend.id}-title`}
                             type="text"
@@ -234,9 +245,9 @@ export function BackendCard(props: {
                     </Field>
                     <Field
                         id={`backend-${backend.id}-id`}
-                        label="Backend ID"
+                        label={t('backendCard.field.id')}
                         density="compact"
-                        description="Numeric identifier. Changing it reassigns the backend and restarts it."
+                        description={t('backendCard.field.idHelp')}
                     >
                         <input
                             id={`backend-${backend.id}-id`}
@@ -283,7 +294,7 @@ export function BackendCard(props: {
                                     aria-hidden
                                     className={`transition-transform ${featuresOpen ? '' : '-rotate-90'}`}
                                 />
-                                Supported features ({backend.features.length})
+                                {t('backendCard.supportedFeatures', { count: backend.features.length })}
                             </button>
                             {featuresOpen && (
                                 <div className="mt-1 flex flex-wrap gap-1">
@@ -303,14 +314,14 @@ export function BackendCard(props: {
                     {editing && (
                         <div className="mt-3 flex items-center gap-2 border-t border-subtle pt-2">
                             <p className="min-w-0 flex-1 text-xs" style={{ color: 'var(--backend-disabled)' }}>
-                                Saving restarts this backend. Any generation running on it will be interrupted.
+                                {t('backendCard.saveWarning')}
                             </p>
                             <button
                                 type="button"
                                 onClick={cancelEdit}
                                 className="rounded border border-default px-3 py-1 text-sm text-fg hover:bg-[var(--sw-hover)]"
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </button>
                             <button
                                 type="button"
@@ -319,7 +330,7 @@ export function BackendCard(props: {
                                 className="rounded px-3 py-1 text-sm disabled:opacity-50"
                                 style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                             >
-                                {props.saving ? 'Saving…' : 'Save changes'}
+                                {props.saving ? t('common.saving') : t('settings.saveChanges')}
                             </button>
                         </div>
                     )}
@@ -345,6 +356,7 @@ function SettingField(props: {
     onReveal: () => void;
     onChange: (value: unknown) => void;
 }) {
+    const { tDynamic } = useTranslation();
     const { field } = props;
     const id = `backend-${props.backendId}-${field.name}`;
 
@@ -352,7 +364,7 @@ function SettingField(props: {
         <Field
             id={id}
             label={field.name}
-            description={field.description || undefined}
+            description={field.description ? tDynamic(field.description) : undefined}
             density="compact"
             modified={props.edited}
         >
@@ -370,6 +382,7 @@ function SettingControl(props: {
     onReveal: () => void;
     onChange: (value: unknown) => void;
 }) {
+    const { t, tDynamic } = useTranslation();
     const { field, value, editing, id } = props;
     const disabled = !editing;
 
@@ -377,9 +390,7 @@ function SettingControl(props: {
         // ListBackendTypes emits sections as a bare 'group' with no child schema, so there is
         // nothing to render. Legacy hits the same wall and logs to console instead of saying so.
         return (
-            <p className="py-1 text-xs text-fg-soft">
-                Grouped settings aren't editable here — edit this backend in the server config file.
-            </p>
+            <p className="py-1 text-xs text-fg-soft">{t('backendCard.groupedSettings')}</p>
         );
     }
 
@@ -392,7 +403,7 @@ function SettingControl(props: {
                     id={id}
                     type={props.revealed ? 'text' : 'password'}
                     value={typed ? String(value ?? '') : ''}
-                    placeholder={isSet ? '(set — type to replace)' : '(not set)'}
+                    placeholder={isSet ? t('settings.secretSet') : t('settings.secretUnset')}
                     disabled={disabled}
                     onChange={e => props.onChange(e.target.value)}
                     className={`${INPUT} min-w-0 flex-1`}
@@ -401,7 +412,7 @@ function SettingControl(props: {
                     type="button"
                     onClick={props.onReveal}
                     disabled={disabled}
-                    aria-label={props.revealed ? 'Hide value' : 'Show value'}
+                    aria-label={props.revealed ? t('settings.hideValue') : t('settings.showValue')}
                     className="shrink-0 rounded border border-default p-1.5 text-fg-soft hover:text-fg disabled:opacity-50"
                 >
                     {props.revealed ? <EyeOff size={13} aria-hidden /> : <Eye size={13} aria-hidden />}
@@ -421,7 +432,7 @@ function SettingControl(props: {
             >
                 {field.values.map((option, i) => (
                     <option key={option} value={option}>
-                        {field.value_names?.[i] || option}
+                        {field.value_names?.[i] ? tDynamic(field.value_names[i]) : option}
                     </option>
                 ))}
             </select>
@@ -441,7 +452,7 @@ function SettingControl(props: {
                         className="accent-[var(--emphasis)]"
                     />
                     <span className="text-sm text-fg-soft">
-                        {value === true || value === 'true' ? 'On' : 'Off'}
+                        {value === true || value === 'true' ? t('common.on') : t('common.off')}
                     </span>
                 </label>
             );
@@ -466,7 +477,7 @@ function SettingControl(props: {
                     rows={2}
                     value={String(value ?? '')}
                     disabled={disabled}
-                    placeholder={field.placeholder || 'Separate entries with ||'}
+                    placeholder={field.placeholder || t('settings.listPlaceholder')}
                     onChange={e => props.onChange(e.target.value)}
                     className={`${INPUT} w-full resize-y font-mono text-xs`}
                 />
@@ -479,7 +490,7 @@ function SettingControl(props: {
                         rows={3}
                         value={String(value ?? '')}
                         disabled={disabled}
-                        placeholder={field.placeholder || 'One per line, eg  MyHeader: MyVal'}
+                        placeholder={field.placeholder || t('backendCard.headersPlaceholder')}
                         onChange={e => props.onChange(e.target.value)}
                         className={`${INPUT} w-full resize-y font-mono text-xs`}
                         spellCheck={false}
