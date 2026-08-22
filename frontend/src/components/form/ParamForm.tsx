@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { useCurrentStatus, useSession, useT2IParams } from '@/api/hooks';
+import { EDITOR_OWNED_PARAMS, useEditorStore } from '@/editor/store';
 import { useParamSchema } from '@/params/schema';
 import { computeVisibility, type FilterMode } from '@/params/visibility';
 import { useParamStore } from '@/params/store';
@@ -31,6 +32,10 @@ export function ParamForm() {
     const resetAll = useParamStore(s => s.resetAll);
 
     const schema = useParamSchema();
+    // The image editor supplies these itself while it is open, so the panel must not also offer
+    // them - two controls for one value, one of which silently loses.
+    const editorOpen = useEditorStore(s => s.open);
+    const suppressed = editorOpen ? EDITOR_OWNED_PARAMS : undefined;
 
     const visibility = useMemo(() => {
         if (!schema) {
@@ -43,9 +48,10 @@ export function ParamForm() {
             groupToggles,
             supportedFeatures: status.data?.supported_features ?? [],
             search,
-            mode
+            mode,
+            suppressed
         });
-    }, [schema, values, toggles, groupToggles, status.data?.supported_features, search, mode]);
+    }, [schema, values, toggles, groupToggles, status.data?.supported_features, search, mode, suppressed]);
 
     if (params.isPending) {
         return <p className="p-4 text-sm text-fg-soft">{t('params.loading')}</p>;

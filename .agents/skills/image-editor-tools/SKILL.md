@@ -1,11 +1,14 @@
 ---
 name: image-editor-tools
-description: Architecture and patterns for developing image editor tools and UI in the SwarmUI image editor.
+description: Architecture and patterns for developing image editor tools and UI in the SwarmUI image editor (the browser UI under src/wwwroot). For the React frontend's editor see new-ui-image-editor.
 ---
 
 # Image Editor Tools
 
 Guide to the image editor tool system in `src/wwwroot/js/genpage/helpers/image_editor.js`.
+
+The React frontend under `frontend/` has its own editor, ported from this one but structured
+differently; see [new-ui-image-editor](../new-ui-image-editor/SKILL.md) for that.
 
 ## When to Use
 

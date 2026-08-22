@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ImageIcon, Info } from 'lucide-react';
+import { ImageIcon, Info, Pencil } from 'lucide-react';
 import { imageUrl, useGenerateStore } from '@/generate/store';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
+import { useOpenEditor } from '@/editor/useOpenEditor';
 import { MetadataView } from '../ui/MetadataView';
 import { DetailSheet } from '../ui/DetailSheet';
 import { ZoomableImage } from './ZoomableImage';
@@ -16,6 +17,7 @@ export function Canvas() {
     const [showMetadata, setShowMetadata] = useState(false);
     const [reuse, setReuse] = useState<string | null>(null);
     const mediaParam = useMediaParamAction();
+    const editor = useOpenEditor();
 
     const current = batch.find(item => item.id === selected);
     const src = imageUrl(current?.src);
@@ -71,11 +73,33 @@ export function Canvas() {
                         <ImageIcon size={40} className="mx-auto mb-3 opacity-40" aria-hidden />
                         <p>{t('canvas.noImage')}</p>
                         <p className="mt-1 text-sm">{t('canvas.noImageHint')}</p>
+                        {editor.available && (
+                            <button
+                                type="button"
+                                onClick={editor.newCanvas}
+                                className="mt-4 rounded border border-default px-2.5 py-1.5 text-sm text-fg hover:bg-[var(--sw-hover)]"
+                            >
+                                {t('canvas.newCanvas')}
+                            </button>
+                        )}
                     </div>
                 )}
 
                 {current && (
                     <div className="absolute right-3 top-3 flex items-center gap-1.5">
+                        {canReuse && editor.available && (
+                            <ReuseButton
+                                label={t('canvas.editImage')}
+                                icon={<Pencil size={13} aria-hidden />}
+                                onClick={() =>
+                                    editor
+                                        .editImage(src!, src!.slice(src!.lastIndexOf('/') + 1))
+                                        .catch((e: unknown) =>
+                                            setReuse(e instanceof Error ? e.message : t('canvas.editFailed'))
+                                        )
+                                }
+                            />
+                        )}
                         {canReuse && mediaParam.available('initimage') && (
                             <ReuseButton
                                 label={t('canvas.useAsInitImage')}
@@ -125,15 +149,17 @@ export function Canvas() {
     );
 }
 
-/** Sends the current image into a media param. Text rather than a glyph: "which button reuses this
- *  image" is exactly the thing the legacy icon strip makes you hover to find out. */
-function ReuseButton(props: { label: string; onClick: () => void }) {
+/** Sends the current image somewhere else - a media param, or the editor. Text rather than a glyph:
+ *  "which button reuses this image" is exactly the thing the legacy icon strip makes you hover to
+ *  find out. */
+function ReuseButton(props: { label: string; onClick: () => void; icon?: React.ReactNode }) {
     return (
         <button
             type="button"
             onClick={props.onClick}
-            className="rounded border border-default bg-surface px-2 py-1.5 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
+            className="flex items-center gap-1.5 rounded border border-default bg-surface px-2 py-1.5 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
         >
+            {props.icon}
             {props.label}
         </button>
     );

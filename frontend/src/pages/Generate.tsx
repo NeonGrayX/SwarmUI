@@ -8,6 +8,8 @@ import { BatchRail } from '@/components/generate/BatchRail';
 import { ContextStrip } from '@/components/generate/ContextStrip';
 import { Splitter } from '@/components/generate/Splitter';
 import { ComfyWorkflow } from '@/components/generate/ComfyWorkflow';
+import { ImageEditor } from '@/components/editor/ImageEditor';
+import { useEditorStore } from '@/editor/store';
 import { PRESETS, useLayoutStore, type LayoutPreset } from '@/generate/layout';
 import { useGenerateStore } from '@/generate/store';
 import { useStartGenerate } from '@/generate/start';
@@ -66,7 +68,7 @@ function SplitWorkspace(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceMo
 
                 <div className="flex min-w-0 flex-1 flex-col">
                     <WorkspaceHeader mode={props.mode} onMode={props.onMode} />
-                    {props.mode === 'comfy' ? <ComfyWorkflow /> : <Canvas />}
+                    <CenterPane mode={props.mode} />
                 </div>
 
                 <Splitter label={t('layout.resizeBatch')} invert onResize={d => resize('batch', d)} />
@@ -152,7 +154,7 @@ function StackedWorkspace(props: { mode: WorkspaceMode; onMode: (mode: Workspace
             <div className="relative min-h-0 flex-1">
                 <PanePanel id="image" active={pane === 'image'}>
                     <WorkspaceHeader mode={props.mode} onMode={props.onMode} compact />
-                    {props.mode === 'comfy' ? <ComfyWorkflow /> : <Canvas />}
+                    <CenterPane mode={props.mode} />
                 </PanePanel>
                 <PanePanel id="params" active={pane === 'params'}>
                     <ParamForm />
@@ -166,6 +168,19 @@ function StackedWorkspace(props: { mode: WorkspaceMode; onMode: (mode: Workspace
             <PromptComposer />
         </div>
     );
+}
+
+/** What fills the middle column: the Comfy workflow, the image editor, or the plain viewer.
+ *
+ * The editor replaces the viewer rather than opening beside it, as it does in the legacy UI where
+ * the two share the image area through a drag bar. Here the editor already carries a viewer's worth
+ * of pan and zoom, so a second copy of the same image next to it would only cost width. */
+function CenterPane(props: { mode: WorkspaceMode }) {
+    const editorOpen = useEditorStore(s => s.open);
+    if (props.mode === 'comfy') {
+        return <ComfyWorkflow />;
+    }
+    return editorOpen ? <ImageEditor /> : <Canvas />;
 }
 
 /** One stacked pane. Hidden rather than unmounted, so switching tabs never costs state. */

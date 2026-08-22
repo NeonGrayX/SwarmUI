@@ -7,6 +7,7 @@
  *   - the text filter matches its id, name, description or group name
  *   - it isn't advanced-and-hidden (advanced params still show once altered)
  *   - if `depend_non_default` is set, the named param is itself non-default
+ *   - it isn't `suppressed` by a part of the UI that supplies it directly
  */
 
 import type { ParamSchema } from '@/api/types';
@@ -24,6 +25,9 @@ export interface VisibilityInput {
     supportedFeatures: string[];
     search: string;
     mode: FilterMode;
+    /** Params some other part of the UI is currently supplying, and which the panel therefore
+     *  must not offer - the image editor owns `initimage` and `maskimage` while it is open. */
+    suppressed?: ReadonlySet<string>;
 }
 
 export interface VisibilityResult {
@@ -103,7 +107,7 @@ export function computeVisibility(input: VisibilityInput): VisibilityResult {
             advancedHiddenCount++;
         }
 
-        let show = supported && param.visible && filterShow;
+        let show = supported && param.visible && filterShow && input.suppressed?.has(param.id) !== true;
         if (show && advanced && mode !== 'advanced' && !paramAltered) {
             show = false;
         }
