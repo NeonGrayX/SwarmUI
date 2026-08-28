@@ -39,8 +39,14 @@ interface JobMessage {
 
 interface JobStore {
     jobs: Job[];
-    /** Starts a websocket-driven job and returns its id. */
-    run: (options: { title: string; route: string; payload: Record<string, unknown> }) => string;
+    /** Starts a websocket-driven job and returns its id. `onDone` fires once the server reports
+     *  success, for refreshing whatever the job changed. */
+    run: (options: {
+        title: string;
+        route: string;
+        payload: Record<string, unknown>;
+        onDone?: () => void;
+    }) => string;
     cancel: (id: string) => void;
     dismiss: (id: string) => void;
     clearFinished: () => void;
@@ -51,7 +57,7 @@ let nextId = 1;
 export const useJobStore = create<JobStore>((set, get) => ({
     jobs: [],
 
-    run: ({ title, route, payload }) => {
+    run: ({ title, route, payload, onDone }) => {
         const id = `job-${nextId++}`;
 
         function patch(changes: Partial<Job>) {
@@ -82,6 +88,7 @@ export const useJobStore = create<JobStore>((set, get) => ({
                 if (message.success) {
                     patch({ status: 'done', overallPercent: 1, currentPercent: 1 });
                     appendLog(t('jobs.completed'));
+                    onDone?.();
                 }
             },
             onError: (error: SwarmApiError) => {
