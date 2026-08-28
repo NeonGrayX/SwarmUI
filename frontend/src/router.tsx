@@ -15,7 +15,6 @@ import { ServerInfoPage } from './pages/server/ServerInfo';
 import { BackendsPage } from './pages/server/Backends';
 import { ServerConfigurationPage } from './pages/server/ServerConfiguration';
 import { UsersPage } from './pages/server/Users';
-import { ExtensionsPage } from './pages/server/Extensions';
 import { LogsPage } from './pages/server/Logs';
 import { AccountPage } from './pages/settings/Account';
 import { PreferencesPage } from './pages/settings/Preferences';
@@ -42,7 +41,6 @@ const IMPLEMENTED: Record<string, ComponentType> = {
     backends: BackendsPage,
     configuration: ServerConfigurationPage,
     users: UsersPage,
-    extensions: ExtensionsPage,
     logs: LogsPage,
     // Settings
     account: AccountPage,
@@ -81,7 +79,7 @@ const PHASE_INFO: Record<string, { phase: string; summary: string }> = {
     backends: { phase: 'Phase 5', summary: 'Add, configure, restart and monitor generation backends.' },
     configuration: { phase: 'Phase 5', summary: 'Server-wide settings: paths, metadata, network, defaults.' },
     users: { phase: 'Phase 5', summary: 'Accounts, roles and permissions.' },
-    extensions: { phase: 'Phase 5', summary: 'Install, update and enable Swarm extensions.' },
+    extensions: { phase: 'a later phase', summary: 'Install, update and enable Swarm extensions.' },
     logs: { phase: 'Phase 5', summary: 'Live server logs with level filtering.' },
     account: { phase: 'Phase 5', summary: 'Your profile, password, API keys and auth tokens.' },
     preferences: { phase: 'Phase 5', summary: 'Your personal settings: theme, language, output format.' },

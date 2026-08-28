@@ -6,8 +6,8 @@ import { useTranslation } from '@/i18n';
  *  Says which phase delivers it rather than pretending to be an empty screen.
  *
  *  `phase` and `summary` come from the build plan in router.tsx and are deliberately not
- *  translated: they are developer-facing notes about work in progress, and every destination
- *  currently has a real screen, so nothing here is reachable in a shipped build. */
+ *  translated: they are developer-facing notes about work in progress. Extensions is the only
+ *  destination that still lands here, and it points at the legacy Extensions tab. */
 export function Placeholder(props: { destination: Destination; phase: string; summary: string }) {
     const { t } = useTranslation();
     const Icon = props.destination.icon;
