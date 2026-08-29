@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '@/i18n';
 
-/** Multi-selection shared by every Library browser.
- *
- * The legacy browsers can only act on one entry at a time, so deleting a run of images means
- * repeating the same confirm dialog per file. Selection here works the way a file manager's does:
- * a checkbox that appears on hover, modifier-click to take a whole run, and the actions that can
- * apply to many entries gathered in one bar above the list. */
+/** Multi-selection shared by every Library browser, working the way a file manager's does: a
+ *  checkbox that appears on hover, modifier-click to take a whole run, and the actions that apply
+ *  to many entries gathered in one bar above the list. */
 export interface Selection {
     /** Ids in list order, so bulk actions run top-to-bottom rather than in insertion order. */
     readonly ids: string[];

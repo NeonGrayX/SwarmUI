@@ -8,12 +8,8 @@ import {
 } from '@/server/users';
 import { useTranslation } from '@/i18n';
 
-/** The permission grid inside the role editor.
- *
- * The legacy version (src/wwwroot/js/genpage/server/servertab.js:274) renders every permission as
- * an always-open table of ~70 toggles with no search and no indication of how dangerous any of
- * them is. Grouping stays — that ordering is the server's, and it is meaningful — but each row now
- * carries its safety level and default audience, and the whole list is filterable. */
+/** The permission grid inside the role editor: ~70 toggles, grouped in the server's own ordering,
+ *  each row carrying its safety level and default audience, and the whole list filterable. */
 export function PermissionPicker(props: {
     ordered: string[];
     info: Record<string, PermissionInfo>;

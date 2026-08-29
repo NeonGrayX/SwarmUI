@@ -1,8 +1,5 @@
-/** Normalizes the raw ListT2IParams payload into something renderable.
- *
- * Two jobs the legacy UI does imperatively across params.js and usertab.js:
- *   1. Apply the user's `param_edits` overrides on top of the server schema
- *      (see applyParamEdits, src/wwwroot/js/genpage/usertab.js:324).
+/** Normalizes the raw ListT2IParams payload into something renderable. Two jobs:
+ *   1. Apply the user's `param_edits` overrides on top of the server schema.
  *   2. Turn the flat group list + `parent` ids into an actual tree, ordered by priority.
  */
 
@@ -55,16 +52,15 @@ export interface NormalizedSchema {
     compatClasses: Record<string, ModelCompatClassInfo>;
 }
 
-/** Params the server hides from the panel because the legacy UI gives them a bespoke home, but
+/** Params the server marks invisible because it expects a UI to give them a bespoke home, but
  *  which this UI renders as ordinary rows.
  *
  * `model` is registered ungrouped and `VisibleNormally: false` (T2IParamTypes.cs:689). Leaving it
- * out here means it counts towards the Modified filter without ever appearing in it, so it lands in
- * Core Parameters, above Images (priority -50). User `param_edits` still win over this. */
+ * out here would let it count towards the Modified filter without ever appearing in it, so it is
+ * placed in Core Parameters, above Images (priority -50). User `param_edits` still win over this. */
 const PANEL_PLACEMENT: Record<string, Partial<ParamSchema>> = {
     model: { visible: true, group: 'coreparameters', priority: -60 },
-    // LoRAs are hidden the same way (T2IParamTypes.cs:698) because the legacy UI drives them from
-    // the model browser and a bottom-bar strip. This UI gives them a real picker, so they sit
+    // LoRAs are hidden the same way (T2IParamTypes.cs:698). They get a real picker here, placed
     // directly under the model they attach to - and not as `advanced`, since choosing a LoRA is
     // ordinary work, not an expert setting.
     loras: { visible: true, advanced: false, group: 'coreparameters', priority: -55 }
@@ -88,7 +84,7 @@ export function normalizeSchema(data: ListT2IParamsResponse): NormalizedSchema {
     }
 
     // PANEL_PLACEMENT counts as shipped state: it is this UI's own placement, not a user edit, so
-    // resetting a parameter puts it back where this UI puts it rather than where the legacy UI did.
+    // resetting a parameter puts it back here rather than back to the server's own default.
     const originals = new Map<string, ParamSchema>();
     const params = data.list
         .map(param => {

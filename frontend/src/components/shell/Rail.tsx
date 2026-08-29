@@ -4,11 +4,8 @@ import { usePermitted } from '@/api/permissions';
 import { SECTIONS, defaultDestination, type SectionId } from '@/nav/destinations';
 import { useTranslation } from '@/i18n';
 
-/** The always-visible primary navigation.
- *
- * Level one of the IA never scrolls away and never changes, so "where am I" is always answerable —
- * unlike the legacy top tab strip, which shared styling with its own sub-strips and sat under a
- * fixed status banner that could cover it. */
+/** The always-visible primary navigation: level one of the IA, which never scrolls away and never
+ *  changes, so "where am I" is always answerable. Folds into <NavDrawer> below `md`. */
 export function Rail() {
     const { t } = useTranslation();
     const sections = usePermitted(SECTIONS);

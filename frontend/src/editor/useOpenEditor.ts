@@ -1,8 +1,7 @@
 /** Opening the image editor from elsewhere in the UI.
  *
  * Opening on an image also sets the output resolution to that image's, and the aspect ratio to
- * Custom - otherwise the first generation would silently resize the canvas the user just set up.
- * The legacy UI does the same from its Edit Image button (currentimagehandler.js:1197).
+ * Custom - otherwise the first generation would silently resize the canvas just set up.
  */
 
 import { useCallback } from 'react';

@@ -41,12 +41,8 @@ function useTokenCount(text: string): number | null {
     return count;
 }
 
-/** The prompt block.
- *
- * Sits below the canvas as a full-width block rather than floating over the image the way
- * .alt_prompt_region does in the legacy UI, where the token counter, attach button, Generate,
- * a caret and an interrupt X all share one cramped line. The negative prompt starts collapsed
- * because most generations do not use one. */
+/** The prompt block: a full-width band below the canvas rather than an overlay on it. The negative
+ *  prompt starts collapsed, since most generations do not use one. */
 export function PromptComposer() {
     const { t } = useTranslation();
     const values = useParamStore(s => s.values);
@@ -184,7 +180,7 @@ function InputErrorNotice(props: { issue: GenIssue }) {
     );
 }
 
-/** Primary action plus a menu, replacing the legacy trio of Generate / bare caret / bare X. */
+/** Generate, plus a menu holding the run variants and the interrupt actions. */
 function GenerateSplitButton(props: { running: boolean; forever: boolean; onGenerate: () => void }) {
     const { t } = useTranslation();
     const setForever = useGenerateStore(s => s.setForever);

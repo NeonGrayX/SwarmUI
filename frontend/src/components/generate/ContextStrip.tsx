@@ -10,12 +10,9 @@ import { useTranslation } from '@/i18n';
 /** Id of the model picker, so the composer's "no model selected" notice can jump to it. */
 export const MODEL_SELECT_ID = 'context-model';
 
-/** Model / LoRA / preset context, always in view under the canvas.
- *
- * Replaces #bottom_info_bar, which renders a run-on line of "<b>Label</b>: value" spans with no
- * affordance to change or clear any of them. Both controls here are the same pickers the parameter
- * panel uses, so what is on screen and what will be generated cannot drift apart.
- */
+/** Model / LoRA / preset context, always in view under the canvas. Both controls are the same
+ *  pickers the parameter panel uses, so what is on screen and what will be generated cannot drift
+ *  apart. */
 export function ContextStrip() {
     const { t } = useTranslation();
     const model = useCurrentModel();

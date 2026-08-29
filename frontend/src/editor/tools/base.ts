@@ -1,11 +1,9 @@
 /** Tool base classes.
+ *  Ported from ImageEditorTool / ImageEditorTempTool / ImageEditorToolWithColor
+ *  (src/wwwroot/js/genpage/helpers/image_editor_tools.js:5-291).
  *
- * Ported from ImageEditorTool / ImageEditorTempTool / ImageEditorToolWithColor
- * (src/wwwroot/js/genpage/helpers/image_editor_tools.js:5-291).
- *
- * The one structural change from the legacy design: a tool no longer owns any DOM. It declares its
- * controls with `getOptions()` and takes edits back through `setOption()`, so the option bar can be
- * rendered, themed and translated once instead of once per tool.
+ *  A tool owns no DOM: it declares its controls with `getOptions()` and takes edits back through
+ *  `setOption()`, so the option bar is rendered, themed and translated once for every tool.
  */
 
 import type { LucideIcon } from 'lucide-react';

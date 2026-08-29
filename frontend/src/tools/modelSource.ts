@@ -1,13 +1,11 @@
 /** Turning a pasted link into a downloadable model.
  *
- * Ported from ModelDownloaderUtil (src/wwwroot/js/genpage/utiltab.js:174), which is the only place
- * that knows how a Civitai or HuggingFace *page* link maps to a direct download link, and how to
- * read a model's metadata off the Civitai API — proxied through `ForwardMetadataRequest`, because
- * the browser cannot reach civitai.red itself.
+ * Ported from ModelDownloaderUtil (src/wwwroot/js/genpage/utiltab.js:174): how a Civitai or
+ * HuggingFace *page* link maps to a direct download link, and how to read a model's metadata off
+ * the Civitai API — proxied through `ForwardMetadataRequest`, because the browser cannot reach
+ * civitai.red itself.
  *
- * This lives apart from the page because the legacy version does its work by writing results
- * straight back into DOM inputs, which is what makes it hard to follow. Here a link resolves to one
- * value describing everything the form needs to show and send.
+ * A link resolves to one `ResolvedSource` describing everything the form needs to show and send.
  */
 
 import { api } from '@/api/client';
@@ -186,11 +184,9 @@ export function parseCivitaiUrl(url: string): [string | null, string | null] {
 }
 
 /** Strips a model title down to something a filesystem accepts, for the 'Save as' suggestion.
- *
- * The legacy version (utiltab.js:576) turns every offending character into a dash, which renders a
- * title like 'Juggernaut XL (Hyper) - v9.0' as 'Juggernaut_XL_-Hyper-_-_v9-0'. Decoration is
- * dropped instead, and only the characters that carry meaning in a path become separators. The
- * server sanitizes this again either way (StrictFilenameClean, Utilities.cs:185). */
+ *  Decoration is dropped rather than turned into separators, and only characters that carry
+ *  meaning in a path become one. The server sanitizes this again either way (StrictFilenameClean,
+ *  Utilities.cs:185). */
 export function cleanSaveName(title: string): string {
     return title
         .replace(/["'()[\]{}!,]/g, '')
@@ -424,11 +420,8 @@ export function stripHtml(html: string): string {
     return (parsed.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-/** Every folder that already holds a model of one subtype, nested paths included.
- *
- * The legacy folder dropdown (utiltab.js:203) builds this from every subtype at once, so it offers
- * LoRA folders as places to put a VAE. Scoping it to the chosen subtype is the same list, minus
- * the entries that cannot apply. */
+/** Every folder that already holds a model of one subtype, nested paths included. Scoped to the
+ *  chosen subtype, so the picker never offers a LoRA folder as a place to put a VAE. */
 export function folderOptions(modelNames: string[]): string[] {
     const folders = new Set<string>();
     for (const name of modelNames) {
@@ -440,7 +433,7 @@ export function folderOptions(modelNames: string[]): string[] {
     return [...folders].sort((a, b) => a.localeCompare(b));
 }
 
-/** Roughly 256x256, the size the legacy downloader saves thumbnails at. */
+/** Roughly 256x256, the size model thumbnails are saved at. */
 const THUMBNAIL_PIXELS = 256 * 256;
 
 function toThumbnailDataUrl(
@@ -496,9 +489,8 @@ function videoThumbnail(url: string): Promise<string | null> {
     });
 }
 
-/** Shrinks a preview into a data URL for embedding as the model's thumbnail. Mirrors
- *  imageToData(..., resize256) (src/wwwroot/js/util.js:916), including the legacy downloader's
- *  first-frame grab for models whose only previews are videos. Null means it could not be read. */
+/** Shrinks a preview into a data URL for embedding as the model's thumbnail, grabbing the first
+ *  frame for models whose only previews are videos. Null means it could not be read. */
 export function previewToThumbnail(preview: Preview): Promise<string | null> {
     return preview.kind === 'video' ? videoThumbnail(preview.url) : imageThumbnail(preview.url);
 }

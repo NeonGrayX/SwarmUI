@@ -3,8 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { findDestinationByPath, findSection } from '@/nav/destinations';
 import { useTranslation } from '@/i18n';
 
-/** Shows rail section → destination. The legacy UI had no location indicator at all beyond two
- *  bolded tab labels in visually identical strips. */
+/** Shows rail section → destination. */
 export function Breadcrumbs() {
     const { t } = useTranslation();
     const pathname = useRouterState({ select: s => s.location.pathname });

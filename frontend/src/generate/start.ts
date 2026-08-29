@@ -9,14 +9,14 @@ import { useGenInput } from './input';
 import { useGenerateStore } from './store';
 import { validateGenInput } from './validate';
 
-/** Fallback creativity for an editor run, matching the legacy default (params.js:1085). */
+/** Fallback creativity for an editor run, when the param carries no usable default. */
 const DEFAULT_INIT_IMAGE_CREATIVITY = 0.6;
 
 /** Replaces the init image, mask and output size with the image editor's, when it is open.
  *
  * The editor *is* the init image while it is showing, which is why its `initimage` and `maskimage`
  * params are hidden from the panel (see `computeVisibility`) - there would be two answers to the
- * same question otherwise. Ported from the editor branch of getGenInput (params.js:1071). */
+ * same question otherwise. */
 function applyEditorOverrides(input: Record<string, unknown>, schema: NormalizedSchema | null): void {
     const editor = editorOverrides();
     if (!editor) {

@@ -1,8 +1,5 @@
-/** Permission gating.
- *
- * Replaces the legacy `data-requiredpermission` attribute sweep in
- * src/wwwroot/js/permissions.js. Permissions arrive with the session (GetNewSession returns the
- * user's full permission list) so no extra request is needed.
+/** Permission gating. Permissions arrive with the session (GetNewSession returns the user's full
+ *  permission list), so no extra request is needed.
  */
 
 import type { ReactNode } from 'react';

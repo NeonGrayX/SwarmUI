@@ -7,11 +7,8 @@ import { Field } from '../form/Field';
 import { DetailSheet } from '../ui/DetailSheet';
 import { useTranslation } from '@/i18n';
 
-/** Side sheet showing a model's details, with inline metadata editing.
- *
- * The legacy equivalent is a Bootstrap modal of ~20 unaligned `<div>Label: <input></div>` rows
- * (GenTabModals.cshtml:132-170). This reuses the same <Field> primitive as the parameter panel,
- * so labels and controls line up and every row gets the same help/reset treatment. */
+/** Side sheet showing a model's details, with inline metadata editing. Built from the same
+ *  <Field> primitive as the parameter panel, so rows align and each gets the same help treatment. */
 export function ModelDetailSheet(props: {
     file: ModelCard | WildcardCard;
     subtype: ModelSubtype;

@@ -1,8 +1,8 @@
 /** Undo entries for the image editor.
+ *  Ported from ImageEditorHistoryEntry (src/wwwroot/js/genpage/helpers/image_editor.js:290).
  *
- * Ported from ImageEditorHistoryEntry (src/wwwroot/js/genpage/helpers/image_editor.js:290). The
- * stack is bounded (`maxHistory`), because entries of the `layer_canvas_edit` kind each hold a
- * full-resolution copy of a layer.
+ *  The stack is bounded (`maxHistory`), because every `layer_canvas_edit` entry holds a
+ *  full-resolution copy of a layer.
  */
 
 import type { ImageEditorEngine } from './engine';

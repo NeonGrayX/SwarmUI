@@ -26,11 +26,8 @@ import { PromptDialog } from '../ui/PromptDialog';
 import { useContextMenu, type LongPressHandlers, type MenuAction } from '../ui/ContextMenu';
 import { useTranslation } from '@/i18n';
 
-/** Unified browser for every model-family asset plus wildcards.
- *
- * Replaces seven separate cramped panes in the legacy bottom tab strip (Models, VAEs, LoRAs,
- * Embeddings, ControlNets, Wildcards, Presets), which shared vertical space with the image and so
- * defaulted to roughly 300px tall. */
+/** One browser for every model-family asset plus wildcards. The Library destination picks the
+ *  subtype; everything else about the screen is shared. */
 export function ModelBrowser(props: { subtype: ModelSubtype; label: string; emptyHint?: string }) {
     const { t } = useTranslation();
     const [path, setPath] = useState('');

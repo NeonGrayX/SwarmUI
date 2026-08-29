@@ -14,10 +14,7 @@ const MODES: { id: FilterMode; labelKey: string }[] = [
     { id: 'advanced', labelKey: 'params.filter.advanced' }
 ];
 
-/** The generation parameter panel: search, filter chips, then the group tree.
- *
- * Replaces the legacy left sidebar (#main_inputs_area), where the only affordances were a text
- * filter and a "Display Advanced Options? (80)" checkbox. */
+/** The generation parameter panel: search, filter chips, then the group tree. */
 export function ParamForm() {
     const { t } = useTranslation();
     const session = useSession();
@@ -72,8 +69,8 @@ export function ParamForm() {
     const searching = search.trim().length > 0;
 
     return (
-        // The panel is narrow, so it overrides the default label column width. The wide settings
-        // screens in Phase 5 keep the roomier default from tokens.css.
+        // The panel is narrow, so it overrides the default label column width; the wide settings
+        // screens keep the roomier default from tokens.css.
         <div className="flex flex-col h-full min-h-0" style={{ ['--sw-field-label-width' as string]: '6.5rem' }}>
             <div className="shrink-0 p-2 border-b border-subtle space-y-2">
                 <div className="relative">

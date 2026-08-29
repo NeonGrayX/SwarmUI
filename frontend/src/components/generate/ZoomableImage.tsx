@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
 import { useTranslation } from '@/i18n';
 
-/** Scale 1 is "fits the viewport", matching the legacy viewer's zoom of 1. */
+/** Scale 1 is "fits the viewport". */
 const MIN_SCALE = 1;
 const MAX_SCALE = 16;
-/** Per wheel notch, as in the legacy viewer (`zoomRate`). */
+/** Zoom step per wheel notch. */
 const ZOOM_RATE = 1.1;
 const FIT: View = { scale: 1, x: 0, y: 0 };
 

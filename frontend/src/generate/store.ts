@@ -1,8 +1,4 @@
-/** Generation run state: the batch rail, the selected image, and the live socket.
- *
- * Replaces the scattered globals in src/wwwroot/js/genpage/helpers/generatehandler.js and
- * gentab/currentimagehandler.js.
- */
+/** Generation run state: the batch rail, the selected image, and the live socket. */
 
 import { create } from 'zustand';
 import { api, SwarmApiError } from '@/api/client';

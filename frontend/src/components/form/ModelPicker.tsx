@@ -16,15 +16,11 @@ import { useToggleStar } from '@/library/hooks';
 import type { ViewMode } from '@/library/types';
 import { t as translate, useTranslation } from '@/i18n';
 
-/** Model pickers, replacing the plain `<select>` the legacy UI gives every model parameter.
+/** Model pickers for every `model`-typed parameter: search, preview thumbnails, and filters over
+ *  what can be a library of a thousand files.
  *
- * A `<select>` of a thousand file names, ordered by path, is unusable for the two questions people
- * actually ask - "which one was that anime model called?" and "which of these will even work with
- * what I have loaded?" - so this offers search, preview thumbnails, and filters, with the
- * compatibility filter answering the second question directly.
- *
- * The legacy UI has an equivalent of that last rule (isModelArchCorrect, models.js:435) but only
- * applies it to dim entries in the model browser; the dropdowns themselves list everything.
+ * The compatibility filter is the important one - it hides models that cannot work with whatever
+ * base model is currently selected (see `isArchCompatible` in src/library/catalog.ts).
  */
 
 /** Filter state worth remembering between openings. Kept out of the query cache because it is

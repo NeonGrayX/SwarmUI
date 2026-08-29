@@ -5,8 +5,8 @@
  * hashes again on top of it (Utilities.HashPassword, src/Utils/Utilities.cs:1339), so sending a
  * raw password stores a hash the login page can never reproduce.
  *
- * This is a port of doPasswordClientPrehash in src/wwwroot/js/site.js. It exists so the server
- * owner never sees the raw password a user reuses across sites; it is not a substitute for TLS.
+ * The point is that the server owner never sees the raw password a user may reuse across sites;
+ * it is not a substitute for TLS.
  */
 
 import { t } from '@/i18n/store';

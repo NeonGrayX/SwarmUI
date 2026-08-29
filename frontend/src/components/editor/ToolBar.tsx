@@ -4,12 +4,12 @@ import { useTranslation } from '@/i18n';
 
 /** The vertical tool strip down the left edge.
  *
- * Mask-only tools (the SAM2 pair) drop out of the strip while an image layer is selected, as they
- * do in the legacy editor - there is nothing for them to write to.
+ * Mask-only tools (the SAM2 pair) drop out of the strip while an image layer is selected - there
+ * is nothing for them to write to.
  *
- * It stays vertical at every width. A row of tools across the top would be the usual answer on a
- * phone, but the editor is already three horizontal bands deep there (header, options, layers) and
- * the canvas needs what height is left far more than it needs the 44px of width this costs. */
+ * It stays vertical at every width: on a phone the editor is already three horizontal bands deep
+ * (header, options, layers), and the canvas needs the remaining height more than it needs the
+ * 44px of width this costs. */
 export function ToolBar(props: { compact?: boolean }) {
     const { t } = useTranslation();
     const engine = useEditorStore(s => s.engine);

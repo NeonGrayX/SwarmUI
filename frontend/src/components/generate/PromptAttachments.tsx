@@ -4,11 +4,8 @@ import { useParamStore, valueOf } from '@/params/store';
 import { useTranslation } from '@/i18n';
 
 /** Images attached to the prompt itself, for models that read reference images (`promptimages`).
- *
- * The param is marked invisible in the schema because the legacy UI renders it outside the param
- * list too - as thumbnails in the prompt region, fed by the paste box and the "Use As Image Prompt"
- * button (addPromptMediaToInput, src/wwwroot/js/genpage/gentab/params.js:973). Same idea here, with
- * one control that also accepts drops and clicks. */
+ *  The param is marked invisible in the schema because it belongs beside the prompt rather than in
+ *  the parameter list. */
 export function PromptAttachments() {
     const { t } = useTranslation();
     const schema = useParamSchema();

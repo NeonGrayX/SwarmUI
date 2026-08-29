@@ -1,9 +1,4 @@
-/** Tool registry. Order here is the order of the toolbar.
- *
- * The legacy editor also registered an "Options" pseudo-tool whose only job was to open a menu
- * (image_editor_tools.js:296). It is not a tool - it has no active state and nothing to draw - so
- * here the toolbar renders that menu directly and the registry holds only real tools.
- */
+/** Tool registry. Order here is the order of the toolbar. */
 
 import type { ImageEditorEngine } from '../engine';
 import type { EditorTool } from './base';

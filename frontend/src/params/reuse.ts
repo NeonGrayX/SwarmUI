@@ -1,17 +1,14 @@
 /** "Reuse parameters" - loading the parameters recorded in an image back into the generation form.
  *
- * Ports copy_current_image_params (src/wwwroot/js/genpage/gentab/currentimagehandler.js:590), which
- * reads the metadata blob and writes it back through the DOM; here it is a plain transform onto the
- * param store. The awkward parts carry over unchanged, because they are facts about the metadata
- * format rather than about the old UI:
+ * Three facts about the metadata format shape most of this:
  *   - `original_prompt` / `original_negativeprompt` are what the user typed, so they win over the
  *     post-wildcard prompt that was actually generated with,
  *   - LoRAs injected by `<lora:...>` syntax in the prompt are already in the prompt; re-adding them
  *     to the LoRA list would apply them twice,
  *   - media params record a server-side source path, which is reusable, or inline data, which is not.
  *
- * The legacy `reuseparamexcludelist` user setting is not honored: it lives in GetUserSettings, which
- * this UI does not otherwise read.
+ * The `reuseparamexcludelist` user setting is not honored: it lives in GetUserSettings, which this
+ * UI does not otherwise read.
  */
 
 import { useCallback } from 'react';
@@ -30,7 +27,7 @@ import { useParamStore, type ParamValue } from './store';
 
 /** Old parameter ids that were renamed, so an older image still loads onto today's form.
  *  Mirrors T2IParamTypes.ParameterRemaps (src/Text2Image/T2IParamTypes.cs:226), which the API does
- *  not expose - the legacy UI gets it inlined into the page instead (Text2Image.cshtml:42). */
+ *  not expose - keep the two in sync by hand. */
 const REMAPS: Record<string, string> = {
     saveintermediateimages: 'outputintermediateimages',
     textvideofps: 'videofps',

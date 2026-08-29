@@ -27,10 +27,8 @@ interface LogsResponse {
     last_sequence_id: number;
 }
 
-/** Live server log viewer with per-type filtering.
- *
- * The legacy Logs tab renders a single pre block with a type dropdown; this keeps the type set as
- * toggleable chips so several streams can be watched at once, and colours each line by its type. */
+/** Live server log viewer. Types are toggleable chips rather than a single choice, so several
+ *  streams can be watched at once, and each line is coloured by its type. */
 export function LogsPage() {
     const { t, tDynamic } = useTranslation();
     // ?types=<name> deep-links a single tracker, which is how a backend card opens its own process
@@ -193,8 +191,8 @@ const PASTEBIN_LEVELS = ['verbose', 'debug', 'info'];
 const PASTE_SERVICE = 'https://paste.denizenscript.com/New/Swarm';
 
 /** One-click upload of the server log to the public Swarm pastebin, for sharing when asking for
- *  support. Mirrors the legacy "Pastebin" modal (ServerTab.cshtml:185), warnings included - the
- *  paste is public and not easily deletable, so the user has to read that before submitting. */
+ *  support. The paste is public and not easily deletable, so the warning is shown before the
+ *  submit rather than after. */
 function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
     const { t } = useTranslation();
     const [level, setLevel] = useState('debug');

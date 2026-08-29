@@ -4,9 +4,6 @@
  * `raw/…`, `Starred/…`); the server accepts both and strips the data prefix itself
  * (T2IParamTypes.cs:1113). List params hold an array of those, which the API joins with its
  * `\n|||\n` splitter (RequestToParams, src/WebAPI/T2IAPI.cs:216).
- *
- * Replaces the file-input half of src/wwwroot/js/site.js (makeImageInput, setMediaFileInput,
- * setMediaFileDirect, clearMediaFileInput).
  */
 
 import { t } from '@/i18n';
@@ -14,8 +11,7 @@ import type { ParamDataType } from '@/api/types';
 
 export type MediaKind = 'image' | 'audio' | 'video';
 
-/** What we know about one media value, for display and for generation metadata.
- *  The legacy UI parks the same facts on the file input's dataset (site.js:588). */
+/** What we know about one media value, for display and for generation metadata. */
 export interface MediaMeta {
     /** Original file name, or the server path the value came from. */
     name: string;
@@ -49,7 +45,7 @@ export function mediaKindOf(type: ParamDataType): MediaKind {
 }
 
 /** `accept` for the file picker. Image inputs also take video, because video models drive their
- *  init image from a clip - matching the accept list in makeImageInput (site.js:1005). */
+ *  init image from a clip. */
 export const FILE_ACCEPT: Record<MediaKind, string> = {
     image: 'image/png, image/jpeg, image/webp, image/gif, video/mp4, video/webm, video/quicktime',
     audio: 'audio/wav, audio/wave, audio/mp3, audio/mpeg, audio/aac, audio/ogg, audio/flac',

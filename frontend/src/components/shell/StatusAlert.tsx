@@ -3,11 +3,8 @@ import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { useCurrentStatus, useSession } from '@/api/hooks';
 import { useTranslation } from '@/i18n';
 
-/** Backend health, rendered as a dismissible alert *inside* the content flow.
- *
- * The legacy equivalent (#top_status_bar) is a fixed-position overlay that sits on top of the tab
- * strip — in the running instance it visually clips the tab labels and intercepts their clicks.
- * Keeping this in normal flow removes that class of bug entirely. */
+/** Backend health, as a dismissible alert *inside* the content flow rather than an overlay, so it
+ *  can never cover or intercept clicks on the navigation above it. */
 export function StatusAlert() {
     const { t, tDynamic } = useTranslation();
     const session = useSession();

@@ -21,10 +21,9 @@ function itemValue(label: string, ...extras: (string | null | undefined)[]): str
 
 /** Substring-based ranking, replacing cmdk's default subsequence scoring.
  *
- * The default scorer matches any character subsequence, so searching "seed" scored a hit on
- * "Settings Appearance theme layout density dark light" and buried the 12 real Seed parameters
- * below eleven irrelevant screens. Requiring a contiguous substring makes results predictable,
- * and the tiers float the most specific match to the top. */
+ * cmdk matches any character subsequence, so "seed" hits "Settings Appearance theme layout density
+ * dark light" and buries the real Seed parameters. Requiring a contiguous substring makes results
+ * predictable, and the tiers float the most specific match to the top. */
 function scoreItem(value: string, search: string): number {
     const query = search.trim().toLowerCase();
     if (!query) {
@@ -114,12 +113,8 @@ function rankSetting(entry: SettingEntry, query: string): number {
     return 0;
 }
 
-/** Ctrl-K / Cmd-K palette.
- *
- * This is what actually solves navigation depth: with every destination, every generation
- * parameter and every user/server setting reachable by name, nobody needs to remember that (for
- * example) "Pickle To Safetensors" lives under Utilities, or which of the two settings screens owns
- * "Model Root". The legacy UI offered no search of any kind across its ~25 screens. */
+/** Ctrl-K / Cmd-K palette: every destination, every generation parameter and every user/server
+ *  setting reachable by name, so nothing depends on remembering which screen owns it. */
 export function CommandPalette() {
     const { t, tDynamic } = useTranslation();
     const [open, setOpen] = useState(false);
@@ -162,8 +157,8 @@ export function CommandPalette() {
             .slice(0, 8);
     }, [search, params.data, tDynamic]);
 
-    // Every setting from both screens, flattened once per tree, so a legacy setting name typed from
-    // memory ("Model Root", "OutPath Builder") lands on the exact row that owns it.
+    // Every setting from both screens, flattened once per tree, so a name typed from memory
+    // ("Model Root", "OutPath Builder") lands on the exact row that owns it.
     const settingsIndex = useMemo<SettingEntry[]>(() => {
         const entries: SettingEntry[] = [];
         if (userSettings.data) {

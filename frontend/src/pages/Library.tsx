@@ -18,8 +18,8 @@ const SUBTYPES: Record<string, { subtype: ModelSubtype; emptyHintKey: string }> 
     wildcards: { subtype: 'Wildcards', emptyHintKey: 'library.emptyHint.wildcards' }
 };
 
-/** One Library screen. All eight asset types share this shell and get the full viewport height,
- *  rather than the ~300px bottom strip they had in the legacy UI. */
+/** One Library screen, picked by destination id: history and presets have browsers of their own,
+ *  everything else is <ModelBrowser> over the subtype below. */
 export function LibraryPage(props: { destinationId: string }) {
     const { t } = useTranslation();
     if (props.destinationId === 'history') {

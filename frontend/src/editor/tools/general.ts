@@ -4,8 +4,8 @@
  * Alt, the middle button and (unless a tool claims it) the right button all borrow this tool while
  * held, so panning is always one gesture away whatever is in hand.
  *
- * The handle glyphs are drawn as paths rather than loaded from `imgs/canvas_move.png` and
- * `imgs/canvas_rotate.png`: this UI ships no such assets, and a path stays crisp on a HiDPI canvas.
+ * The handle glyphs are drawn as canvas paths: this UI ships no image assets, and a path stays
+ * crisp on a HiDPI canvas.
  */
 
 import { MousePointer2 } from 'lucide-react';

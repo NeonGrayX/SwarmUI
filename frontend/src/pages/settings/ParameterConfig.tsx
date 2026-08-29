@@ -53,11 +53,8 @@ function sameRecord(a: ParamEdit, b: ParamEdit): boolean {
     return true;
 }
 
-/** Parameter Configuration.
- *
- * The legacy screen renders ~253 rows each carrying 8-10 inline controls with mid-line labels,
- * producing an unreadable and unnavigable wall. This shows the same information as a scannable
- * table and moves editing into a side sheet, so only one parameter's controls are on screen. */
+/** Parameter Configuration: every generation parameter as a scannable table, with editing in a
+ *  side sheet so only one parameter's controls are on screen at a time. */
 export function ParameterConfigPage() {
     const { t, tDynamic } = useTranslation();
     const session = useSession();
@@ -75,7 +72,7 @@ export function ParameterConfigPage() {
     const savedParams = saved.params ?? {};
 
     // The blob is stored whole, so a save has to carry every override the server already holds -
-    // including the group edits this screen does not touch, which the legacy UI can still write.
+    // including group edits, which this screen does not touch but other UIs can still write.
     const save = useMutation({
         mutationFn: (next: ParamEdits) => api.post('SetParamEdits', { edits: next }),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['t2i-params'] })

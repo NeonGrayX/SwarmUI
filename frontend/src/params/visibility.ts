@@ -1,7 +1,6 @@
 /** Which parameters and groups are currently visible.
  *
- * Ported from hideUnsupportableParams (src/wwwroot/js/genpage/gentab/params.js:1369), which is the
- * authority on these rules. A param shows when all of the following hold:
+ * A param shows when all of the following hold:
  *   - its `feature_flag`s are all supported by the connected backends
  *   - `visible` is set (VisibleNormally)
  *   - the text filter matches its id, name, description or group name
@@ -81,7 +80,7 @@ export function computeVisibility(input: VisibilityInput): VisibilityResult {
     // Pass 1: altered state, needed before visibility because advanced params stay visible once set.
     for (const param of schema.params) {
         let paramAltered = isAltered(param, values, toggles);
-        // A group toggle that is off suppresses its children's altered state, as in params.js:1411.
+        // A group toggle that is off suppresses its children's altered state.
         const group = param.group ? schema.groupsById.get(param.group) : undefined;
         if (group?.toggles && groupToggles[group.id] !== true) {
             paramAltered = false;
@@ -101,8 +100,8 @@ export function computeVisibility(input: VisibilityInput): VisibilityResult {
         const filterShow = matchesSearch(param, schema, query);
         const advanced = isAdvanced(param, schema);
 
-        // Counts only param-level `advanced`, not group-inherited, matching the legacy
-        // advancedCount in params.js:1440 which drives "Display Advanced Options? (n)".
+        // Counts only param-level `advanced`, not group-inherited, which is what the
+        // "Advanced (n)" chip is offering to reveal.
         if (param.advanced && supported && filterShow) {
             advancedHiddenCount++;
         }

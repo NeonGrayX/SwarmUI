@@ -5,14 +5,12 @@ import { useTranslation } from '@/i18n';
 
 /** The detail panel every browser opens for a selected entry.
  *
- * On a wide screen it is a column beside the list, which keeps the list visible while you read the
- * detail. On a narrow one that column would leave the list about 90px wide, so it becomes a bottom
- * sheet instead: portrait screens have vertical room to spare and no horizontal room at all, and a
- * sheet rising from the bottom edge also puts its content within thumb reach.
+ * Wide screens get a column beside the list, so the list stays visible while the detail is read.
+ * Narrow ones get a bottom sheet instead — that column would leave the list about 90px wide, and a
+ * sheet also puts its content within thumb reach.
  *
- * Callers write one tree — a header block and a scrolling body — and this decides how it is
- * presented. `min-h-0` on the body is the caller's job either way, exactly as with the old
- * hand-rolled `<aside>`s this replaces. */
+ * Callers write one tree, a header block and a scrolling body, and this decides how it is
+ * presented. `min-h-0` on the body is the caller's job either way. */
 export function DetailSheet(props: {
     /** Accessible name for the panel. */
     label: string;

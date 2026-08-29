@@ -50,8 +50,8 @@ export function BackendsPage() {
 
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ['backends'] });
     // Every one of these can be refused by the server — Program.LockSettings alone rejects add,
-    // delete, edit and restart. Legacy swallows the result, so a locked server looks like a dead
-    // button; surface it instead. (Per-backend save errors render inside the card.)
+    // delete, edit and restart — so the refusal is surfaced rather than swallowed, or a locked
+    // server looks like a dead button. (Per-backend save errors render inside the card.)
     const [actionError, setActionError] = useState<string | null>(null);
     const failWith = (whatKey: string) => (error: unknown) =>
         setActionError(

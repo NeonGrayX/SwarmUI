@@ -6,8 +6,6 @@
  *     (API.cs:104). We use the header so request bodies stay clean.
  *   - Errors come back as { error, error_id } rather than an HTTP status in most cases.
  *   - `invalid_session_id` means the session lapsed; acquire a new one and retry.
- *
- * This replaces genericRequest/makeWSRequest in src/wwwroot/js/site.js.
  */
 
 import { t } from '@/i18n/store';
@@ -28,7 +26,7 @@ export class SwarmApiError extends Error {
 }
 
 const SESSION_COOKIE = 'session_id';
-/** Matches the legacy retry ceiling in site.js so a broken session can't loop forever. */
+/** Retry ceiling, so a broken session can't loop forever. */
 const MAX_RETRY_DEPTH = 3;
 
 /** Holds the active session and serializes concurrent attempts to establish one. */

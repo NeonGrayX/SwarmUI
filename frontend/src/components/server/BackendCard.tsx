@@ -36,15 +36,8 @@ export interface BackendSaveInput {
     new_id?: number;
 }
 
-/** One backend, with its settings panel expanding in place.
- *
- * The legacy card (src/wwwroot/js/genpage/server/backends.js:21) always renders every setting as a
- * disabled input and the ✎ button re-enables them, so a page with several backends is a wall of
- * greyed-out text boxes. Here the panel is collapsed by default: the chevron opens it read-only and
- * the ✎ opens it ready to edit, which is the same two states without the permanent noise.
- *
- * Title and ID are real labelled inputs. Legacy makes them contentEditable spans inside the card
- * heading, which is why they need a keydown handler to swallow Enter. */
+/** One backend, with its settings panel expanding in place. The panel is collapsed by default:
+ *  the chevron opens it read-only, the ✎ opens it ready to edit. */
 export function BackendCard(props: {
     backend: Backend;
     type?: BackendType;
@@ -388,7 +381,7 @@ function SettingControl(props: {
 
     if (field.type === 'group') {
         // ListBackendTypes emits sections as a bare 'group' with no child schema, so there is
-        // nothing to render. Legacy hits the same wall and logs to console instead of saying so.
+        // nothing to render; say so rather than dropping the row silently.
         return (
             <p className="py-1 text-xs text-fg-soft">{t('backendCard.groupedSettings')}</p>
         );

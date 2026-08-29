@@ -25,12 +25,9 @@ function splitList(text: string): string[] {
         .filter(Boolean);
 }
 
-/** Schema-driven settings editor, shared by Server Configuration and user Preferences.
- *
- * The legacy versions of both screens (src/wwwroot/js/genpage/helpers/settings_editor.js) render
- * label and control as inline siblings, producing ~60 unaligned rows with no search and no way to
- * see what you have changed. This gives them a group sidebar, a search box, aligned two-column
- * rows via the same <Field> primitive as the parameter panel, and a sticky unsaved-changes bar. */
+/** Schema-driven settings editor, shared by Server Configuration and user Preferences: a group
+ *  sidebar, a search box, rows built from the same <Field> primitive as the parameter panel, and a
+ *  sticky unsaved-changes bar. */
 export function SettingsForm(props: {
     tree: SettingsTree;
     /** Called with a map of dotted key -> new value. */

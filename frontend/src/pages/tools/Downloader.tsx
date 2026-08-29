@@ -296,9 +296,8 @@ export function DownloaderPage() {
     );
 }
 
-/** What the pasted link turned out to be, and what will actually be fetched. The legacy tool shows
- *  the first half of this and rewrites the URL box in place for the second, which loses whatever
- *  the user pasted. */
+/** What the pasted link turned out to be, and what will actually be fetched. Shown beside the URL
+ *  box rather than rewritten into it, so the pasted link survives. */
 function SourcePanel(props: { source: ModelSource | null; resolving: boolean }) {
     const { t } = useTranslation();
     const { source, resolving } = props;

@@ -1,7 +1,5 @@
-/** Colour conversions for the image editor.
- *
- * Ported from the arithmetic in src/wwwroot/js/genpage/helpers/color_picker.js; the picker UI
- * itself is react-colorful, so only the conversions that the editor's own logic needs live here.
+/** Colour conversions for the image editor. The picker UI itself is react-colorful, so only the
+ *  conversions the editor's own logic needs live here.
  */
 
 export interface Rgb {
@@ -35,8 +33,8 @@ export function rgbToHex(r: number, g: number, b: number): string {
     return `#${part(r)}${part(g)}${part(b)}`;
 }
 
-/** Rec. 601 luma, matching colorPickerHelper.hexToGrayscale. Mask layers only carry brightness,
- *  so a colour picked for one is compressed rather than silently reinterpreted. */
+/** Rec. 601 luma. Mask layers only carry brightness, so a colour picked for one is compressed
+ *  rather than silently reinterpreted. */
 export function hexToGrayscale(hex: string): string {
     const { r, g, b } = hexToRgb(hex);
     const gray = Math.round(r * 0.299 + g * 0.587 + b * 0.114);

@@ -2,12 +2,9 @@ import { Construction } from 'lucide-react';
 import type { Destination } from '@/nav/destinations';
 import { useTranslation } from '@/i18n';
 
-/** Honest placeholder for a destination that is routed but not yet built.
- *  Says which phase delivers it rather than pretending to be an empty screen.
- *
- *  `phase` and `summary` come from the build plan in router.tsx and are deliberately not
- *  translated: they are developer-facing notes about work in progress. Extensions is the only
- *  destination that still lands here, and it points at the legacy Extensions tab. */
+/** Stand-in for a routed destination with no screen of its own — Extensions is the only one.
+ *  `phase` and `summary` come from router.tsx and are deliberately untranslated: they are
+ *  developer-facing notes, not interface copy. */
 export function Placeholder(props: { destination: Destination; phase: string; summary: string }) {
     const { t } = useTranslation();
     const Icon = props.destination.icon;

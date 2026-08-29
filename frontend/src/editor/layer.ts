@@ -1,8 +1,8 @@
 /** A single layer of the image editor.
+ *  Ported from ImageEditorLayer (src/wwwroot/js/genpage/helpers/image_editor.js:6).
  *
- * Direct port of ImageEditorLayer (src/wwwroot/js/genpage/helpers/image_editor.js:6). A layer is a
- * backing canvas at its own native resolution, placed into image space by an offset, a display
- * size and a rotation - so scaling a layer never resamples its pixels until it is exported.
+ * A layer is a backing canvas at its own native resolution, placed into image space by an offset,
+ * a display size and a rotation - so scaling a layer never resamples its pixels until export.
  *
  * `childLayers` are live buffers: while a stroke is in progress the brush draws into a child, so
  * the stroke composites as one object (its opacity applies to the stroke, not to each dab) and can
@@ -85,8 +85,8 @@ export class EditorLayer {
 
     /** Inverts the layer's pixels - "Invert Colors" on an image layer, "Invert Mask" on a mask.
      *
-     *  Alpha is left alone, as it is in the legacy editor: on a mask, an area nobody painted is
-     *  not a masked area waiting to be flipped, it is an area with no mask at all. */
+     *  Alpha is left alone: on a mask, an area nobody painted is not a masked area waiting to be
+     *  flipped, it is an area with no mask at all. */
     invert(): void {
         this.saveBeforeEdit();
         const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);

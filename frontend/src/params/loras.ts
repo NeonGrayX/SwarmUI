@@ -3,8 +3,7 @@
  * The server takes `loras`, `loraweights` and `lorasectionconfinement` as separate equal-length
  * lists (T2IParamTypes.cs:698) and only warns-and-patches when they disagree
  * (T2IParamInput.cs:66), so anything that edits one has to edit the others in the same breath.
- * The legacy UI threads that by hand through loras.js against three DOM inputs; here it is one
- * hook, which is also what lets the picker and the context strip stay in step.
+ * One hook owns all three, which is what keeps the picker and the context strip in step.
  */
 
 import { useCallback, useMemo } from 'react';

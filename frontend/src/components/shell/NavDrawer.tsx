@@ -7,12 +7,9 @@ import { SECTIONS, defaultDestination } from '@/nav/destinations';
 import { useTranslation } from '@/i18n';
 import { useActiveSection } from './Rail';
 
-/** Phone-width replacement for the rail.
- *
- * The rail is 4.5rem of permanently reserved width for five links — affordable beside a 1400px
- * workspace, not beside a 360px one. Folded into a drawer it costs one header button, and the
- * level-two nav stays on screen as the horizontal strip under the header, so the "where am I"
- * guarantee the rail exists to provide is not lost with it. */
+/** Phone-width replacement for the rail, which is 4.5rem of permanently reserved width. Folded
+ *  into a drawer it costs one header button, and level two stays on screen as the horizontal strip
+ *  under the header, so "where am I" is still answerable without opening this. */
 export function NavDrawer() {
     const { t } = useTranslation();
     const [open, setOpen] = useState(false);

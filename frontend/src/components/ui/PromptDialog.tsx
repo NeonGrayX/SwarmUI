@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslation } from '@/i18n';
 
-/** Single-text-input dialog, used for rename-style actions.
- *  Replaces the browser `prompt()` calls the legacy UI uses for renames. */
+/** Single-text-input dialog, used for rename-style actions. */
 export function PromptDialog(props: {
     open: boolean;
     title: string;

@@ -26,12 +26,9 @@ const INPUT_CLASS =
  * Numeric
  * ------------------------------------------------------------------------------------------- */
 
-/** Slider with an always-editable numeric box.
- *
- * The legacy slider is display-only next to a separate number field; here the number is the source
- * of truth and the track is a second view of it, so keyboard and pointer both work naturally.
- * `view_min`/`view_max` bound the track while `min`/`max` bound what can be typed - the schema
- * distinguishes these (T2IParamTypes.cs ViewMin/ViewMax) and the legacy UI honors it too. */
+/** Slider with an always-editable numeric box. The number is the source of truth and the track is
+ *  a second view of it. `view_min`/`view_max` bound the track while `min`/`max` bound what can be
+ *  typed (T2IParamTypes.cs ViewMin/ViewMax). */
 export function SliderField(props: ControlProps & { big?: boolean }) {
     const { t, tDynamic } = useTranslation();
     const { param } = props;
@@ -67,8 +64,8 @@ export function SliderField(props: ControlProps & { big?: boolean }) {
     );
 }
 
-/** Power-of-two slider, used for width/height. The track moves in exponent space so each notch
- *  doubles, matching linearToPot/potToLinear in the legacy util.js. */
+/** Power-of-two slider, used for width/height. The track moves in exponent space, so each notch
+ *  doubles. */
 export function PowerOfTwoSlider(props: ControlProps) {
     const { t, tDynamic } = useTranslation();
     const { param } = props;
@@ -126,7 +123,7 @@ export function NumberField(props: ControlProps) {
     );
 }
 
-/** Seed input with randomize (-1) and reroll actions, replacing the legacy pair of glyph buttons. */
+/** Seed input with randomize (-1) and reroll actions. */
 export function SeedField(props: ControlProps) {
     const { t } = useTranslation();
     const numeric = Number(props.value ?? -1);
@@ -162,7 +159,7 @@ export function SeedField(props: ControlProps) {
     );
 }
 
-/** Frame count that can also be read as seconds. The legacy makeVideoFramesInput shows both. */
+/** Frame count, with the equivalent duration in seconds beside it. */
 export function VideoFramesField(props: ControlProps) {
     const { t } = useTranslation();
     const numeric = Number(props.value ?? props.param.min);

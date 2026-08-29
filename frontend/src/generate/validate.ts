@@ -2,9 +2,7 @@
  *
  * The backend only reports these once the request has reached a worker, and in terms of its own
  * internals - a missing model comes back as "No model input given. Did your UI load properly?"
- * (WorkflowGeneratorSteps.cs:61), which tells the user nothing about what to do. The legacy UI
- * gated the same case in front of the socket call (validateModel, generatehandler.js:358); this is
- * that gate, generalized.
+ * (WorkflowGeneratorSteps.cs:61). Catching them here says what to actually do instead.
  */
 
 import { t } from '@/i18n';

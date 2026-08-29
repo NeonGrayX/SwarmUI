@@ -9,12 +9,9 @@ import { useTranslation } from '@/i18n';
 
 /** The LoRA field: what is applied, at what weight, plus a picker to change it.
  *
- * In the legacy UI this is spread over three places - a select2 multi-select in the parameter
- * list, a row of weight boxes in the bottom bar, and the LoRAs tab of the model browser - none of
- * which say whether a given LoRA can work with the model that is loaded. Since a LoRA trained on a
- * different base model does nothing useful, that check is the picker's default filter here, and
- * anything already selected that stops matching is flagged in place.
- */
+ *  A LoRA trained against a different base model does nothing useful, so compatibility with the
+ *  selected model is the picker's default filter, and anything already selected that stops
+ *  matching is flagged in place. */
 
 /** Fallbacks matching the LoRA Weights param registration (T2IParamTypes.cs:701), for the case
  *  where the schema has not loaded yet. */

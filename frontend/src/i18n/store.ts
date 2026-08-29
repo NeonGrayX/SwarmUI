@@ -13,8 +13,6 @@
  *     which means the several hundred parameter/settings translations already written for that
  *     interface apply here unchanged.
  *
- * Replaces src/wwwroot/js/translator.js, whose DOM-walking approach can't work against React.
- *
  * This module deliberately does not import the API client: the client asks `t` for its own error
  * messages, so a dependency the other way would be a cycle. Fetching the server-keyed table is
  * therefore the job of `useTranslationSync` in ./index.ts, which hands the result to `setDynamic`.

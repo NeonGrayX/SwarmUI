@@ -4,15 +4,12 @@ import { HexColorInput, HexColorPicker } from 'react-colorful';
 import { hexToLevel, levelToHex } from '@/editor/color';
 import { useTranslation } from '@/i18n';
 
-/** The colour control in the editor's option bar: a swatch that opens a picker, and an eyedropper.
+/** The colour control in the editor's option bar: a react-colorful swatch picker, plus an
+ *  eyedropper.
  *
- * Replaces the hand-built HSV canvas picker of src/wwwroot/js/genpage/helpers/color_picker.js with
- * react-colorful, which is the same interaction in 2.8KB and comes with keyboard support the
- * original never had.
- *
- * On a mask layer the hue/saturation area is replaced by a single brightness ramp: a mask carries
- * nothing but brightness, so offering colours there would only invite a choice that gets silently
- * discarded on the way to the backend. */
+ *  On a mask layer the hue/saturation area is replaced by a single brightness ramp: a mask carries
+ *  nothing but brightness, so offering colours there would invite a choice that is silently
+ *  discarded on the way to the backend. */
 export function ColorField(props: {
     value: string;
     grayscale: boolean;

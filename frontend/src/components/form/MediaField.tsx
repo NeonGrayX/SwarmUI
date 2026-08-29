@@ -30,10 +30,8 @@ function kindKey(prefix: string, kind: MediaKind): string {
 
 /** File input for image / audio / video params, single or list.
  *
- * Accepts a file three ways - picker, drag and drop, clipboard paste - where the legacy UI splits
- * these across a hidden `<input type=file>`, a separate zero-width "Ctrl+V: Paste Image" text box,
- * and an `Upload` anchor (makeImageInput, src/wwwroot/js/site.js:990). The preview replaces the
- * whole control here rather than hanging below it, so a set input reads as set at a glance.
+ * Accepts a file three ways - picker, drag and drop, clipboard paste - and the preview replaces
+ * the whole control once one is set, so a filled input reads as filled at a glance.
  *
  * Values are stored as `data:` URLs; the server strips the prefix when parsing
  * (T2IParamTypes.cs:1113). Server-side paths (`inputs/…`, `raw/…`) set from elsewhere are kept
@@ -102,7 +100,7 @@ export function MediaField(props: ControlProps & { emptyLabel?: string }) {
     }
 
     /** Records what a preview learned once it loaded: resolution for visual media, duration for
-     *  timed media. Both end up in the generation metadata, as they do in the legacy UI. */
+     *  timed media. Both end up in the generation metadata. */
     function patchMeta(index: number, patch: Partial<MediaMeta>): void {
         const filled = filledMetas(values, metas, kind);
         const current = filled[index];

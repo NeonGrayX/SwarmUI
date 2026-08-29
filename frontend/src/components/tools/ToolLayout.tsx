@@ -3,12 +3,9 @@ import { AlertTriangle, ChevronRight, Loader2, X } from 'lucide-react';
 import { useJobStore, type Job } from '@/tools/jobs';
 import { useTranslation } from '@/i18n';
 
-/** Standard shell for a tool screen.
- *
- * Replaces the legacy `card-center-container` pattern, which pins a ~620px card to the middle of a
- * 1568px viewport and stuffs eight lines of `<br>`-separated explanation into the card body. Here
- * the form leads, the long explanation collapses behind "About this tool", and the one line that
- * actually matters is promoted to a warning beside the action. */
+/** Standard shell for a tool screen: the form leads, the long explanation collapses behind
+ *  "About this tool", and the one line that actually matters is promoted to a warning beside the
+ *  action. */
 export function ToolLayout(props: {
     title: string;
     summary: string;

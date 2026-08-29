@@ -1,12 +1,12 @@
 /* Design tokens for the new SwarmUI frontend.
  *
- * These deliberately reuse the *exact* custom-property names the legacy UI uses, so that the 14
+ * These deliberately reuse the *exact* custom-property names the legacy UI uses, so that the
  * themes registered in WebServer.cs can be loaded on top of this file unchanged.
  * Legacy base values live in src/wwwroot/css/site.css :root; theme files override a subset.
  *
  * Anything genuinely new to this UI is namespaced --sw-* so it never collides with legacy names.
  *
- * Two rules keep this working across all 14 themes:
+ * Two rules keep this working across every theme:
  *
  *  1. Any property a theme file *might* set must be declared here as a derivation of properties
  *     every theme does set - never as a literal. A literal here is a silent modern_dark default
@@ -145,11 +145,11 @@
     /* Secondary text. Derived from --text rather than using the themes' own --text-soft, because
      * several themes set that too close to their background: modern_light lands at 3.4:1 and
      * ctp_latte at 3.9:1, both under WCAG AA. Mixing 12% toward the background keeps a visible
-     * hierarchy while clearing 4.5:1 in all 14 shipped themes (worst case ctp_latte at 5.0:1,
+     * hierarchy while clearing 4.5:1 in every shipped theme (worst case ctp_latte at 5.0:1,
      * which is the floor because its own --text is only 6.6:1 to begin with). */
     --sw-fg-soft: color-mix(in srgb, var(--text) 88%, var(--background) 12%);
 
-    /* Spacing scale — the legacy UI has no consistent rhythm; this establishes one. */
+    /* Spacing scale. */
     --sw-space-1: 0.25rem;
     --sw-space-2: 0.5rem;
     --sw-space-3: 0.75rem;
@@ -161,7 +161,7 @@
     --sw-radius: 6px;
     --sw-radius-lg: 10px;
 
-    /* Form layout: the fixed label column that makes fields actually align. */
+    /* Form layout: the fixed label column that keeps fields aligned. */
     --sw-field-label-width: 11rem;
     --sw-field-gap: 0.75rem;
     --sw-field-row-height: 2rem;

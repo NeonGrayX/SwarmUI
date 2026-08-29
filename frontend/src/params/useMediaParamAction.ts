@@ -1,8 +1,5 @@
 /** Sending an image somewhere from outside the param panel - "Use as init image" and friends.
- *
- * The legacy equivalent is the Use As Init button (currentimagehandler.js:1127), which builds a
- * File, stuffs it into the file input's `files` list, then hand-checks the group toggle. Here it is
- * one call: inline the data, record its metadata, and switch the param and its groups on.
+ *  One call: inline the data, record its metadata, and switch the param and its groups on.
  */
 
 import { useCallback } from 'react';

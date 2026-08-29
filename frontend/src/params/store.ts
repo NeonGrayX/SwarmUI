@@ -87,9 +87,7 @@ export function valueOf(
     return param.id in values ? values[param.id] : defaultValue(param);
 }
 
-/** Whether the user has moved a param away from its default, or switched its toggle on.
- *  Mirrors the `isAltered` computation in hideUnsupportableParams
- *  (src/wwwroot/js/genpage/gentab/params.js:1409). */
+/** Whether the user has moved a param away from its default, or switched its toggle on. */
 export function isAltered(
     param: ParamSchema,
     values: Record<string, ParamValue>,

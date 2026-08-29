@@ -13,9 +13,8 @@ interface Token {
 
 const WORD_END = '</w>';
 
-/** Word-end vs word-piece, matching the legacy tokenizer tab's green/yellow split. The colour is
- *  the only way to see where the encoder thinks a word actually ends: "photorealistic" is two
- *  tokens, and only the second one carries the word break. */
+/** Word-end vs word-piece. The colour is the only way to see where the encoder thinks a word
+ *  actually ends: "photorealistic" is two tokens, and only the second carries the word break. */
 const TINT_WORD_END = 'color-mix(in srgb, var(--sw-surface) 70%, var(--green))';
 const TINT_WORD_PIECE = 'color-mix(in srgb, var(--sw-surface) 70%, var(--yellow))';
 

@@ -149,9 +149,8 @@ export function Canvas() {
     );
 }
 
-/** Sends the current image somewhere else - a media param, or the editor. Text rather than a glyph:
- *  "which button reuses this image" is exactly the thing the legacy icon strip makes you hover to
- *  find out. */
+/** Sends the current image somewhere else - a media param, or the editor. Labelled with text
+ *  rather than a glyph, since "which button reuses this image" is not guessable from an icon. */
 function ReuseButton(props: { label: string; onClick: () => void; icon?: React.ReactNode }) {
     return (
         <button

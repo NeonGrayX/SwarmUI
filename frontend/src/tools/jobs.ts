@@ -1,9 +1,5 @@
-/** Shared job runner for the long-running websocket tools.
- *
- * The legacy versions of these tools report progress only via console.log ("Additional debug info
- * while running can be found in the browser console" — UtilitiesTab.cshtml), so a user running a
- * model download or LoRA extraction has no in-page feedback at all. This gives every such tool one
- * progress bar, one log tail and one cancel button.
+/** Shared job runner for the long-running websocket tools: one progress bar, one log tail and one
+ *  cancel button, for every tool that runs a job.
  */
 
 import { create } from 'zustand';

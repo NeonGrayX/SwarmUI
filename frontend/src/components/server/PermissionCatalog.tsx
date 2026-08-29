@@ -9,11 +9,8 @@ import {
 } from '@/server/users';
 import { useTranslation } from '@/i18n';
 
-/** Read-only reference for every registered permission.
- *
- * The legacy UI has no equivalent — permissions only ever appear as unlabelled toggles inside one
- * role, so there is no way to ask "what is this permission, and who currently has it?". Listing
- * the roles that grant each one answers that without opening every role in turn. */
+/** Read-only reference for every registered permission, listing the roles that grant each one —
+ *  "what is this permission, and who currently has it?" without opening every role in turn. */
 export function PermissionCatalog(props: {
     ordered: string[];
     info: Record<string, PermissionInfo>;

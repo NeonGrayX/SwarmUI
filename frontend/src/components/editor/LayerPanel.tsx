@@ -117,7 +117,7 @@ function AddButtons() {
     );
 }
 
-/** Opacity for the layer in hand. In the legacy panel this was reachable by right-click only. */
+/** Opacity for the layer in hand. */
 function OpacitySlider(props: { layer: EditorLayer; className?: string }) {
     const { t } = useTranslation();
     const engine = useEditorStore(s => s.engine);

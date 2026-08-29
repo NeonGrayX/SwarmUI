@@ -14,7 +14,7 @@ import { ImageEditorEngine } from './engine';
 import type { EditorExport } from './types';
 
 /** Params the editor supplies at generation time, and which the parameter panel therefore hides
- *  while it is open. The legacy UI hides the same two (doParamHides, image_editor.js:1010). */
+ *  while it is open. */
 export const EDITOR_OWNED_PARAMS: ReadonlySet<string> = new Set(['initimage', 'maskimage']);
 
 /** One engine for the session. Reopening the editor on another image resets its document rather

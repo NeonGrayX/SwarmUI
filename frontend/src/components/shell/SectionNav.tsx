@@ -3,15 +3,12 @@ import { usePermitted } from '@/api/permissions';
 import { destinationsIn, findSection, type SectionId } from '@/nav/destinations';
 import { useTranslation } from '@/i18n';
 
-/** Level two of the IA: the destinations within the active rail section.
+/** Level two of the IA: the destinations within the active rail section. Styled deliberately
+ *  unlike the rail, so the hierarchy is legible at a glance. Sections with a single destination
+ *  render no nav at all.
  *
- * Styled deliberately unlike the rail so the hierarchy is legible at a glance — the core problem
- * with the legacy UI, where the top strip and its sub-strips both rendered as `nav-tabs`.
- * Sections with a single destination render no nav at all.
- *
- * Below `lg` the column becomes a horizontal strip under the header: a 14rem column is a third of
- * a phone screen, but the same links scroll sideways in one 40px row and stay permanently visible,
- * which is what keeps this level of the IA out of the drawer. */
+ *  Below `lg` the column becomes a horizontal strip under the header — one 40px row that scrolls
+ *  sideways, which is what keeps this level out of the drawer on a phone. */
 export function SectionNav(props: { section: SectionId; orientation?: 'vertical' | 'horizontal' }) {
     const { t } = useTranslation();
     const destinations = usePermitted(destinationsIn(props.section));

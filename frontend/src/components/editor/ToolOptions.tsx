@@ -3,12 +3,9 @@ import { useEditorStore, useEditorVersion } from '@/editor/store';
 import { ColorField } from './ColorField';
 import { useTranslation } from '@/i18n';
 
-/** The active tool's option bar, along the bottom of the editor.
- *
- * Tools describe their controls as data (`EditorTool.getOptions`) and this renders them, which is
- * the one structural change from the legacy editor - there, each tool wrote its own HTML string
- * into the bar and queried its elements back out, so nothing was translated and only the mouse
- * could reach any of it. */
+/** The active tool's option bar, along the bottom of the editor. Tools describe their controls as
+ *  data (`EditorTool.getOptions`) and this renders them, so every tool's options are themed,
+ *  translated and keyboard-reachable without arranging for it individually. */
 export function ToolOptions() {
     const engine = useEditorStore(s => s.engine);
     useEditorVersion();

@@ -1,6 +1,6 @@
 /** Theme application.
  *
- * The 14 themes registered in WebServer.cs are plain CSS files that override a shared set of custom
+ * The themes registered in WebServer.cs are plain CSS files that override a shared set of custom
  * properties (--background, --text, --emphasis, ...). Because src/styles/tokens.css deliberately
  * adopts those same property names, loading a theme's stylesheet re-themes this UI too - no port
  * needed. Theme links are appended to <head> after the bundle so they win on equal specificity.

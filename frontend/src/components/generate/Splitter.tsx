@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
-/** Draggable vertical divider between two panes.
- *
- * Keyboard accessible, which the legacy `.splitter-bar` divs are not - they are plain divs with
- * mousedown handlers and no role, tabindex or key handling. */
+/** Draggable vertical divider between two panes. Also resizable from the keyboard, via the arrow
+ *  keys on the focused handle. */
 export function Splitter(props: {
     onResize: (deltaPx: number) => void;
     label: string;

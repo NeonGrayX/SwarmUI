@@ -52,8 +52,8 @@ function delay(ms: number): Promise<void> {
  *
  * ListImages returns `src` paths relative to the *user's* output directory, so they need the
  * user-aware prefix from imageOutPrefix - `/View/<user_id>/...` or `/Output/...` depending on the
- * server's AppendUserNameToOutputPath setting. A bare `/View/<src>` 404s.
- * (Note this differs from the generation websocket, which already sends fully-prefixed paths.) */
+ * server's AppendUserNameToOutputPath setting. A bare `/View/<src>` 404s. The generation websocket
+ * differs: it already sends fully-prefixed paths. */
 export function HistoryBrowser() {
     const { t } = useTranslation();
     const [path, setPath] = useState('');
@@ -78,7 +78,7 @@ export function HistoryBrowser() {
     const prefix = imageOutPrefix(session.data?.user_id, session.data?.output_append_user);
     const urlForPath = (full: string) => `/${prefix}/${full}`;
     // ListImages returns `src` relative to the *requested path*, not to the output root, so the
-    // current folder has to be joined back on. At root this is a no-op, which is what hid the bug.
+    // current folder has to be joined back on. At root that is a no-op.
     const urlFor = (src: string) => urlForPath(joinPath(path, src));
 
     const files = images.data?.files ?? [];
@@ -462,8 +462,7 @@ function ImageSheet(props: {
                 </SheetIcon>
             </div>
 
-            {/* Spelled out rather than iconified: which button reuses what is exactly the thing an
-                icon strip makes you hover to find out. Same wording as the canvas buttons. */}
+            {/* Labelled with text, and worded the same way as the canvas buttons. */}
             <div className="flex shrink-0 gap-2 border-b border-subtle px-3 py-2">
                 <SheetButton label={t('history.reuseParameters')} onClick={props.onReuse} />
                 {props.canUseAsInit && (

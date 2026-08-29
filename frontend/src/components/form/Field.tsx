@@ -32,13 +32,8 @@ export interface FieldProps {
 /** The single form row used everywhere in this UI.
  *
  * The layout rule that matters: label and control live in a two-column grid with a *fixed* label
- * column (--sw-field-label-width), so every row in a panel aligns. The legacy UI emits label and
- * control as inline siblings, which is why User Settings and Server Configuration render as ragged
- * text with controls at arbitrary x-positions. The grid itself lives in `.sw-field-row` in
- * index.css, which stacks the two below `sm` — a phone has no width to give a label column.
- *
- * The legacy `?` glyph becomes a real info tooltip, so descriptions are readable rather than
- * hover-only tooltips on a 9px character. */
+ * column (--sw-field-label-width), so every row in a panel aligns. The grid lives in `.sw-field-row`
+ * in index.css, which stacks the two below `sm` — a phone has no width to give a label column. */
 export function Field(props: FieldProps) {
     const { t } = useTranslation();
     const density = props.density ?? 'comfortable';

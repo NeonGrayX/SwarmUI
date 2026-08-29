@@ -1,14 +1,12 @@
 /** Turns the metadata blob stored on an image into labelled, readable rows.
  *
  * Images carry `{"sui_image_params": {...}, "sui_extra_data": {...}, "sui_models": [...]}`
- * (GenFullMetadataObject, src/Text2Image/T2IParamInput.cs:406). Raw, that reads as a wall of
- * JSON with ids like `cfgscale` in it; here the param schema supplies real names, descriptions
- * and value labels, and the rows are grouped the way the panel shows them.
+ * (GenFullMetadataObject, src/Text2Image/T2IParamInput.cs:406). The param schema supplies real
+ * names, descriptions and value labels, and the rows are grouped the way the panel shows them.
  *
- * The regrouping mirrors getFormattedMetadataEntries
- * (src/wwwroot/js/genpage/helpers/metadatahelpers.js:292): width/height fold into a resolution,
- * loras pair up with their weights, media params absorb their filename/resolution/duration facts,
- * and prep/generation times merge into one row.
+ * Several keys are folded together on the way: width/height become a resolution, loras pair up
+ * with their weights, media params absorb their filename/resolution/duration facts, and
+ * prep/generation times merge into one row.
  */
 
 import { hasTranslation, t, tDynamic } from '@/i18n';

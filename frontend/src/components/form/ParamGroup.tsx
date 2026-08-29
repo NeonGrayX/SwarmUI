@@ -16,11 +16,8 @@ interface Props {
     depth?: number;
 }
 
-/** A collapsible parameter group.
- *
- * The header carries a count of altered descendants, so you can tell a collapsed group holds
- * changes without expanding it. In the legacy UI that information only exists once expanded, which
- * is why finding "what did I actually change" means opening all 34 groups one at a time. */
+/** A collapsible parameter group. The header carries a count of altered descendants, so a
+ *  collapsed group still says whether it holds changes. */
 export function ParamGroup(props: Props) {
     const { t, tDynamic } = useTranslation();
     const { node, visibility } = props;
@@ -158,7 +155,7 @@ export function ParamField(props: {
                 disabled={disabled}
                 onChange={next => {
                     setValue(param.id, next);
-                    // Touching a toggleable param implies switching it on, as the legacy UI does.
+                    // Touching a toggleable param implies switching it on.
                     if (param.toggleable && toggles[param.id] !== true) {
                         setToggle(param.id, true);
                     }

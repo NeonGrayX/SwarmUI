@@ -2,10 +2,7 @@ import type { ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslation } from '@/i18n';
 
-/** Confirmation for irreversible actions.
- *
- * The legacy UI communicates danger with bold body text ("Be careful! ... There is no undo") and
- * then fires immediately on click. This puts a real decision point in front of the action. */
+/** Confirmation for irreversible actions. */
 export function ConfirmDialog(props: {
     open: boolean;
     title: string;

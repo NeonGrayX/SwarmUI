@@ -4,11 +4,8 @@ import { parseImageMetadata, type MetadataEntry } from '@/params/metadata';
 import { useParamSchema } from '@/params/schema';
 import { useTranslation } from '@/i18n';
 
-/** An image's metadata as a readable list of labelled rows.
- *
- * Same shape as the model detail sheet: a fixed label column, values beside it, technical
- * bookkeeping in its own group at the bottom. The JSON is still one click away for anyone who
- * wants to copy the whole thing back into a tool. */
+/** An image's metadata as a readable list of labelled rows: a fixed label column, values beside
+ *  it, technical bookkeeping grouped at the bottom, and the raw JSON one click away. */
 export function MetadataView(props: { metadata: string | null | undefined; empty: string }) {
     const { t } = useTranslation();
     const schema = useParamSchema();

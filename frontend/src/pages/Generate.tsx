@@ -17,8 +17,8 @@ import { useIsCompact } from '@/shell/viewport';
 import { useTranslation } from '@/i18n';
 
 /** The Generate workspace: parameters, canvas, batch rail, and the prompt composer beneath. */
-/** Comfy Workflow was a sibling top-level tab in the legacy UI; here it is a mode of the Generate
- *  workspace, since it is another way to drive the same generation, not a separate destination. */
+/** Comfy Workflow is a mode of this workspace rather than its own destination: it is another way
+ *  to drive the same generation. */
 type WorkspaceMode = 'standard' | 'comfy';
 
 /** Which of the three panes a narrow screen is showing. */
@@ -88,11 +88,10 @@ function SplitWorkspace(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceMo
 
 /** The same workspace on a screen too narrow for three columns.
  *
- * The prompt, the generate button and the model/LoRA context stay pinned to the bottom, because
- * those are what every run touches and they are also what a thumb reaches. The three panes above
- * them take turns instead of sharing the width: at 360px, splitting it three ways gives the image
- * about 90px, which is not a compromise so much as an unusable version of all three. Selecting a
- * batch tile switches back to the image, so the batch tab does not become a trap. */
+ * The prompt, the generate button and the model/LoRA context stay pinned to the bottom - what
+ * every run touches, and what a thumb reaches. The three panes above them take turns as tabs
+ * rather than sharing the width; at 360px, three columns would leave the image about 90px.
+ * Selecting a batch tile switches back to the image tab. */
 function StackedWorkspace(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceMode) => void }) {
     const { t } = useTranslation();
     const [pane, setPane] = useState<Pane>('image');
@@ -172,9 +171,8 @@ function StackedWorkspace(props: { mode: WorkspaceMode; onMode: (mode: Workspace
 
 /** What fills the middle column: the Comfy workflow, the image editor, or the plain viewer.
  *
- * The editor replaces the viewer rather than opening beside it, as it does in the legacy UI where
- * the two share the image area through a drag bar. Here the editor already carries a viewer's worth
- * of pan and zoom, so a second copy of the same image next to it would only cost width. */
+ * The editor replaces the viewer rather than opening beside it - it already carries a viewer's
+ * worth of pan and zoom, so a second copy of the same image would only cost width. */
 function CenterPane(props: { mode: WorkspaceMode }) {
     const editorOpen = useEditorStore(s => s.open);
     if (props.mode === 'comfy') {

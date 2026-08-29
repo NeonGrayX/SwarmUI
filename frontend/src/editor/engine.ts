@@ -1,20 +1,17 @@
 /** The image editor engine: view, layers, history, input dispatch, rendering and export.
+ *  Ported from ImageEditor (src/wwwroot/js/genpage/helpers/image_editor.js:332).
  *
- * Ported from the ImageEditor class (src/wwwroot/js/genpage/helpers/image_editor.js:332).
+ * The engine owns its `<canvas>` and drives it imperatively - a brush stroke is not a diffable
+ * thing, so React would gain nothing from re-rendering sixty times a second. React owns everything
+ * around the canvas (toolbar, layer panel, option bar) and learns about structural changes through
+ * `subscribe`, which the engine fires only for discrete events: a layer added, a tool switched, an
+ * option edited. Pointer motion and repaints deliberately do not notify.
  *
- * The engine owns its `<canvas>` and drives it imperatively - React would have to diff a scene
- * graph sixty times a second to do the same job, and a brush stroke is not a diffable thing. React
- * owns everything around the canvas (toolbar, layer panel, option bar) and learns about structural
- * changes through `subscribe`, which the engine fires only for discrete events: a layer added, a
- * tool switched, an option edited. Pointer motion and repaints deliberately do not notify.
- *
- * Three departures from the legacy implementation, none of them behavioural:
- *   - pointer events replace the parallel mouse and touch handlers, so pen pressure, touch and
- *     mouse are one code path and the 1-second touch/mouse de-duplication timer is unnecessary
- *   - the backing canvas is sized in device pixels, so the editor is not blurry on a HiDPI screen.
- *     All coordinate maths stays in CSS pixels (`viewWidth`/`viewHeight`); only `getImageData`
- *     callers have to scale, via `devicePixel`
- *   - repaints are coalesced onto an animation frame instead of running synchronously per event
+ * Two rules that are easy to trip over:
+ *   - pen, touch and mouse are one pointer-event code path; pressure comes from `pressureOf`
+ *   - the backing canvas is sized in *device* pixels, while all coordinate maths stays in CSS
+ *     pixels (`viewWidth`/`viewHeight`). Only `getImageData` callers have to scale, via
+ *     `devicePixel`
  */
 
 import { HistoryEntry } from './history';
@@ -54,7 +51,7 @@ const NO_HOST: EditorHost = {
 };
 
 /** Undo depth. Each `layer_canvas_edit` entry holds a full-resolution copy of a layer, so this
- *  trades memory directly - the legacy limit of 15 is kept. */
+ *  trades directly against memory. */
 const MAX_HISTORY = 15;
 const ZOOM_RATE = 1.1;
 const GRID_SCALE = 4;
@@ -382,9 +379,9 @@ export class ImageEditorEngine {
     /** The Alt key (and the middle/right button) temporarily borrows the General tool, so the
      *  canvas can always be panned without losing the tool in hand.
      *
-     *  Deliberately not routed through `activateTool`: deactivating the borrowed-from tool would
-     *  run its teardown, and the SAM2 point tool's teardown throws its points away - so in the
-     *  legacy editor, panning mid-segmentation silently cleared the prompt you had built up. */
+     *  Deliberately not routed through `activateTool`: that would run the borrowed-from tool's
+     *  teardown, and the SAM2 point tool's teardown throws its points away - panning mid-
+     *  segmentation would clear the prompt built up so far. */
     handleAltDown(): void {
         if (this.preAltTool || this.activeTool.id === 'general') {
             return;
@@ -613,8 +610,7 @@ export class ImageEditorEngine {
         img.src = canvas.toDataURL();
     }
 
-    /** Follows the width/height params while the editor is open, as the legacy UI does from the
-     *  param change handler (params.js:648). */
+    /** Follows the width/height params while the editor is open. */
     setOutputSize(width: number, height: number): void {
         if (this.realWidth === width && this.realHeight === height) {
             return;
@@ -1309,7 +1305,7 @@ export class ImageEditorEngine {
         return {
             initImage: this.getFinalImageData(),
             maskImage: this.getFinalMaskData(),
-            // Latent dimensions are multiples of 8; the legacy UI floors here too (params.js:1075).
+            // Latent dimensions are multiples of 8.
             width: Math.floor(this.realWidth / 8) * 8,
             height: Math.floor(this.realHeight / 8) * 8
         };

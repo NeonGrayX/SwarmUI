@@ -58,16 +58,13 @@ function ancestorsOf(path: string): string[] {
     return segments.map((_, i) => segments.slice(0, i + 1).join('/'));
 }
 
-/** Breadcrumb + expandable folder tree for the current path.
+/** Breadcrumb + expandable folder tree for the current path. `folders` is undefined while a
+ *  folder's contents are still loading, which leaves the tree untouched rather than momentarily
+ *  collapsing the branch being opened.
  *
- * The legacy browsers render a bare nested tree of links with no indication of where you are;
- * this pairs an explicit breadcrumb with a tree whose parents expand in place. `folders` is
- * undefined while a folder's contents are still loading, which leaves the tree untouched rather
- * than momentarily collapsing the branch being opened.
- *
- * On a phone the whole thing folds into one row via <SideNav>, showing the current folder's name.
- * Only the explicit navigation buttons close it: opening a branch below the fetched depth also
- * calls `onNavigate`, to go and load that level, and must leave the tree on screen. */
+ *  On a phone the whole thing folds into one row via <SideNav>. Only the explicit navigation
+ *  buttons close it: opening a branch below the fetched depth also calls `onNavigate`, to go and
+ *  load that level, and must leave the tree on screen. */
 export function FolderPane(props: {
     folders: string[] | undefined;
     path: string;

@@ -34,8 +34,7 @@ const SHORTCUTS: { groupKey: string; items: { keys: string[]; actionKey: string 
     }
 ];
 
-/** Keyboard reference, opened with `?`.
- *  The legacy UI documents its hotkeys nowhere in the interface. */
+/** Keyboard reference, opened with `?`. */
 export function ShortcutsDialog() {
     const { t } = useTranslation();
     const [open, setOpen] = useState(false);

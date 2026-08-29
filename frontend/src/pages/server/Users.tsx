@@ -21,15 +21,11 @@ function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-/** Accounts, roles and permissions.
+/** Accounts, roles and permissions. Master-detail, with accounts and roles on their own tabs -
+ *  they have different actions and different permissions behind them.
  *
- * Master-detail rather than the legacy UI's shared left rail, which stacks roles and users into one
- * column and paints the right pane with hand-built HTML strings
- * (src/wwwroot/js/genpage/server/servertab.js:77). The two lists have different actions and
- * different permissions behind them, so they get their own tabs.
- *
- * Two permissions are in play and neither implies the other: manage_users covers the accounts,
- * configure_roles covers roles and the permission catalog. */
+ *  Two permissions are in play and neither implies the other: manage_users covers the accounts,
+ *  configure_roles covers roles and the permission catalog. */
 export function UsersPage() {
     const { t, tDynamic } = useTranslation();
     const queryClient = useQueryClient();
@@ -368,8 +364,7 @@ function cleanName(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9_]/g, '');
 }
 
-/** What the legacy add-user form offers when it cannot read the role list
- *  (src/wwwroot/js/genpage/server/servertab.js:94). */
+/** Roles offered by the add-user form when the role list itself cannot be read. */
 const FALLBACK_ROLES: [string, string][] = [
     ['user', 'User'],
     ['guest', 'Guest']

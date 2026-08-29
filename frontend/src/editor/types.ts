@@ -1,9 +1,8 @@
 /** Shared types for the image editor.
  *
- * The legacy editor built its own DOM: every tool wrote an HTML string into a bottom bar and
- * queried its own elements back out (image_editor_tools.js). Here a tool instead *describes* its
- * controls as data, and React renders them - which is what makes the controls themeable,
- * translatable and keyboard-accessible without each tool having to arrange for that itself.
+ * A tool owns no DOM: it *describes* its controls as `ToolOption[]` and React renders them, which
+ * is what makes every tool's controls themeable, translatable and keyboard-accessible without each
+ * tool having to arrange for that itself.
  */
 
 import type { LucideIcon } from 'lucide-react';
@@ -77,9 +76,8 @@ export interface EditorExport {
     height: number;
 }
 
-/** A pointer's writing pressure, 1 for devices that do not report it.
- *  Replaces getForceFrom (image_editor_tools.js:738) and the touch/mouse de-duplication it needed:
- *  pointer events deliver one stream for pen, touch and mouse alike. */
+/** A pointer's writing pressure, 1 for devices that do not report it. Pointer events deliver one
+ *  stream for pen, touch and mouse alike, so there is nothing to de-duplicate. */
 export function pressureOf(e: PointerEvent): number {
     if (e.pointerType === 'mouse' || !e.pressure) {
         return 1;

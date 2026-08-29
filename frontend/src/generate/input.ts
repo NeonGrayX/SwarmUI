@@ -1,13 +1,12 @@
 /** Builds the request body for a generation from the param store.
  *
- * Replaces getGenInput (src/wwwroot/js/genpage/gentab/params.js:1016), which reads values back out
- * of the DOM. Two rules carry over from there:
+ * Two rules the server expects:
  *   - a param whose own toggle, or any containing group's toggle, is off is not sent at all
  *   - media params contribute `<id>_filename` / `<id>_resolution` / `<id>_duration` to
  *     `extra_metadata`, so the saved image records what was fed into it
  *
- * Unlike the legacy UI this sends only what the user actually set, letting the server supply the
- * rest - which is why a default redefined in Parameter Configuration has to be sent explicitly.
+ * Only what the user actually set is sent, and the server supplies the rest - which is why a
+ * default redefined in Parameter Configuration has to be sent explicitly.
  */
 
 import { useCallback } from 'react';

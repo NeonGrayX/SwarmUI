@@ -6,9 +6,6 @@
  *   - `ListModels` carries the human-facing metadata - preview image, title, tags, trigger phrase,
  *     default LoRA weight - but is permission-gated and capped by ModelListSanityCap, so it is
  *     treated as enrichment only. A model it omits still appears, just without a thumbnail.
- *
- * The legacy UI keeps these two in separate worlds: the dropdown in `input_model` is built from the
- * param list and shows nothing but a name, while the metadata lives in a browser pane elsewhere.
  */
 
 import { useMemo } from 'react';

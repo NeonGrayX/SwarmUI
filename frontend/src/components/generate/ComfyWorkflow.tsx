@@ -9,12 +9,9 @@ interface Backend {
     type: string;
 }
 
-/** ComfyUI's own editor, embedded.
- *
- * The legacy Comfy Workflow tab does the same thing - an iframe pointed at ComfyBackendDirect/
- * (comfy_workflow_editor_helper.js:110), which the server proxies to whichever Comfy backend is
- * running. It needs a live Comfy backend, so this checks first and explains itself when there
- * isn't one rather than showing a blank frame. */
+/** ComfyUI's own editor, embedded: an iframe pointed at `ComfyBackendDirect/`, which the server
+ *  proxies to whichever Comfy backend is running. Needs a live Comfy backend, so this checks first
+ *  and says so rather than showing a blank frame. */
 export function ComfyWorkflow() {
     const { t } = useTranslation();
     const [reloadKey, setReloadKey] = useState(0);

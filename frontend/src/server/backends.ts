@@ -30,7 +30,7 @@ export interface BackendType {
     name: string;
     description: string;
     settings: BackendSettingSchema[];
-    /** False marks a type the legacy UI hides behind an "advanced" toggle and double-confirms. */
+    /** False marks a backend type that is not meant to be added casually. */
     is_standard: boolean;
 }
 
@@ -39,7 +39,7 @@ export interface Backend {
     status: string;
     id: number;
     settings: Record<string, unknown>;
-    /** Bumped by EditBackend; the legacy list poller uses it to detect an out-of-band edit. */
+    /** Bumped by EditBackend, so a poller can tell an out-of-band edit from its own. */
     modcount: number;
     features: string[];
     enabled: boolean;
@@ -79,8 +79,7 @@ export function isLive(backend: Backend): boolean {
     return backend.enabled && backend.status !== 'disabled';
 }
 
-/** Restart only does something from these two states — matches the legacy button's disabled rule
- *  (src/wwwroot/js/genpage/server/backends.js:212). */
+/** Restart only does something from these two states; the button is disabled elsewhere. */
 export function canRestart(status: string): boolean {
     return status === 'errored' || status === 'running';
 }
@@ -96,11 +95,10 @@ export function backendLogName(types: { identifier: string; name: string }[], id
 
 /** True when a 'text' setting holds several lines rather than one value.
  *
- * ListBackendTypes has no marker for this: every string field is reported as 'text', so both this
- * UI and the legacy one (which passes 'normal' to makeTextInput for every setting) render a
- * single-line input. That is wrong for the OtherHeaders fields on SwarmSwarm, SimpleRemoteLLM and
- * AutoScaling, all of which the server parses with Split('\n') — SwarmSwarmBackend.cs:118. A
- * single-line box cannot express a two-header value at all.
+ * ListBackendTypes has no marker for this: every string field is reported as 'text', so the
+ * default is a single-line input. That is wrong for the OtherHeaders fields on SwarmSwarm,
+ * SimpleRemoteLLM and AutoScaling, all of which the server parses with Split('\n') —
+ * SwarmSwarmBackend.cs:118. A single-line box cannot express a two-header value at all.
  *
  * Detected rather than hardcoded, so a backend from an extension gets the same treatment. Both
  * signals are load-bearing: the description catches an empty field on first configuration, and the

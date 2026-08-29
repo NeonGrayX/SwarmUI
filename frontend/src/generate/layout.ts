@@ -1,8 +1,5 @@
-/** Workspace pane sizing and the named layout presets.
- *
- * Replaces MovableGenTab in src/wwwroot/js/genpage/gentab/layout.js, which let users drag any
- * sub-tab into any pane. The new IA removes most of the need for that, so this offers a few
- * deliberate arrangements plus free resizing instead.
+/** Workspace pane sizing and the named layout presets: a few deliberate arrangements, plus free
+ *  resizing of each pane.
  */
 
 import { create } from 'zustand';

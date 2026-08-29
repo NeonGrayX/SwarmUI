@@ -102,8 +102,8 @@ export function ServerInfoPage() {
     const canShutdown = usePermission('shutdown');
     const canFreeMemory = usePermission('control_mem_clean');
 
-    // Everything the legacy Server Info tab bakes into its Razor markup instead of serving over the
-    // API. Best-effort: if the scrape fails, the rows it feeds are simply absent.
+    // Facts the server renders into Razor markup instead of serving over the API; see legacyInfo.
+    // Best-effort: if the scrape fails, the rows it feeds are simply absent.
     const legacy = useQuery({
         queryKey: ['legacy-server-info'],
         queryFn: fetchLegacyServerInfo,
@@ -236,7 +236,7 @@ export function ServerInfoPage() {
 }
 
 /** Warnings about a broken install. Both conditions permanently disable parts of Swarm, so they
- *  lead the page rather than sitting in a card near the bottom like they do in the legacy UI. */
+ *  lead the page. */
 function InstallHealth(props: { info: LegacyServerInfo | undefined }) {
     const { t } = useTranslation();
     const canInstall = usePermission('install');
@@ -419,11 +419,9 @@ function ConnectedUsersPanel(props: { users: ConnectedUser[]; pending: boolean }
 
 /** Update checking and applying.
  *
- * The legacy card re-runs the check on every visit to the tab and leaves the result on screen
- * indefinitely; here the check is a query, so it runs once and the button is an explicit refetch.
- * Whether it runs on arrival at all follows the server's own Maintenance.CheckForUpdates setting,
- * same as legacy — each check runs `git fetch` against the core repo, every extension and every
- * backend, so it is not free. */
+ * The check is a query, so it runs once and the button is an explicit refetch. Whether it runs on
+ * arrival at all follows the server's own Maintenance.CheckForUpdates setting: each check runs
+ * `git fetch` against the core repo, every extension and every backend, so it is not free. */
 function UpdatesPanel(props: { info: LegacyServerInfo | undefined }) {
     const { t } = useTranslation();
     const autoCheck = props.info?.autoUpdateCheck;
