@@ -5,7 +5,7 @@ import { useMediaParamAction } from '@/params/useMediaParamAction';
 import { useOpenEditor } from '@/editor/useOpenEditor';
 import { MetadataView } from '../ui/MetadataView';
 import { DetailSheet } from '../ui/DetailSheet';
-import { ZoomableImage } from './ZoomableImage';
+import { ZoomableImage } from '../ui/ZoomableImage';
 import { useTranslation } from '@/i18n';
 
 /** The main image view, plus a collapsible metadata panel. */

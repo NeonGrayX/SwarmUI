@@ -11,6 +11,7 @@ import { BrowserToolbar, EmptyState, FolderPane, StarButton } from './BrowserChr
 import { DetailSheet } from '../ui/DetailSheet';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { ImageLightbox } from '../ui/ImageLightbox';
 import { MetadataView } from '../ui/MetadataView';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
 import { useTranslation } from '@/i18n';
@@ -61,6 +62,7 @@ export function HistoryBrowser() {
     const [view, setView] = useState<ViewMode>('grid');
     const [reverse, setReverse] = useState(true);
     const [selected, setSelected] = useState<PinnedImage | null>(null);
+    const [viewing, setViewing] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
     const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
 
@@ -103,6 +105,21 @@ export function HistoryBrowser() {
             : selected;
     }, [selected, files, path]);
 
+    // Where the shown image sits in the listing, which is what the viewer steps along. An image
+    // pinned from a folder the tree has since left is not in it at all, so it is shown alone.
+    const viewIndex = useMemo(
+        () => (detail ? filtered.findIndex(file => joinPath(path, file.src) === detail.full) : -1),
+        [detail, filtered, path]
+    );
+
+    // The viewer only ever shows the detail image, so it goes wherever that does - closed, deleted,
+    // or cleared by a bulk delete.
+    useEffect(() => {
+        if (!selected) {
+            setViewing(false);
+        }
+    }, [selected]);
+
     // Failures are worth saying out loud; successes leave for the Generate screen and speak for
     // themselves there.
     useEffect(() => {
@@ -128,6 +145,14 @@ export function HistoryBrowser() {
             onSuccess: () => setSelected(current =>
                 current && current.full === full ? { ...current, starred: !current.starred } : current)
         });
+    }
+
+    /** Moves the detail sheet, and with it the viewer, to a neighbouring image in the listing. */
+    function step(delta: number): void {
+        const next = viewIndex < 0 ? undefined : filtered[viewIndex + delta];
+        if (next) {
+            setSelected(pin(next));
+        }
     }
 
     /** Loads an image's parameters into the generation form and switches to it. */
@@ -369,7 +394,20 @@ export function HistoryBrowser() {
                     onReuse={() => reuse(detail.entry)}
                     onUseAsInit={() => void useAsInit(detail)}
                     onDelete={() => setPendingDelete(detail.full)}
+                    onOpenViewer={() => setViewing(true)}
                     onClose={() => setSelected(null)}
+                />
+            )}
+
+            {detail && viewing && (
+                <ImageLightbox
+                    src={urlForPath(detail.full)}
+                    alt={detail.entry.src}
+                    title={detail.entry.src.split('/').pop() ?? detail.entry.src}
+                    position={viewIndex < 0 ? undefined : { index: viewIndex + 1, total: filtered.length }}
+                    onPrev={viewIndex > 0 ? () => step(-1) : undefined}
+                    onNext={viewIndex >= 0 && viewIndex < filtered.length - 1 ? () => step(1) : undefined}
+                    onClose={() => setViewing(false)}
                 />
             )}
 
@@ -433,6 +471,7 @@ function ImageSheet(props: {
     onReuse: () => void;
     onUseAsInit: () => void;
     onDelete: () => void;
+    onOpenViewer: () => void;
     onClose: () => void;
 }) {
     const { t } = useTranslation();
@@ -471,11 +510,20 @@ function ImageSheet(props: {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                <img
-                    src={props.url}
-                    alt=""
-                    className="mb-3 max-h-72 w-full rounded border border-subtle object-contain lg:max-h-none"
-                />
+                {/* The panel is only ever a few hundred pixels wide, so the image here is a
+                    thumbnail of the detail being read; clicking it opens the real view of it. */}
+                <button
+                    type="button"
+                    onClick={props.onOpenViewer}
+                    title={t('viewer.open')}
+                    className="mb-3 block w-full cursor-zoom-in"
+                >
+                    <img
+                        src={props.url}
+                        alt=""
+                        className="max-h-72 w-full rounded border border-subtle object-contain lg:max-h-none"
+                    />
+                </button>
                 <MetadataView metadata={props.entry.metadata} empty={t('history.noMetadata')} />
             </div>
         </DetailSheet>

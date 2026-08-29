@@ -7,6 +7,10 @@ const MIN_SCALE = 1;
 const MAX_SCALE = 16;
 /** Zoom step per wheel notch. */
 const ZOOM_RATE = 1.1;
+/** How far a finger has to travel horizontally to count as "next image" rather than a stray tap. */
+const SWIPE_MIN = 60;
+/** Movement below this still counts as a click rather than a drag. */
+const CLICK_SLOP = 6;
 const FIT: View = { scale: 1, x: 0, y: 0 };
 
 interface View {
@@ -44,6 +48,15 @@ export function ZoomableImage(props: {
     isPreview?: boolean;
     /** Changing this resets the view - a new image should always start out fitted. */
     resetKey?: string;
+    /** Steps to the neighbouring image, when the caller is showing a set rather than one image.
+     *  Left alone the arrow keys only pan, and a swipe does nothing. */
+    onPrev?: () => void;
+    onNext?: () => void;
+    /** Takes keyboard focus on mount, for a viewer that opened onto nothing else. */
+    autoFocus?: boolean;
+    /** Called for a click that lands beside the image rather than on it - the "click the dark bit
+     *  to dismiss" every full-screen viewer has. Drags that end there do not count. */
+    onBackdropClick?: () => void;
 }) {
     const [view, setView] = useState<View>(FIT);
     const viewportRef = useRef<HTMLDivElement>(null);
@@ -52,7 +65,13 @@ export function ZoomableImage(props: {
     const pointers = useRef(new Map<number, { x: number; y: number }>());
     const pinchDist = useRef(0);
     const dragging = useRef(false);
+    /** Where a lone pointer went down, for the swipe that steps between images. */
+    const swipeStart = useRef<{ x: number; y: number } | null>(null);
+    /** Whether the pointer travelled since it went down, so a pan that happens to end on the
+     *  backdrop is not mistaken for a click on it. */
+    const dragged = useRef(false);
     const [panning, setPanning] = useState(false);
+    const zoomed = view.scale > 1.001;
 
     /** Rescales around a point in client space (the viewport centre when none is given), so the
      *  pixel under the cursor stays under the cursor. */
@@ -120,6 +139,12 @@ export function ZoomableImage(props: {
         setView(FIT);
     }, [props.resetKey]);
 
+    useEffect(() => {
+        if (props.autoFocus) {
+            viewportRef.current?.focus();
+        }
+    }, [props.autoFocus]);
+
     /** Toggles between fitted and one screen pixel per image pixel - the view worth checking detail
      *  in. An image small enough to be upscaled by the fit has no such view, so it just doubles. */
     function toggleNative(clientX?: number, clientY?: number) {
@@ -134,6 +159,8 @@ export function ZoomableImage(props: {
     function onPointerDown(e: React.PointerEvent) {
         pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
         const points = [...pointers.current.values()];
+        swipeStart.current = points.length === 1 ? { x: e.clientX, y: e.clientY } : null;
+        dragged.current = false;
         if (points.length === 2) {
             pinchDist.current = distance(points[0], points[1]);
         }
@@ -150,6 +177,10 @@ export function ZoomableImage(props: {
             return;
         }
         pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const start = swipeStart.current;
+        if (start && distance(start, { x: e.clientX, y: e.clientY }) > CLICK_SLOP) {
+            dragged.current = true;
+        }
         const points = [...pointers.current.values()];
         if (points.length >= 2) {
             const spread = distance(points[0], points[1]);
@@ -165,13 +196,42 @@ export function ZoomableImage(props: {
     }
 
     function onPointerUp(e: React.PointerEvent) {
+        const start = swipeStart.current;
         pointers.current.delete(e.pointerId);
         if (pointers.current.size < 2) {
             pinchDist.current = 0;
         }
-        if (pointers.current.size === 0) {
-            dragging.current = false;
-            setPanning(false);
+        if (pointers.current.size > 0) {
+            return;
+        }
+        dragging.current = false;
+        swipeStart.current = null;
+        setPanning(false);
+        // A fitted image has nothing to pan, so a flick across it steps to the neighbouring one.
+        // Only by touch or pen: a mouse has the arrow keys and the on-screen buttons, and stepping
+        // on a stray click-drag would be a nasty surprise.
+        if (start && !zoomed && e.pointerType !== 'mouse') {
+            const dx = e.clientX - start.x;
+            if (Math.abs(dx) > SWIPE_MIN && Math.abs(dx) > Math.abs(e.clientY - start.y)) {
+                (dx < 0 ? props.onNext : props.onPrev)?.();
+            }
+        }
+    }
+
+    /** Dismisses on a click that landed beside the image. Tested against the image's box rather
+     *  than the event target, because the pointer capture taken for panning retargets the click to
+     *  the viewport whether or not the image was under it. */
+    function onClick(e: React.MouseEvent) {
+        const img = imgRef.current;
+        if (!props.onBackdropClick || dragged.current || !img) {
+            return;
+        }
+        const box = img.getBoundingClientRect();
+        const onImage =
+            e.clientX >= box.left && e.clientX <= box.right &&
+            e.clientY >= box.top && e.clientY <= box.bottom;
+        if (!onImage) {
+            props.onBackdropClick();
         }
     }
 
@@ -182,8 +242,10 @@ export function ZoomableImage(props: {
             '=': () => zoom(scale => scale * 1.25),
             '-': () => zoom(scale => scale / 1.25),
             '0': () => setView(FIT),
-            ArrowLeft: () => pan(step, 0),
-            ArrowRight: () => pan(-step, 0),
+            // Panning is what the arrows are for once there is somewhere to pan to; until then
+            // they walk the set, which is what they mean in every other image viewer.
+            ArrowLeft: () => (zoomed ? pan(step, 0) : props.onPrev?.()),
+            ArrowRight: () => (zoomed ? pan(-step, 0) : props.onNext?.()),
             ArrowUp: () => pan(0, step),
             ArrowDown: () => pan(0, -step)
         };
@@ -195,7 +257,6 @@ export function ZoomableImage(props: {
     }
 
     const { t } = useTranslation();
-    const zoomed = view.scale > 1.001;
 
     return (
         <div className="absolute inset-4">
@@ -208,6 +269,7 @@ export function ZoomableImage(props: {
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerUp}
+                onClick={onClick}
                 onDoubleClick={e => toggleNative(e.clientX, e.clientY)}
                 onKeyDown={onKeyDown}
                 className="absolute inset-0 flex items-center justify-center overflow-hidden"
@@ -226,7 +288,9 @@ export function ZoomableImage(props: {
                 />
             </div>
 
-            <div className="absolute bottom-0 left-0 flex items-center gap-1 rounded border border-default bg-surface p-1 text-fg-soft">
+            {/* Above anything a caller lays over the viewer - the lightbox's step columns reach
+                into this corner - so the zoom controls stay reachable. */}
+            <div className="absolute bottom-0 left-0 z-10 flex items-center gap-1 rounded border border-default bg-surface p-1 text-fg-soft">
                 <ZoomButton label={t('zoom.out')} onClick={() => zoom(scale => scale / 1.25)} disabled={!zoomed}>
                     <ZoomOut size={15} aria-hidden />
                 </ZoomButton>
