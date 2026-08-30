@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "Modelin hangi kitaplık kategorisine kaydedileceği. Civitai bağlantıları bunu modelin kendi türünden ayarlar.",
     "downloader.namePlaceholder": "modelim",
     "downloader.nextPreview": "Sonraki önizleme",
+    "downloader.noBackends": "İndirilen bir modeli yükleyebilecek çalışan bir arka uç yok.",
+    "downloader.noLocalBackend": "İndirilenler bu sunucunun model klasörlerine kaydedilir, ancak çalışan tüm arka uçlar başka makinelerde olduğu için dosyayı göremez.",
     "downloader.otherTypes": "Diğer",
     "downloader.previewAlt": "{model} önizlemesi",
     "downloader.previousPreview": "Önceki önizleme",

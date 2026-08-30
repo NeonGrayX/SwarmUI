@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "В какую категорию библиотеки сохраняется модель. Ссылки Civitai задают её по типу самой модели.",
     "downloader.namePlaceholder": "moya-model",
     "downloader.nextPreview": "Следующий образец",
+    "downloader.noBackends": "Нет работающего бэкенда, который мог бы загрузить скачанную модель.",
+    "downloader.noLocalBackend": "Загрузки сохраняются в папки моделей этого сервера, но все работающие бэкенды находятся на других машинах и не увидят файл.",
     "downloader.otherTypes": "Другие",
     "downloader.previewAlt": "Образец модели {model}",
     "downloader.previousPreview": "Предыдущий образец",

@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "मॉडल किस लाइब्रेरी श्रेणी में सहेजा जाएगा। Civitai लिंक इसे मॉडल के अपने प्रकार से सेट कर देते हैं।",
     "downloader.namePlaceholder": "my-model",
     "downloader.nextPreview": "अगला पूर्वावलोकन",
+    "downloader.noBackends": "ऐसा कोई चालू बैकएंड नहीं है जो डाउनलोड किया गया मॉडल लोड कर सके।",
+    "downloader.noLocalBackend": "डाउनलोड इसी सर्वर के मॉडल फ़ोल्डरों में सहेजे जाते हैं, लेकिन सभी चालू बैकएंड दूसरी मशीनों पर हैं और यह फ़ाइल नहीं देख पाएंगे।",
     "downloader.otherTypes": "अन्य",
     "downloader.previewAlt": "{model} का पूर्वावलोकन",
     "downloader.previousPreview": "पिछला पूर्वावलोकन",

@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "模型保存到的媒体库分类。Civitai 链接会根据模型自身类型自动设置。",
     "downloader.namePlaceholder": "my-model",
     "downloader.nextPreview": "下一张预览",
+    "downloader.noBackends": "当前没有运行中的后端能够加载下载的模型。",
+    "downloader.noLocalBackend": "下载文件会保存到本服务器的模型文件夹，但所有运行中的后端都在其他机器上，看不到该文件。",
     "downloader.otherTypes": "其他",
     "downloader.previewAlt": "{model} 的预览",
     "downloader.previousPreview": "上一张预览",

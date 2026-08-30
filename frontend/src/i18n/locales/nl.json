@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "In welke bibliotheekcategorie het model wordt opgeslagen. Civitai-links stellen dit in op basis van het modeltype.",
     "downloader.namePlaceholder": "mijn-model",
     "downloader.nextPreview": "Volgend voorbeeld",
+    "downloader.noBackends": "Er draait geen backend die een gedownload model zou kunnen laden.",
+    "downloader.noLocalBackend": "Downloads worden opgeslagen in de modelmappen van deze server, maar alle actieve backends draaien op andere machines en zien het bestand niet.",
     "downloader.otherTypes": "Overige",
     "downloader.previewAlt": "Voorbeeld van {model}",
     "downloader.previousPreview": "Vorig voorbeeld",

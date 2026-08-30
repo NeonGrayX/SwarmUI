@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "Which Library category the model is saved into. Civitai links set this from the model's own type.",
     "downloader.namePlaceholder": "my-model",
     "downloader.nextPreview": "Next preview",
+    "downloader.noBackends": "No backend is running that could load a downloaded model.",
+    "downloader.noLocalBackend": "Downloads are saved to this server's model folders, but every running backend is on another machine and won't see the file.",
     "downloader.otherTypes": "Other",
     "downloader.previewAlt": "Preview of {model}",
     "downloader.previousPreview": "Previous preview",

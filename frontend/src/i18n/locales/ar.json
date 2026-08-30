@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "فئة المكتبة التي يُحفظ فيها النموذج. روابط Civitai تضبطها حسب نوع النموذج نفسه.",
     "downloader.namePlaceholder": "my-model",
     "downloader.nextPreview": "المعاينة التالية",
+    "downloader.noBackends": "لا توجد خلفية قيد التشغيل قادرة على تحميل نموذج منزَّل.",
+    "downloader.noLocalBackend": "تُحفظ التنزيلات في مجلدات النماذج على هذا الخادم، لكن جميع الخلفيات قيد التشغيل موجودة على أجهزة أخرى ولن ترى الملف.",
     "downloader.otherTypes": "أخرى",
     "downloader.previewAlt": "معاينة {model}",
     "downloader.previousPreview": "المعاينة السابقة",

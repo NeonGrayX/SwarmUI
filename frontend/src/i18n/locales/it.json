@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "In quale categoria della libreria viene salvato il modello. I collegamenti Civitai la impostano in base al tipo del modello.",
     "downloader.namePlaceholder": "mio-modello",
     "downloader.nextPreview": "Anteprima successiva",
+    "downloader.noBackends": "Non è in esecuzione alcun backend in grado di caricare un modello scaricato.",
+    "downloader.noLocalBackend": "I download vengono salvati nelle cartelle dei modelli di questo server, ma tutti i backend in esecuzione sono su altre macchine e non vedranno il file.",
     "downloader.otherTypes": "Altri",
     "downloader.previewAlt": "Anteprima di {model}",
     "downloader.previousPreview": "Anteprima precedente",

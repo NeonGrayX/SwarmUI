@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "Vilken bibliotekskategori modellen sparas i. Civitai-länkar ställer in detta utifrån modellens egen typ.",
     "downloader.namePlaceholder": "min-modell",
     "downloader.nextPreview": "Nästa förhandsvisning",
+    "downloader.noBackends": "Ingen backend körs som skulle kunna ladda en nedladdad modell.",
+    "downloader.noLocalBackend": "Nedladdningar sparas i den här serverns modellmappar, men alla körande backends finns på andra maskiner och kommer inte att se filen.",
     "downloader.otherTypes": "Övriga",
     "downloader.previewAlt": "Förhandsvisning av {model}",
     "downloader.previousPreview": "Föregående förhandsvisning",

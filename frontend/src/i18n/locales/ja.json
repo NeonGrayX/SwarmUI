@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "モデルを保存するライブラリのカテゴリー。Civitai のリンクではモデル自身の種別から設定されます。",
     "downloader.namePlaceholder": "my-model",
     "downloader.nextPreview": "次のプレビュー",
+    "downloader.noBackends": "ダウンロードしたモデルを読み込めるバックエンドが実行されていません。",
+    "downloader.noLocalBackend": "ダウンロードはこのサーバーのモデルフォルダーに保存されますが、実行中のバックエンドはすべて別のマシンにあるため、そのファイルを認識できません。",
     "downloader.otherTypes": "その他",
     "downloader.previewAlt": "{model} のプレビュー",
     "downloader.previousPreview": "前のプレビュー",

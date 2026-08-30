@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "La catégorie de la bibliothèque dans laquelle le modèle est enregistré. Les liens Civitai la définissent d'après le type du modèle.",
     "downloader.namePlaceholder": "mon-modele",
     "downloader.nextPreview": "Aperçu suivant",
+    "downloader.noBackends": "Aucun backend en cours d'exécution ne pourrait charger un modèle téléchargé.",
+    "downloader.noLocalBackend": "Les téléchargements sont enregistrés dans les dossiers de modèles de ce serveur, mais tous les backends en cours d'exécution sont sur d'autres machines et ne verront pas le fichier.",
     "downloader.otherTypes": "Autres",
     "downloader.previewAlt": "Aperçu de {model}",
     "downloader.previousPreview": "Aperçu précédent",

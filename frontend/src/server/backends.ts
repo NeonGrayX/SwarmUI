@@ -154,6 +154,40 @@ export function settingsPayload(
     return out;
 }
 
+/** Whether a backend loads its models out of *this* server's model folders.
+ *
+ * The model downloader writes to the server's own download folder (ModelsAPI.cs:598) and has no
+ * way to write anywhere else, so a backend that reads a different disk will never see what was
+ * downloaded. Worth knowing before a multi-gigabyte fetch.
+ *
+ * A remote Swarm backend never qualifies. Neither does a control instance that only manages other
+ * backends rather than loading anything itself — both `swarmswarmbackend` and `autoscalingbackend`
+ * report `can_load_models: false` for exactly that reason (SwarmSwarmBackend.cs:336,
+ * AutoScalingBackend.cs:77). What is left is judged by address: no address at all means the
+ * backend self-starts on this machine, a loopback address is on this machine too, and anything
+ * else is another box with its own disk.
+ *
+ * Deliberately conservative — an unrecognised address counts as remote, so the warning fires on a
+ * setup this cannot classify rather than staying quiet about one it got wrong. */
+export function usesLocalModelFolders(backend: Backend): boolean {
+    if (backend.type === 'swarmswarmbackend' || backend.can_load_models === false) {
+        return false;
+    }
+    const address = String(backend.settings?.Address ?? '').trim();
+    if (address === '') {
+        return true;
+    }
+    let host: string;
+    try {
+        host = new URL(address).hostname;
+    }
+    catch {
+        return false;
+    }
+    // URL keeps IPv6 literals bracketed.
+    return host === 'localhost' || host.startsWith('127.') || host === '[::1]';
+}
+
 /** Whether a backend can serve the embedded Comfy editor at '/ComfyBackendDirect'.
  *
  * Type name alone is not enough: ComfyUIBackendExtension.ComfyBackendsDirect() also serves the

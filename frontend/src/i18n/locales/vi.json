@@ -202,6 +202,8 @@
     "downloader.modelTypeHelp": "Mô hình được lưu vào hạng mục nào của Thư viện. Liên kết Civitai đặt giá trị này theo loại của chính mô hình.",
     "downloader.namePlaceholder": "mo-hinh-cua-toi",
     "downloader.nextPreview": "Ảnh xem trước kế tiếp",
+    "downloader.noBackends": "Không có backend nào đang chạy để nạp mô hình đã tải.",
+    "downloader.noLocalBackend": "Tệp tải về được lưu vào thư mục mô hình của máy chủ này, nhưng mọi backend đang chạy đều nằm trên máy khác và sẽ không thấy tệp đó.",
     "downloader.otherTypes": "Khác",
     "downloader.previewAlt": "Ảnh xem trước của {model}",
     "downloader.previousPreview": "Ảnh xem trước trước đó",

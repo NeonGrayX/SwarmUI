@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { api } from '@/api/client';
 import { queryKeys } from '@/api/hooks';
 import { usePermission } from '@/api/permissions';
 import { Field } from '@/components/form/Field';
@@ -16,6 +17,7 @@ import {
     type ModelSource,
     type Preview
 } from '@/tools/modelSource';
+import { usesLocalModelFolders, type Backend } from '@/server/backends';
 import { useJobStore } from '@/tools/jobs';
 import { hasTranslation, useTranslation, type Translator } from '@/i18n';
 
@@ -31,6 +33,47 @@ const LOOKUP_DEBOUNCE_MS = 400;
 function subtypeLabel(subtype: string, t: Translator['t']): string {
     const key = `downloader.type.${subtype}`;
     return hasTranslation(key) ? t(key) : subtypeNoun(subtype);
+}
+
+/** Whether anything running could actually load what the download leaves behind.
+ *
+ * The server downloads to its own model folders, so on a setup whose backends all live on other
+ * machines the file lands somewhere nothing will ever read it. That is a bad thing to discover
+ * several gigabytes in, so it is said up front — as a warning only, since the download itself is
+ * still legitimate (a backend may be started later, or the folder may be a network share this
+ * cannot see from here).
+ *
+ * Silent without the backends-list permission: the check is a courtesy, not a gate. */
+function ReachNotice() {
+    const { t } = useTranslation();
+    const canSeeBackends = usePermission('view_backends_list');
+    // Same key and payload as ComfyWorkflow's query, so this shares that cache rather than adding
+    // a request of its own.
+    const backends = useQuery({
+        queryKey: ['backends'],
+        queryFn: () => api.post<Record<string, Backend>>('ListBackends', {}),
+        enabled: canSeeBackends,
+        refetchInterval: 10_000
+    });
+
+    if (!canSeeBackends || !backends.data) {
+        return null;
+    }
+    const running = Object.values(backends.data).filter(
+        backend => backend.status === 'running' || backend.status === 'idle'
+    );
+    if (running.some(usesLocalModelFolders)) {
+        return null;
+    }
+    return (
+        <p
+            className="flex items-start gap-1.5 pt-2 text-xs"
+            style={{ color: 'var(--status-bar-warn-color-start-end)' }}
+        >
+            <AlertTriangle size={13} aria-hidden className="mt-px shrink-0" />
+            <span>{running.length > 0 ? t('downloader.noLocalBackend') : t('downloader.noBackends')}</span>
+        </p>
+    );
 }
 
 export function DownloaderPage() {
@@ -292,6 +335,8 @@ export function DownloaderPage() {
                     })}
                 </p>
             )}
+
+            <ReachNotice />
         </ToolLayout>
     );
 }
