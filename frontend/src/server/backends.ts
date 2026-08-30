@@ -153,3 +153,16 @@ export function settingsPayload(
     }
     return out;
 }
+
+/** Whether a backend can serve the embedded Comfy editor at '/ComfyBackendDirect'.
+ *
+ * Type name alone is not enough: ComfyUIBackendExtension.ComfyBackendsDirect() also serves the
+ * route from a `swarmswarmbackend` whose remote is a Comfy backend, and that type name says
+ * nothing about Comfy. What both cases do share is the 'comfyui' feature flag - a Swarm backend
+ * reports its remote's feature set as its own - so key off that, and keep the type check as a
+ * fallback for a backend that is still starting and has not reported features yet. */
+export function isComfyCapable(backend: Pick<Backend, 'type' | 'features'>): boolean {
+    return (
+        (backend.features ?? []).includes('comfyui') || backend.type.toLowerCase().includes('comfy')
+    );
+}

@@ -3,11 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import { api } from '@/api/client';
 import { useTranslation } from '@/i18n';
-
-interface Backend {
-    status: string;
-    type: string;
-}
+import { isComfyCapable, type Backend } from '@/server/backends';
 
 /** ComfyUI's own editor, embedded: an iframe pointed at `ComfyBackendDirect/`, which the server
  *  proxies to whichever Comfy backend is running. Needs a live Comfy backend, so this checks first
@@ -22,9 +18,7 @@ export function ComfyWorkflow() {
         refetchInterval: 10_000
     });
 
-    const comfyBackends = Object.values(backends.data ?? {}).filter(b =>
-        b.type.toLowerCase().includes('comfy')
-    );
+    const comfyBackends = Object.values(backends.data ?? {}).filter(isComfyCapable);
     const running = comfyBackends.some(b => b.status === 'running' || b.status === 'idle');
 
     if (backends.isPending) {
