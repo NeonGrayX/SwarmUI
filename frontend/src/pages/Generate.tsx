@@ -41,22 +41,33 @@ export function GeneratePage() {
         }
     }, [forever, running, startGenerate]);
 
-    return compact ? (
-        <StackedWorkspace mode={mode} onMode={setMode} />
-    ) : (
-        <SplitWorkspace mode={mode} onMode={setMode} />
+    // The mode switch sits above the whole workspace, not inside the middle column: Comfy drives
+    // its own parameters and prompt, so in that mode there are no side panes to sit between.
+    return (
+        <div className="flex h-full min-h-0 flex-col">
+            <WorkspaceHeader mode={mode} onMode={setMode} presets={!compact && mode === 'standard'} />
+            {mode === 'comfy' ? (
+                <div className="min-h-0 flex-1">
+                    <ComfyWorkflow />
+                </div>
+            ) : compact ? (
+                <StackedWorkspace />
+            ) : (
+                <SplitWorkspace />
+            )}
+        </div>
     );
 }
 
 /** Parameters | canvas | batch, side by side and freely resizable. */
-function SplitWorkspace(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceMode) => void }) {
+function SplitWorkspace() {
     const { t } = useTranslation();
     const paramsWidth = useLayoutStore(s => s.params);
     const batchWidth = useLayoutStore(s => s.batch);
     const resize = useLayoutStore(s => s.resize);
 
     return (
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex min-h-0 flex-1">
                 <aside
                     className="shrink-0 overflow-hidden border-r border-subtle bg-surface"
@@ -67,8 +78,7 @@ function SplitWorkspace(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceMo
                 <Splitter label={t('layout.resizeParams')} onResize={d => resize('params', d)} />
 
                 <div className="flex min-w-0 flex-1 flex-col">
-                    <WorkspaceHeader mode={props.mode} onMode={props.onMode} />
-                    <CenterPane mode={props.mode} />
+                    <CenterPane />
                 </div>
 
                 <Splitter label={t('layout.resizeBatch')} invert onResize={d => resize('batch', d)} />
@@ -92,7 +102,7 @@ function SplitWorkspace(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceMo
  * every run touches, and what a thumb reaches. The three panes above them take turns as tabs
  * rather than sharing the width; at 360px, three columns would leave the image about 90px.
  * Selecting a batch tile switches back to the image tab. */
-function StackedWorkspace(props: { mode: WorkspaceMode; onMode: (mode: WorkspaceMode) => void }) {
+function StackedWorkspace() {
     const { t } = useTranslation();
     const [pane, setPane] = useState<Pane>('image');
     const selected = useGenerateStore(s => s.selected);
@@ -113,7 +123,7 @@ function StackedWorkspace(props: { mode: WorkspaceMode; onMode: (mode: Workspace
     ];
 
     return (
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
             <div
                 role="tablist"
                 aria-label={t('generate.pane.label')}
@@ -152,8 +162,7 @@ function StackedWorkspace(props: { mode: WorkspaceMode; onMode: (mode: Workspace
                 live generation, neither of which may be thrown away by a tab switch. */}
             <div className="relative min-h-0 flex-1">
                 <PanePanel id="image" active={pane === 'image'}>
-                    <WorkspaceHeader mode={props.mode} onMode={props.onMode} compact />
-                    <CenterPane mode={props.mode} />
+                    <CenterPane />
                 </PanePanel>
                 <PanePanel id="params" active={pane === 'params'}>
                     <ParamForm />
@@ -169,15 +178,12 @@ function StackedWorkspace(props: { mode: WorkspaceMode; onMode: (mode: Workspace
     );
 }
 
-/** What fills the middle column: the Comfy workflow, the image editor, or the plain viewer.
+/** What fills the middle column: the image editor or the plain viewer.
  *
  * The editor replaces the viewer rather than opening beside it - it already carries a viewer's
  * worth of pan and zoom, so a second copy of the same image would only cost width. */
-function CenterPane(props: { mode: WorkspaceMode }) {
+function CenterPane() {
     const editorOpen = useEditorStore(s => s.open);
-    if (props.mode === 'comfy') {
-        return <ComfyWorkflow />;
-    }
     return editorOpen ? <ImageEditor /> : <Canvas />;
 }
 
@@ -198,16 +204,17 @@ function PanePanel(props: { id: Pane; active: boolean; children: React.ReactNode
     );
 }
 
+/** The bar above the workspace: which mode is driving generation, and how the panes are sized. */
 function WorkspaceHeader(props: {
     mode: WorkspaceMode;
     onMode: (mode: WorkspaceMode) => void;
-    /** Drops the pane-size presets, which have no panes to size in the stacked layout. */
-    compact?: boolean;
+    /** Shows the pane-size presets, which only the split standard layout has panes to size for. */
+    presets: boolean;
 }) {
     const { t } = useTranslation();
 
     return (
-        <div className="flex shrink-0 items-center gap-2 border-b border-subtle px-3 py-1">
+        <div className="flex shrink-0 items-center gap-2 border-b border-subtle bg-surface px-3 py-1">
             <div className="flex overflow-hidden rounded border border-default">
                 {(
                     [
@@ -232,7 +239,7 @@ function WorkspaceHeader(props: {
                 ))}
             </div>
             <div className="flex-1" />
-            {!props.compact && <LayoutPresetMenu />}
+            {props.presets && <LayoutPresetMenu />}
         </div>
     );
 }
