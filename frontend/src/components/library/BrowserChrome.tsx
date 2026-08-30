@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, Folder, Grid3x3, List, Search, Star, X } from 'lucide-react';
-import type { SortMode, ViewMode } from '@/library/types';
+import type { ImageSortMode, SortMode, ViewMode } from '@/library/types';
 import { SideNav } from '../ui/SideNav';
+import { useNumberDrag } from '../ui/useNumberDrag';
 import { t as translate, useTranslation } from '@/i18n';
 
 /** Child folder names keyed by their absolute parent path ('' is the root). */
@@ -17,11 +18,11 @@ function joinFolder(base: string, relative: string): string {
 
 /** Folds one list response into the known tree.
  *
- * The list endpoints only describe the levels below the requested path that they walked (three,
- * here), so a tree that survives navigation has to be stitched together from every response seen
- * so far: group the returned relative paths by parent and replace exactly those entries, leaving
- * branches and deeper levels the server did not mention as previously discovered. Mirrors
- * refillTree in the legacy browser (src/wwwroot/js/genpage/helpers/browsers.js). */
+ * The list endpoints only describe the levels below the requested path that they walked (as deep
+ * as the browser asked for), so a tree that survives navigation has to be stitched together from
+ * every response seen so far: group the returned relative paths by parent and replace exactly
+ * those entries, leaving branches and deeper levels the server did not mention as previously
+ * discovered. Mirrors refillTree in the legacy browser (src/wwwroot/js/genpage/helpers/browsers.js). */
 function mergeFolders(known: FolderTree, path: string, folders: string[]): FolderTree {
     const fetched = new Map<string, string[]>([[path, []]]);
     for (const folder of folders) {
@@ -258,22 +259,46 @@ function FolderNode(props: {
     );
 }
 
-const SORTS: { id: SortMode; labelKey: string }[] = [
+/** One choice in a browser's sort dropdown. `id` is what the listing endpoint is sent, so the
+ *  options a browser offers are fixed by the endpoint it lists from. */
+export interface SortOption<S extends string> {
+    id: S;
+    labelKey: string;
+}
+
+export const MODEL_SORTS: readonly SortOption<SortMode>[] = [
     { id: 'Name', labelKey: 'browser.sort.name' },
     { id: 'Title', labelKey: 'browser.sort.title' },
     { id: 'DateCreated', labelKey: 'browser.sort.dateCreated' },
     { id: 'DateModified', labelKey: 'browser.sort.dateModified' }
 ];
 
-export function BrowserToolbar(props: {
+export const IMAGE_SORTS: readonly SortOption<ImageSortMode>[] = [
+    { id: 'Name', labelKey: 'browser.sort.name' },
+    { id: 'Date', labelKey: 'browser.sort.date' }
+];
+
+/** How many folder levels below the browsed one the server walks. The legacy browser offered the
+ *  same range (src/wwwroot/js/genpage/helpers/browsers.js), and deep scans of a big output folder
+ *  get slow fast, so the cap stays. */
+const MIN_DEPTH = 1;
+const MAX_DEPTH = 10;
+
+/** Toolbar shared by every browser. The sort dropdown and the depth box are only drawn for the
+ *  browsers that pass them, since a browser listing a flat set has neither to offer. */
+export function BrowserToolbar<S extends string>(props: {
     search: string;
     onSearch: (value: string) => void;
     view: ViewMode;
     onView: (view: ViewMode) => void;
-    sort?: SortMode;
-    onSort?: (sort: SortMode) => void;
+    sort?: S;
+    onSort?: (sort: S) => void;
+    /** Passed alongside `sort`: the modes the listing endpoint accepts. */
+    sortOptions?: readonly SortOption<S>[];
     reverse: boolean;
     onReverse: (reverse: boolean) => void;
+    depth?: number;
+    onDepth?: (depth: number) => void;
     count: number;
     total: number;
     children?: React.ReactNode;
@@ -307,15 +332,15 @@ export function BrowserToolbar(props: {
                 )}
             </div>
 
-            {props.sort && props.onSort && (
+            {props.sort && props.onSort && props.sortOptions && (
                 <label className="flex items-center gap-1.5 text-xs text-fg-soft">
                     {t('browser.sort.label')}
                     <select
                         value={props.sort}
-                        onChange={e => props.onSort?.(e.target.value as SortMode)}
+                        onChange={e => props.onSort?.(e.target.value as S)}
                         className="rounded border border-default bg-surface-sunken px-1.5 py-1 text-xs text-fg outline-none focus:border-[var(--emphasis)]"
                     >
-                        {SORTS.map(sort => (
+                        {props.sortOptions.map(sort => (
                             <option key={sort.id} value={sort.id}>
                                 {t(sort.labelKey)}
                             </option>
@@ -333,6 +358,10 @@ export function BrowserToolbar(props: {
                 />
                 {t('browser.reverse')}
             </label>
+
+            {props.depth !== undefined && props.onDepth && (
+                <DepthInput depth={props.depth} onDepth={props.onDepth} />
+            )}
 
             {props.children}
 
@@ -361,6 +390,39 @@ export function BrowserToolbar(props: {
                 </ViewButton>
             </div>
         </div>
+    );
+}
+
+/** How many folder levels the listing walks. Typed into or, as in the legacy UI, dragged. */
+function DepthInput(props: { depth: number; onDepth: (depth: number) => void }) {
+    const { t } = useTranslation();
+    const drag = useNumberDrag({
+        value: props.depth,
+        onChange: props.onDepth,
+        min: MIN_DEPTH,
+        max: MAX_DEPTH
+    });
+    return (
+        <label className="flex items-center gap-1.5 text-xs text-fg-soft" title={t('browser.depthHint')}>
+            {t('browser.depth')}
+            <input
+                type="number"
+                min={MIN_DEPTH}
+                max={MAX_DEPTH}
+                value={props.depth}
+                onChange={e => {
+                    const depth = Number.parseInt(e.target.value, 10);
+                    // An emptied box - what you get part-way through typing a new number - is not
+                    // a depth, so the last one stands until a real one is typed.
+                    if (Number.isFinite(depth)) {
+                        props.onDepth(Math.min(MAX_DEPTH, Math.max(MIN_DEPTH, depth)));
+                    }
+                }}
+                aria-label={t('browser.depthHint')}
+                {...drag}
+                className="w-12 rounded border border-default bg-surface-sunken px-1.5 py-1 text-xs text-fg outline-none focus:border-[var(--emphasis)]"
+            />
+        </label>
     );
 }
 

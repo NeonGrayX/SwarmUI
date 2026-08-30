@@ -18,7 +18,7 @@ import {
     type WildcardCard
 } from '@/library/types';
 import { usePermission } from '@/api/permissions';
-import { BrowserToolbar, EmptyState, FolderPane, StarButton } from './BrowserChrome';
+import { BrowserToolbar, EmptyState, FolderPane, MODEL_SORTS, StarButton } from './BrowserChrome';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ModelDetailSheet } from './ModelDetailSheet';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -133,6 +133,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                     onView={setView}
                     sort={sort}
                     onSort={setSort}
+                    sortOptions={MODEL_SORTS}
                     reverse={reverse}
                     onReverse={setReverse}
                     count={ordered.length}

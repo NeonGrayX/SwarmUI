@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import type {
+    ImageSortMode,
     ListImagesResponse,
     ListModelsResponse,
     ModelSubtype,
@@ -45,7 +46,7 @@ export function useModels(
 
 export function useImages(
     path: string,
-    sort: 'Name' | 'Date',
+    sort: ImageSortMode,
     reverse: boolean,
     depth: number
 ): UseQueryResult<ListImagesResponse> {

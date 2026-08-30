@@ -87,6 +87,10 @@ export interface MyUserData {
 }
 
 export type SortMode = 'Name' | 'Title' | 'DateCreated' | 'DateModified';
+
+/** ListImages sorts by far less than ListModels does - those two modes are all it parses
+ *  (ImageHistorySortMode, used by T2IAPI.ListImages). */
+export type ImageSortMode = 'Name' | 'Date';
 export type ViewMode = 'grid' | 'list';
 
 /** True when the entry is a full model card rather than a wildcard. */

@@ -2,12 +2,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { Download, Star, Trash2, X } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { useDeleteImage, useImages, useToggleImageStar } from '@/library/hooks';
-import { imageOutPrefix, isImageStarred, type ImageEntry, type ViewMode } from '@/library/types';
+import {
+    imageOutPrefix,
+    isImageStarred,
+    type ImageEntry,
+    type ImageSortMode,
+    type ViewMode
+} from '@/library/types';
 import { usePermission } from '@/api/permissions';
 import { useSession } from '@/api/hooks';
 import { useReuseParameters } from '@/params/reuse';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
-import { BrowserToolbar, EmptyState, FolderPane, StarButton } from './BrowserChrome';
+import { BrowserToolbar, EmptyState, FolderPane, IMAGE_SORTS, StarButton } from './BrowserChrome';
 import { DetailSheet } from '../ui/DetailSheet';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -60,7 +66,13 @@ export function HistoryBrowser() {
     const [path, setPath] = useState('');
     const [search, setSearch] = useState('');
     const [view, setView] = useState<ViewMode>('grid');
+    // Newest first: sorting by date and reversing is what makes the last thing generated the first
+    // thing on screen, which is what the history screen is usually opened for.
+    const [sort, setSort] = useState<ImageSortMode>('Date');
     const [reverse, setReverse] = useState(true);
+    // Subfolders are per-model or per-day, so a couple of levels of them is the usual shape of an
+    // output folder; deeper is available but is the user's call, since the server walks every level.
+    const [depth, setDepth] = useState(3);
     const [selected, setSelected] = useState<PinnedImage | null>(null);
     const [viewing, setViewing] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -68,7 +80,7 @@ export function HistoryBrowser() {
 
     const [flash, setFlash] = useState<string | null>(null);
 
-    const images = useImages(path, 'Date', reverse, 3);
+    const images = useImages(path, sort, reverse, depth);
     const toggleStar = useToggleImageStar();
     const deleteImage = useDeleteImage();
     const canDelete = usePermission('user_delete_image');
@@ -247,8 +259,13 @@ export function HistoryBrowser() {
                     onSearch={setSearch}
                     view={view}
                     onView={setView}
+                    sort={sort}
+                    onSort={setSort}
+                    sortOptions={IMAGE_SORTS}
                     reverse={reverse}
                     onReverse={setReverse}
+                    depth={depth}
+                    onDepth={setDepth}
                     count={filtered.length}
                     total={files.length}
                 />
