@@ -15,6 +15,9 @@ rm ./src/bin/last_build
 # Build the program
 dotnet build src/SwarmUI.csproj --configuration Debug -o ./src/bin/live_release
 
+# Build the new frontend UI (see 'frontend/'), served at '/ui'
+source ./launchtools/frontend-build-logic.sh
+
 # Default env configuration, gets overwritten by the C# code's settings handler
 export ASPNETCORE_ENVIRONMENT="Production"
 export ASPNETCORE_URLS="http://*:7801"

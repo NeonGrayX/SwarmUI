@@ -66,6 +66,9 @@ if not exist src\bin\live_release\SwarmUI.exe if exist src\bin\live_release_back
     move src\bin\live_release_backup src\bin\live_release
 )
 
+rem Build the new frontend UI (see 'frontend/'), served at '/ui'
+call launchtools\windows-frontend-build.bat
+
 rem Default env configuration, gets overwritten by the C# code's settings handler
 set ASPNETCORE_ENVIRONMENT="Production"
 set ASPNETCORE_URLS="http://*:7801"

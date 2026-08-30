@@ -55,6 +55,9 @@ if [ ! -f src/bin/live_release/SwarmUI.dll ] && [ -f src/bin/live_release_backup
     mv ./src/bin/live_release_backup ./src/bin/live_release
 fi
 
+# Build the new frontend UI (see 'frontend/'), served at '/ui'
+source ./launchtools/frontend-build-logic.sh
+
 # Default env configuration, gets overwritten by the C# code's settings handler
 export ASPNETCORE_ENVIRONMENT="Production"
 export ASPNETCORE_URLS="http://*:7801"

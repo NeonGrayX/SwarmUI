@@ -9,8 +9,17 @@ RUN apt install -y git wget build-essential python3.11 python3.11-venv python3.1
 # Install dependencies for controlnet preprocessors
 RUN apt install -y libglib2.0-0 libgl1
 
+# Install nodejs (needed to build the new frontend UI, see 'frontend/')
+RUN apt install -y ca-certificates curl gnupg
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+RUN apt install -y nodejs
+
 # Copy swarm's files into the docker container
 COPY . ./SwarmUI
+
+# Prebuild the new frontend UI so it's ready at launch, then drop node_modules to keep the image small
+# (the launch script only rebuilds it if the frontend actually changed, eg after a git pull)
+RUN cd /SwarmUI && bash launchtools/frontend-build-logic.sh && rm -rf frontend/node_modules
 
 RUN chown -R $UID:$UID ./SwarmUI
 

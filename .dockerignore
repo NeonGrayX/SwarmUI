@@ -19,3 +19,6 @@ __pycache__/
 venv/
 *.pth
 *.safetensors
+**/node_modules/
+/src/wwwroot/newui/
+**/*.tsbuildinfo

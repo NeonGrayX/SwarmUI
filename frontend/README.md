@@ -29,6 +29,14 @@ The Swarm server picks this up automatically and serves it at `http://localhost:
 (see `NewUIPath` in `src/Core/WebServer.cs`). If the directory is absent, `/ui` returns a message
 saying so; nothing else is affected.
 
+The normal launch scripts do this for you: `launch-linux.sh` / `launch-macos.sh` (and so both docker
+launchers) run `launchtools/frontend-build-logic.sh`, and `launch-windows.bat` runs
+`launchtools/windows-frontend-build.bat`. Both hash the frontend's inputs against
+`src/wwwroot/newui/.build_stamp` and rebuild only when something changed, running `npm ci` first if
+`node_modules` is missing or older than the lockfile. If `npm` isn't installed, or the build fails,
+they warn and let the server start anyway - only `/ui` is affected. The standard Dockerfile prebuilds
+the UI at image build time, so a container start doesn't pay for it.
+
 ## Layout
 
 ```
