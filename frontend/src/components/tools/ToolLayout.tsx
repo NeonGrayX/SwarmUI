@@ -28,23 +28,7 @@ export function ToolLayout(props: {
 
                     <div className="rounded-lg border border-default bg-surface p-4">{props.children}</div>
 
-                    {props.warning && (
-                        <div
-                            className="mt-3 flex items-start gap-2 rounded-lg border p-3 text-sm"
-                            style={{
-                                borderColor: 'color-mix(in srgb, var(--status-bar-warn-color-middle) 45%, transparent)',
-                                background: 'color-mix(in srgb, var(--status-bar-warn-color-middle) 12%, transparent)'
-                            }}
-                        >
-                            <AlertTriangle
-                                size={15}
-                                aria-hidden
-                                className="mt-0.5 shrink-0"
-                                style={{ color: 'var(--status-bar-warn-color-start-end)' }}
-                            />
-                            <div className="text-fg">{props.warning}</div>
-                        </div>
-                    )}
+                    {props.warning && <ToolWarning className="mt-3">{props.warning}</ToolWarning>}
 
                     {props.action && <div className="mt-3 flex justify-end">{props.action}</div>}
 
@@ -74,6 +58,27 @@ export function ToolLayout(props: {
             </div>
 
             <JobPanel />
+        </div>
+    );
+}
+
+/** The promoted warning box, also used by tools drawn outside this layout. */
+export function ToolWarning(props: { children: ReactNode; className?: string }) {
+    return (
+        <div
+            className={['flex items-start gap-2 rounded-lg border p-3 text-sm', props.className ?? ''].join(' ')}
+            style={{
+                borderColor: 'color-mix(in srgb, var(--status-bar-warn-color-middle) 45%, transparent)',
+                background: 'color-mix(in srgb, var(--status-bar-warn-color-middle) 12%, transparent)'
+            }}
+        >
+            <AlertTriangle
+                size={15}
+                aria-hidden
+                className="mt-0.5 shrink-0"
+                style={{ color: 'var(--status-bar-warn-color-start-end)' }}
+            />
+            <div className="text-fg">{props.children}</div>
         </div>
     );
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, ImageOff, Trash2 } from 'lucide-react';
+import { CheckCircle2, Download, ImageOff, Trash2 } from 'lucide-react';
 import {
     useDeleteModel,
     useModels,
@@ -21,6 +21,7 @@ import { usePermission } from '@/api/permissions';
 import { BrowserToolbar, EmptyState, FolderPane, MODEL_SORTS, StarButton } from './BrowserChrome';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ModelDetailSheet } from './ModelDetailSheet';
+import { DownloadModelDialog } from './DownloadModelDialog';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { PromptDialog } from '../ui/PromptDialog';
 import { useContextMenu, type LongPressHandlers, type MenuAction } from '../ui/ContextMenu';
@@ -39,6 +40,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
     const [pendingRename, setPendingRename] = useState<string | null>(null);
     const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
+    const [downloading, setDownloading] = useState(false);
 
     const models = useModels(props.subtype, path, sort, reverse, 3);
     const userData = useMyUserData();
@@ -50,6 +52,8 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
 
     const canDelete = usePermission('delete_models');
     const canEdit = usePermission('edit_model_metadata');
+    // Wildcards are written here rather than fetched from anywhere, so they get no downloader.
+    const canDownload = usePermission('download_models') && props.subtype !== 'Wildcards';
 
     const starred = userData.data?.starred_models?.[props.subtype] ?? [];
 
@@ -138,7 +142,19 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                     onReverse={setReverse}
                     count={ordered.length}
                     total={files.length}
-                />
+                >
+                    {canDownload && (
+                        <button
+                            type="button"
+                            onClick={() => setDownloading(true)}
+                            title={t('modelBrowser.downloadHint', { noun: props.label })}
+                            className="flex items-center gap-1 rounded border border-default px-2 py-1 text-xs text-fg hover:bg-[var(--sw-hover)]"
+                        >
+                            <Download size={13} aria-hidden />
+                            {t('common.download')}
+                        </button>
+                    )}
+                </BrowserToolbar>
 
                 {selection.count > 0 && (
                     <SelectionBar
@@ -221,6 +237,15 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                     subtype={props.subtype}
                     canEdit={canEdit}
                     onClose={() => setSelected(null)}
+                />
+            )}
+
+            {canDownload && (
+                <DownloadModelDialog
+                    open={downloading}
+                    subtype={props.subtype}
+                    folder={path}
+                    onClose={() => setDownloading(false)}
                 />
             )}
 
