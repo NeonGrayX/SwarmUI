@@ -272,7 +272,7 @@ public partial class WorkflowGenerator
                         // TODO: Send a signal back so a progress bar can be displayed on a UI
                         nextPerc = Math.Round(perc / 0.05) * 0.05 + 0.05;
                     }
-                }, verifyHash: hash).Wait();
+                }, verifyHash: hash, session: UserInput.SourceSession).Wait();
                 File.Move(tmpPath, filePath);
             }
             catch (Exception ex)
@@ -1674,7 +1674,7 @@ public partial class WorkflowGenerator
                 {
                     endFramePath = g.LoadImage(VideoEndImage, "${videoendframe}", false).Path;
                 }
-                string emptyAV = g.CreateNode("EmptyMiniMaxH3LatentAV", new JObject()
+                string emptyAV = g.CreateNode("SwarmEmptyMiniMaxH3LatentAV", new JObject()
                 {
                     ["length"] = Frames,
                     ["height"] = Height,
@@ -2378,17 +2378,13 @@ public partial class WorkflowGenerator
         {
             defaultGuidance = 1;
         }
-        bool wantsSwarmCustom = Features.Contains("variation_seed") && (needsAdvancedEncode || (UserInput.TryGet(T2IParamTypes.FluxGuidanceScale, out _) && HasFluxGuidance()) || IsHunyuanVideoSkyreels() || attachImages is not null);
-        JArray qwenImage;
-        if (attachImages is null && isPositive && IsMiniMaxH3())
+        JArray minimaxRefs = null;
+        if (isPositive && IsMiniMaxH3())
         {
-            // TODO: Compatible with SwarmCustom. Maybe a "ref items" passable unit of some form.
             JObject refData = new()
             {
-                ["clip"] = clip,
                 ["vae"] = CurrentVae.Path,
                 ["audio_vae"] = CurrentAudioVae.Path,
-                ["prompt"] = prompt,
                 ["width"] = width,
                 ["height"] = height,
                 ["length"] = UserInput.Get(T2IParamTypes.Text2VideoFrames, 124),
@@ -2421,16 +2417,26 @@ public partial class WorkflowGenerator
                 {
                     hasAny = true;
                     WGNodeData videoNode = LoadVideo(video[i], "${promptvideos." + i + "}", false);
+                    int fps = Text2VideoFPS();
+                    string resampleNode = CreateNode("SwarmVideoResampleFPS", new JObject()
+                    {
+                        ["images"] = videoNode.Path,
+                        ["fps_in"] = videoNode.FPS,
+                        ["fps_out"] = fps,
+                        ["method"] = "linear"
+                    });
+                    videoNode = videoNode.WithPath([resampleNode, 0]);
+                    videoNode.FPS = fps;
                     refData[$"ref_videos.ref_video_{i}"] = videoNode.Path;
                 }
             }
             if (hasAny)
             {
-                node = CreateNode("MiniMaxH3ReferenceToVideo", refData);
-                NodeHelpers[trackerId] = node;
-                return [node, 0];
+                minimaxRefs = NodePath(CreateNode("SwarmMiniMaxH3CollectReferences", refData), 0);
             }
         }
+        bool wantsSwarmCustom = Features.Contains("variation_seed") && (needsAdvancedEncode || (UserInput.TryGet(T2IParamTypes.FluxGuidanceScale, out _) && HasFluxGuidance()) || IsHunyuanVideoSkyreels() || attachImages is not null || minimaxRefs is not null);
+        JArray qwenImage;
         if (IsAceStep15())
         {
             node = CreateNode("TextEncodeAceStepAudio1.5", new JObject()
@@ -2622,7 +2628,8 @@ public partial class WorkflowGenerator
                 ["target_width"] = width,
                 ["target_height"] = height,
                 ["guidance"] = UserInput.Get(T2IParamTypes.FluxGuidanceScale, defaultGuidance),
-                ["images"] = attachImages
+                ["images"] = attachImages,
+                ["minimax_refs"] = minimaxRefs
             }, id);
         }
         else if (model is not null && model.ModelClass is not null && model.ModelClass.ID == "stable-diffusion-xl-v1-base")
@@ -2889,6 +2896,29 @@ public partial class WorkflowGenerator
         long seed = UserInput.Get(T2IParamTypes.Seed) + 500;
         WGNodeData media = CurrentMedia;
         double scale = UserInput.Get(ComfyUIBackendExtension.SeedVRUpscale, 1);
+        double downscale = UserInput.Get(ComfyUIBackendExtension.SeedVRPreDownscale, 1);
+        if (downscale <= 0)
+        {
+            throw new SwarmReadableErrorException($"Invalid SeedVR pre-downscale value {downscale}. Must be greater than 0.");
+        }
+        if (downscale < 1)
+        {
+            media = media.AsRawImage(vae);
+            int downWidth = (int)Math.Round((media.Width ?? UserInput.GetImageWidth()) * downscale);
+            int downHeight = (int)Math.Round((media.Height ?? UserInput.GetImageHeight()) * downscale);
+            string scaledDown = CreateNode("ImageScale", new JObject()
+            {
+                ["image"] = media.Path,
+                ["width"] = downWidth,
+                ["height"] = downHeight,
+                ["upscale_method"] = "bilinear",
+                ["crop"] = "disabled"
+            });
+            media = media.WithPath([scaledDown, 0]);
+            media.Width = downWidth;
+            media.Height = downHeight;
+            scale /= downscale;
+        }
         if (scale != 1)
         {
             // TODO: Should probably extract a shared upscale logic with the refiner rather than copy/pasted here

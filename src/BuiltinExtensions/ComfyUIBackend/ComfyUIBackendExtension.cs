@@ -614,7 +614,7 @@ public class ComfyUIBackendExtension : Extension
 
     public static T2IRegisteredParam<bool> AITemplateParam, DebugRegionalPrompting, ShiftedLatentAverageInit, UseCfgZeroStar, UseTCFG, SeedVRSplitLatent;
 
-    public static T2IRegisteredParam<double> IPAdapterWeight, IPAdapterStart, IPAdapterEnd, SelfAttentionGuidanceScale, SelfAttentionGuidanceSigmaBlur, PerturbedAttentionGuidanceScale, StyleModelMergeStrength, StyleModelApplyStart, StyleModelMultiplyStrength, RescaleCFGMultiplier, TeaCacheThreshold, TeaCacheStart, NunchakuCacheThreshold, EasyCacheThreshold, EasyCacheStart, EasyCacheEnd, RenormCFG, NormalizedAttentionGuidanceScale, NormalizedAttentionGuidanceAlpha, NormalizedAttentionGuidanceTau, SeedVRUpscale;
+    public static T2IRegisteredParam<double> IPAdapterWeight, IPAdapterStart, IPAdapterEnd, SelfAttentionGuidanceScale, SelfAttentionGuidanceSigmaBlur, PerturbedAttentionGuidanceScale, StyleModelMergeStrength, StyleModelApplyStart, StyleModelMultiplyStrength, RescaleCFGMultiplier, TeaCacheThreshold, TeaCacheStart, NunchakuCacheThreshold, EasyCacheThreshold, EasyCacheStart, EasyCacheEnd, RenormCFG, NormalizedAttentionGuidanceScale, NormalizedAttentionGuidanceAlpha, NormalizedAttentionGuidanceTau, SeedVRUpscale, SeedVRPreDownscale;
 
     public static T2IRegisteredParam<int> RefinerHyperTile, VideoFrameInterpolationMultiplier, SeedVRTemporalVideoOverlap;
 
@@ -860,6 +860,9 @@ public class ComfyUIBackendExtension : Extension
             "None", IgnoreIf: "None", FeatureFlag: "comfyui", Group: GroupSeedVR, Subtype: "Stable-Diffusion", ChangeWeight: 9, DoNotPreview: true, OrderPriority: -10,
             GetValues: (session) => ["None", .. T2IParamTypes.CleanModelList(Program.MainSDModels.ListModelsFor(session).Where(m => m.ModelClass?.CompatClass?.ID == "seedvr2").OrderBy(m => m.Name).Select(m => m.Name))]
             ));
+        SeedVRPreDownscale = T2IParamTypes.Register<double>(new("SeedVR Pre-Downscale", "Optional downscale of the image immediately before upscaling it back.\nSetting to '1' disables this behavior.\nPre-downscaling to degrade the image can help improve quality (reduces oversharpening).",
+            "1", IgnoreIf: "1", Min: 0, Max: 1, Step: 0.05, OrderPriority: -9.5, ViewType: ParamViewType.SLIDER, FeatureFlag: "comfyui", Group: GroupSeedVR, DoNotPreview: true, Examples: ["1", "0.5", "0.25"]
+            ));
         SeedVRUpscale = T2IParamTypes.Register<double>(new("SeedVR Upscale", "Optional upscale of the image before SeedVR2 runs over it.\nSetting to '1' disables the upscale, and just restores at the current size.",
             "1", IgnoreIf: "1", Min: 0.25, Max: 8, ViewMax: 4, Step: 0.25, OrderPriority: -9, ViewType: ParamViewType.SLIDER, FeatureFlag: "comfyui", Group: GroupSeedVR, DoNotPreview: true, Examples: ["1", "1.5", "2"]
             ));
@@ -930,14 +933,14 @@ public class ComfyUIBackendExtension : Extension
             {
                 tasks.Add(Utilities.RunCheckedTask(async () =>
                 {
-                    string headTarget = ComfyUISelfStartBackend.ComfyNodeGitPins.TryGetValue(folder, out string pinCommit) ? pinCommit : null;
-                    JObject nodeUpdates = await AdminAPI.GetUpdatesDataFor(folder, true, headTarget: headTarget);
+                    string nodeName = Path.GetFileName(folder);
+                    string latestTarget = ComfyUISelfStartBackend.ComfyNodeGitPins.TryGetValue(nodeName, out string pinCommit) ? pinCommit : null;
+                    JObject nodeUpdates = await AdminAPI.GetUpdatesDataFor(folder, true, latestTarget: latestTarget);
                     if (nodeUpdates is null)
                     {
                         Logs.Debug($"Check for updates found no updates for ComfyUI node at {folder}");
                         return;
                     }
-                    string nodeName = Path.GetFileName(folder);
                     lock (locker)
                     {
                         backendsData[$"Comfy Node: {nodeName}"] = nodeUpdates;
@@ -971,7 +974,7 @@ public class ComfyUIBackendExtension : Extension
             {
                 tasks.Add(Utilities.RunCheckedTask(async () =>
                 {
-                    string headTarget = ComfyUISelfStartBackend.ComfyNodeGitPins.TryGetValue(folder, out string pinCommit) ? pinCommit : null;
+                    string headTarget = ComfyUISelfStartBackend.ComfyNodeGitPins.TryGetValue(nodeName, out string pinCommit) ? pinCommit : null;
                     await AdminAPI.DoGitUpdate(folder, aggressive, didWork, didFail, targetCommit: headTarget);
                 }));
             }

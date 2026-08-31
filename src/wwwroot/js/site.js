@@ -1,5 +1,9 @@
 
+/** Current user session ID (not login session), or null if none. */
 let session_id = getCookie('session_id') || null;
+/** List of functions to fire when the main generate page has fully loaded. */
+let sessionReadyCallbacks = [];
+/** Current User ID, or null if none. */
 let user_id = null;
 let outputAppendUser = null;
 
@@ -62,6 +66,19 @@ function enableSliderForBox(div, number = null) {
         number.addEventListener('input', () => {
             range.value = number.value;
             range.dispatchEvent(new Event('change'));
+        });
+    }
+    let shiftStep = range.dataset.shiftStep;
+    if (shiftStep && range.dataset.ispot != "true") {
+        let normalStep = range.step;
+        let updateShiftStep = (event) => {
+            range.step = event.shiftKey ? shiftStep : normalStep;
+        };
+        range.addEventListener('pointerdown', updateShiftStep);
+        range.addEventListener('keydown', updateShiftStep);
+        range.addEventListener('keyup', updateShiftStep);
+        range.addEventListener('blur', () => {
+            range.step = normalStep;
         });
     }
     number.dispatchEvent(new Event('input'));
@@ -589,7 +606,7 @@ function setMediaFileDirect(elem, src, type, name, longName = null, callback = n
     let parent = findParentOfClass(elem, 'auto-input');
     let preview = parent.querySelector('.auto-input-preview');
     let label = parent.querySelector('.auto-file-input-filename');
-    elem.dataset.filedata = src;
+    elem.dataset.filedata = isValidMediaPath(longName) ? longName : src;
     let button = `<button class="interrupt-button auto-input-remove-button" title="Remove ${type}">&times;</button>`;
     let img;
     if (type == 'image') {
@@ -765,14 +782,15 @@ function updateRangeStyle(e) {
 }
 
 /** Builds the range portion shared by slider-based inputs. */
-function makeSliderRange(id, value, min, max, step, isPot = false) {
+function makeSliderRange(id, value, min, max, step, isPot = false, shiftStep = null) {
+    let shiftAttr = shiftStep == null ? '' : ` data-shift-step="${shiftStep}"`;
     return `
         <div class="auto-slider-range-wrapper" style="${getRangeStyle(value, min, max)}">
-            <input class="auto-slider-range" type="range" id="${id}_rangeslider" value="${value}" min="${min}" max="${max}" step="${step}" data-ispot="${isPot}" autocomplete="off" oninput="updateRangeStyle(this)" onchange="updateRangeStyle(this)">
+            <input class="auto-slider-range" type="range" id="${id}_rangeslider" value="${value}" min="${min}" max="${max}" step="${step}" data-ispot="${isPot}"${shiftAttr} autocomplete="off" oninput="updateRangeStyle(this)" onchange="updateRangeStyle(this)">
         </div>`;
 }
 
-function makeSliderInput(featureid, id, paramid, name, description, value, min, max, view_min = 0, view_max = 0, step = 1, isPot = false, toggles = false, popover_button = true) {
+function makeSliderInput(featureid, id, paramid, name, description, value, min, max, view_min = 0, view_max = 0, step = 1, isPot = false, toggles = false, popover_button = true, shiftStep = null) {
     name = escapeHtml(name);
     featureid = featureid ? ` data-feature-require="${featureid}"` : '';
     let rangeVal = isPot ? potToLinear(value, max, min, step) : value;
@@ -785,7 +803,7 @@ function makeSliderInput(featureid, id, paramid, name, description, value, min, 
         </label>
         <input class="auto-slider-number" type="number" id="${id}" data-param_id="${paramid}" value="${value}" min="${min}" max="${max}" step="${step}" data-ispot="${isPot}" autocomplete="off" onchange="autoNumberWidth(this)">
         <br>
-        ${makeSliderRange(id, rangeVal, view_min, view_max, step, isPot)}
+        ${makeSliderRange(id, rangeVal, view_min, view_max, step, isPot, shiftStep)}
     </div>`;
 }
 
