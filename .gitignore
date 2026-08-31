@@ -31,3 +31,8 @@ docker-compose.yml
 __pycache__/
 venv/
 *.pth
+
+# New frontend (see frontend/README.md)
+node_modules/
+/src/wwwroot/newui
+*.tsbuildinfo
