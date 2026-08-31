@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Trash2 } from 'lucide-react';
+import { ExternalLink, KeyRound, Trash2 } from 'lucide-react';
 import { api } from '@/api/client';
 import { useSession } from '@/api/hooks';
+import { usePermission } from '@/api/permissions';
 import { MIN_PASSWORD_LENGTH, prehashPassword } from '@/api/password';
 import { useMyUserData } from '@/library/hooks';
 import { Field } from '@/components/form/Field';
@@ -21,6 +22,44 @@ interface AuthToken {
 /** The auth-token routes all refuse when the server has no user authorization configured.
  *  Matched against the server's English message, which is what the API actually returns. */
 const AUTH_DISABLED = 'Authorization is not enabled.';
+
+interface UpstreamKey {
+    /** Storage id the server knows the key by, eg 'huggingface_api'. */
+    keyType: string;
+    /** Brand name, deliberately not translated. */
+    title: string;
+    /** Where the user goes to mint one. */
+    createLink: string;
+    infoKey: string;
+}
+
+/** Keys the server accepts for the logged-in user. Mirrors
+ *  BasicAPIFeatures.AcceptedAPIKeyTypes — SetAPIKey rejects anything outside that fixed set, so
+ *  there is nothing gained by asking the server for the list. */
+const UPSTREAM_KEYS: UpstreamKey[] = [
+    {
+        keyType: 'stability_api',
+        title: 'Stability AI',
+        createLink: 'https://platform.stability.ai/account/keys',
+        infoKey: 'apiKeys.info.stability'
+    },
+    {
+        keyType: 'civitai_api',
+        title: 'Civitai',
+        createLink: 'https://civitai.com/user/account',
+        infoKey: 'apiKeys.info.civitai'
+    },
+    {
+        keyType: 'huggingface_api',
+        title: 'Hugging Face',
+        createLink: 'https://huggingface.co/settings/tokens',
+        infoKey: 'apiKeys.info.huggingface'
+    }
+];
+
+/** GetAPIKeyStatus answers with a sentence, not a field: 'not set', or 'last updated <stamp>'
+ *  (BasicAPIFeatures.GetAPIKeyStatus). Split the stamp back out so the label can be translated. */
+const KEY_SET_PREFIX = 'last updated ';
 
 function unixToText(seconds: number): string {
     return seconds ? new Date(seconds * 1000).toLocaleString() : translate('account.never');
@@ -58,6 +97,7 @@ export function AccountPage() {
                 </Panel>
 
                 <ChangePasswordPanel />
+                <ApiKeysPanel />
                 <AuthTokensPanel />
             </div>
         </div>
@@ -284,6 +324,118 @@ function AuthTokensPanel() {
                 onCancel={() => setPendingRevoke(null)}
             />
         </Panel>
+    );
+}
+
+function ApiKeysPanel() {
+    const { t } = useTranslation();
+    const canRead = usePermission('read_user_settings');
+    const canEdit = usePermission('edit_user_settings');
+
+    if (!canRead && !canEdit) {
+        return null;
+    }
+
+    return (
+        <Panel title={t('apiKeys.title')}>
+            <p className="mb-2 text-xs text-fg-soft">{t('apiKeys.note')}</p>
+            {!canEdit && <p className="mb-2 text-xs text-fg-soft">{t('apiKeys.readOnly')}</p>}
+            <ul className="divide-y divide-[var(--light-border)]">
+                {UPSTREAM_KEYS.map(info => (
+                    <ApiKeyRow key={info.keyType} info={info} canRead={canRead} canEdit={canEdit} />
+                ))}
+            </ul>
+        </Panel>
+    );
+}
+
+function ApiKeyRow(props: { info: UpstreamKey; canRead: boolean; canEdit: boolean }) {
+    const { t } = useTranslation();
+    const queryClient = useQueryClient();
+    const { info } = props;
+    const [value, setValue] = useState('');
+    const statusKey = ['api-key-status', info.keyType];
+
+    const status = useQuery({
+        queryKey: statusKey,
+        queryFn: () => api.post<{ status: string }>('GetAPIKeyStatus', { keyType: info.keyType }),
+        enabled: props.canRead
+    });
+
+    const save = useMutation({
+        // 'none' is the server's unset sentinel, not a key value.
+        mutationFn: (key: string) => api.post('SetAPIKey', { keyType: info.keyType, key }),
+        onSuccess: () => {
+            setValue('');
+            queryClient.invalidateQueries({ queryKey: statusKey });
+        }
+    });
+
+    const raw = status.data?.status;
+    const savedAt = raw?.startsWith(KEY_SET_PREFIX) ? raw.slice(KEY_SET_PREFIX.length) : null;
+    const isSet = savedAt !== null;
+
+    return (
+        <li className="py-2">
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-fg-strong">{info.title}</span>
+                <span className="text-xs text-fg-soft">
+                    {!props.canRead
+                        ? '—'
+                        : status.isPending
+                          ? t('common.loading')
+                          : isSet
+                            ? t('apiKeys.savedAt', { when: savedAt })
+                            : t('apiKeys.notSet')}
+                </span>
+                <a
+                    href={info.createLink}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="ml-auto inline-flex items-center gap-1 text-xs underline"
+                    style={{ color: 'var(--emphasis)' }}
+                >
+                    {t('apiKeys.getKey')}
+                    <ExternalLink size={11} aria-hidden />
+                </a>
+            </div>
+            <p className="mt-0.5 text-xs text-fg-soft">{t(info.infoKey)}</p>
+            <div className="mt-1.5 flex items-center gap-2">
+                <input
+                    type="password"
+                    value={value}
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={!props.canEdit || save.isPending}
+                    placeholder={t('apiKeys.placeholder', { service: info.title })}
+                    onChange={e => setValue(e.target.value)}
+                    aria-label={t('apiKeys.placeholder', { service: info.title })}
+                    className={`${INPUT} min-w-0 flex-1 disabled:opacity-40`}
+                />
+                <button
+                    type="button"
+                    disabled={!props.canEdit || !value.trim() || save.isPending}
+                    onClick={() => save.mutate(value.trim())}
+                    className="shrink-0 rounded px-3 py-1.5 text-sm disabled:opacity-40"
+                    style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
+                >
+                    {save.isPending ? t('common.saving') : t('common.save')}
+                </button>
+                <button
+                    type="button"
+                    disabled={!props.canEdit || !isSet || save.isPending}
+                    onClick={() => save.mutate('none')}
+                    className="shrink-0 rounded border border-default px-3 py-1.5 text-sm text-fg disabled:opacity-40 hover:bg-[var(--sw-hover)]"
+                >
+                    {t('common.remove')}
+                </button>
+            </div>
+            {save.isError && (
+                <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
+                    {save.error instanceof Error ? save.error.message : t('apiKeys.saveFailed')}
+                </p>
+            )}
+        </li>
     );
 }
 

@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { DownloaderWarning, useDownloaderForm } from '@/components/tools/DownloaderForm';
 import { useTranslation } from '@/i18n';
@@ -18,9 +19,9 @@ export function DownloaderPage() {
                     <p>{t('downloader.about2')}</p>
                     <p>
                         {t('downloader.about3Before')}{' '}
-                        <a href="/Text2Image" className="underline" style={{ color: 'var(--emphasis)' }}>
-                            /Text2Image
-                        </a>{' '}
+                        <Link to="/settings/account" className="underline" style={{ color: 'var(--emphasis)' }}>
+                            {t('nav.destination.account')}
+                        </Link>{' '}
                         {t('downloader.about3After')}
                     </p>
                 </>

@@ -49,7 +49,7 @@ export function DownloadModelDialog(props: {
                         lives on in the store) rather than leaving its lookups polling. */}
                     <DownloadForm subtype={props.subtype} folder={props.folder} />
 
-                    <JobPanel />
+                    <JobPanel onNavigate={props.onClose} />
                 </Dialog.Content>
             </Dialog.Portal>
         </Dialog.Root>

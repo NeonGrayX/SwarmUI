@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { AlertTriangle, ChevronRight, Loader2, X } from 'lucide-react';
 import { useJobStore, type Job } from '@/tools/jobs';
+import { JobFailureHelp } from './JobFailureHelp';
 import { useTranslation } from '@/i18n';
 
 /** Standard shell for a tool screen: the form leads, the long explanation collapses behind
@@ -83,8 +84,12 @@ export function ToolWarning(props: { children: ReactNode; className?: string }) 
     );
 }
 
-/** Progress for every running/finished job, shared across all tools. */
-export function JobPanel() {
+/** Progress for every running/finished job, shared across all tools.
+ *
+ * `onNavigate` fires when something in a job row is about to route away, so a caller that drew
+ * this inside a dialog (the Library's download popup) can close itself first rather than leave the
+ * overlay sitting over the page the user just asked for. */
+export function JobPanel(props: { onNavigate?: () => void } = {}) {
     const { t } = useTranslation();
     const jobs = useJobStore(s => s.jobs);
     const clearFinished = useJobStore(s => s.clearFinished);
@@ -111,7 +116,7 @@ export function JobPanel() {
             </div>
             <ul className="px-4 pb-2">
                 {jobs.map(job => (
-                    <JobRow key={job.id} job={job} />
+                    <JobRow key={job.id} job={job} onNavigate={props.onNavigate} />
                 ))}
             </ul>
         </div>
@@ -125,7 +130,7 @@ const STATUS_COLOR: Record<Job['status'], string> = {
     cancelled: 'var(--sw-fg-soft)'
 };
 
-function JobRow(props: { job: Job }) {
+function JobRow(props: { job: Job; onNavigate?: () => void }) {
     const { t } = useTranslation();
     const { job } = props;
     const cancel = useJobStore(s => s.cancel);
@@ -189,6 +194,8 @@ function JobRow(props: { job: Job }) {
                     {job.error}
                 </p>
             )}
+
+            <JobFailureHelp error={job.error} onNavigate={props.onNavigate} />
 
             {expanded && job.log.length > 0 && (
                 <pre className="mt-1.5 max-h-32 overflow-auto rounded border border-subtle bg-surface-sunken p-2 font-mono text-[11px] text-fg-soft">
