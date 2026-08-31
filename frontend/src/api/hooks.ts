@@ -36,7 +36,7 @@ export function useT2IParams(enabled = true): UseQueryResult<ListT2IParamsRespon
 
 /** Backend health and generation counters.
  *  Polls fast while something is wrong or running, slowly when idle — mirroring the interval
- *  switch in reviseStatusBar (src/wwwroot/js/genpage/main.js:154). */
+ *  switch in reviseStatusBar (src/wwwroot/js/genpage/main.js:117). */
 export function useCurrentStatus(enabled = true): UseQueryResult<CurrentStatus> {
     return useQuery({
         queryKey: queryKeys.currentStatus,

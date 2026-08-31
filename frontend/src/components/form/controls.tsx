@@ -321,7 +321,7 @@ function IconButton(props: {
  * ------------------------------------------------------------------------------------------- */
 
 /** Picks the control for a param. `view_type` wins where it is meaningful, otherwise the data type
- *  decides. Mirrors the switch in getHtmlForParam (src/wwwroot/js/genpage/gentab/params.js:190). */
+ *  decides. Mirrors the switch in getHtmlForParam (src/wwwroot/js/genpage/gentab/params.js:182). */
 export function ParamControl(props: Omit<ControlProps, 'inputId'>) {
     const generatedId = useId();
     const inputId = `param-${props.param.id}-${generatedId}`;

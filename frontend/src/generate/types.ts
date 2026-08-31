@@ -1,5 +1,5 @@
 /** Messages streamed by GenerateText2ImageWS.
- *  Documented inline at src/WebAPI/T2IAPI.cs:55-78. */
+ *  Documented inline at src/WebAPI/T2IAPI.cs:44-79. */
 
 export interface GenProgressMessage {
     gen_progress: {

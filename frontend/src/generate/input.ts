@@ -46,7 +46,7 @@ function isEmpty(value: ParamValue): boolean {
 
 /** Adds the media facts for one param. Single params get plain strings; list params get arrays
  *  aligned with the values (with nulls for entries we know nothing about), which the server keeps
- *  as arrays (RequestToParams, src/WebAPI/T2IAPI.cs:202). */
+ *  as arrays (RequestToParams, src/WebAPI/T2IAPI.cs:196). */
 function addMediaMetadata(
     extra: Record<string, unknown>,
     param: ParamSchema,
@@ -106,7 +106,7 @@ export function buildGenInput(
         }
         // Feature support gates this path but not the loop above, on purpose: a value the user
         // typed is theirs to send, while one injected on their behalf has no business reaching a
-        // backend that cannot take it. isParamEnabled (params.js:997) skips both.
+        // backend that cannot take it. isParamEnabled (params.js:1027) skips both.
         if (isEmpty(value) || !isEnabled(param, schema, state) || !isSupported(param, supportedFeatures)) {
             continue;
         }

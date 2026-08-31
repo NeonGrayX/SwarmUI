@@ -1,7 +1,7 @@
 /** Reading a failed download's error message well enough to say what to do about it.
  *
  * The server reports these as one readable sentence carrying both the URL and the upstream status
- * (`Failed to download <url>: got response code 403 Forbidden`, Utilities.cs:728), and that is all
+ * (`Failed to download <url>: got response code 403 Forbidden`, Utilities.cs:800), and that is all
  * that reaches the browser — there is no structured failure to inspect. So the message is parsed
  * back apart here, because 401 and 403 from a model host are almost never a broken link: they mean
  * the file needs an account, and the user has somewhere specific to go.
@@ -33,7 +33,7 @@ function hostOf(url: URL): FailureHost {
         return 'huggingface';
     }
     // The server rewrites civitai.com and civitai.green to civitai.red before downloading
-    // (ModelsAPI.cs:609), so the failure can name any of the three.
+    // (ApplyDownloadAPIKey, Utilities.cs:739), so the failure can name any of the three.
     if (/(^|\.)civitai\.(com|red|green)$/.test(host)) {
         return 'civitai';
     }

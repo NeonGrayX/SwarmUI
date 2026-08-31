@@ -222,6 +222,7 @@
     "downloader.noBackends": "Es läuft kein Backend, das ein heruntergeladenes Modell laden könnte.",
     "downloader.noLocalBackend": "Downloads landen in den Modellordnern dieses Servers, aber alle laufenden Backends sind auf anderen Rechnern und sehen die Datei nicht.",
     "downloader.otherTypes": "Weitere",
+    "downloader.paidAccess": "Vorabzugriff bis {date} – erfordert ein Civitai-Konto, das für diese Version bezahlt hat.",
     "downloader.previewAlt": "Vorschau von {model}",
     "downloader.previousPreview": "Vorherige Vorschau",
     "downloader.saveAsHelp": "Dateiname zum Speichern, ohne Endung. Geben Sie einen Pfad mit Schrägstrich ein, um einen neuen Ordner anzulegen.",

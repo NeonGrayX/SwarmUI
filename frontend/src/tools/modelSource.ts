@@ -21,7 +21,8 @@ export const LIBRARY_SUBTYPES = ['Stable-Diffusion', 'LoRA', 'VAE', 'Embedding',
 const HF_PREFIX = 'https://huggingface.co/';
 const CIVITAI_PREFIX = 'https://civitai.red/';
 /** Domains that serve the same site as civitai.red. The server normalizes these too
- *  (ModelsAPI.cs:609), but the API calls made here have to be aimed at the canonical host. */
+ *  (ApplyDownloadAPIKey, src/Utils/Utilities.cs:739), but the API calls made here have to be aimed
+ *  at the canonical host. */
 const CIVITAI_ALIASES = ['https://civitai.com/', 'https://civitai.green/'];
 
 /** Formats the server can be asked to fetch. */
@@ -40,8 +41,11 @@ const CIVITAI_SUBTYPES: Record<string, string> = {
     VAE: 'VAE'
 };
 
-/** Civitai files that ride along with a model rather than being it. */
+/** Civitai files that ride along with a model rather than being it, so they are never what a link
+ *  is taken to mean. A VAE can still be picked deliberately from the file list; a text encoder is
+ *  not a model at all, so it is not offered there either. */
 const CIVITAI_SIDE_FILES = ['Text Encoder', 'VAE'];
+const CIVITAI_NON_MODEL_FILES = ['Text Encoder'];
 
 /** Base models whose prompting conventions Swarm keys off a usage hint. */
 const HINTED_BASE_MODELS = ['Illustrious', 'Pony'];
@@ -70,19 +74,44 @@ export interface Preview {
     kind: 'image' | 'video';
 }
 
+/** One selectable alternative behind a Civitai link. */
+export interface CivitaiOption {
+    id: string;
+    label: string;
+}
+
+/** A downloadable file, which is shown with its size where Civitai states one. */
+export interface CivitaiFileOption extends CivitaiOption {
+    sizeKb: number | null;
+}
+
+/** A version and file picked out of what the link's model offers, overriding what the link itself
+ *  points at. Both are Civitai ids. */
+export interface CivitaiChoice {
+    versionId?: string;
+    fileId?: string;
+}
+
 /** What the Civitai API knows about the model behind the link, in display form. */
 export interface CivitaiInfo {
     modelId: string;
     versionId: string;
     modelName: string;
     versionName: string;
+    /** Every version of the model, newest first, as the version picker lists them. */
+    versions: CivitaiOption[];
+    /** Files of the chosen version that can actually be downloaded, as the file picker lists them.
+     *  One entry means there is nothing to pick between. */
+    files: CivitaiFileOption[];
+    /** Id of the file within `files` that this source downloads. */
+    fileId: string;
+    /** When early access to this version ends, or null when it is freely downloadable. */
+    paidAccessEndsAt: string | null;
     baseModel: string;
     date: string;
     author: string;
     /** Trained words, already joined for display. */
     triggerWords: string;
-    fileName: string;
-    fileSizeKb: number | null;
     /** Descriptions come back as HTML; these are the text of it. */
     description: string;
     versionDescription: string;
@@ -186,13 +215,14 @@ export function parseCivitaiUrl(url: string): [string | null, string | null] {
 /** Strips a model title down to something a filesystem accepts, for the 'Save as' suggestion.
  *  Decoration is dropped rather than turned into separators, and only characters that carry
  *  meaning in a path become one. The server sanitizes this again either way (StrictFilenameClean,
- *  Utilities.cs:185). */
+ *  src/Utils/Utilities.cs:187). */
 export function cleanSaveName(title: string): string {
     return title
         .replace(/["'()[\]{}!,]/g, '')
-        // Characters the server would strip from a filename (Utilities.cs:161), plus the '/' that
-        // would otherwise quietly create a folder and the '.' the server deletes outright.
-        .replace(/[<>:\\|?*~&@;#$^/.]+/g, '-')
+        // Characters the server would strip from a filename (FilePathForbidden,
+        // src/Utils/Utilities.cs:163), plus the '/' that would otherwise quietly create a folder
+        // and the '.' the server deletes outright.
+        .replace(/[<>:\\|?*~&@;#$^%/.]+/g, '-')
         .replace(/\s+/g, '_')
         .replace(/-{2,}/g, '-')
         .replace(/^[-_]+|[-_]+$/g, '');
@@ -236,6 +266,7 @@ function resolveHuggingFace(url: string): ModelSource {
 
 /** Minimal shapes of the Civitai API responses this reads. */
 interface CivitaiFileData {
+    id: number;
     name: string;
     type?: string;
     downloadUrl?: string;
@@ -251,6 +282,8 @@ interface CivitaiVersionData {
     trainedWords?: string[];
     files?: CivitaiFileData[];
     images?: { url: string; type: string }[];
+    /** Present on early-access versions, which only paying accounts can download until it lapses. */
+    paidAccess?: { endsAt?: string };
 }
 
 interface CivitaiModelData {
@@ -263,51 +296,94 @@ interface CivitaiModelData {
     modelVersions?: CivitaiVersionData[];
 }
 
+/** Answers already had from the Civitai API, so that picking a different version or file of a
+ *  model the form has just described re-resolves off the response already in hand instead of
+ *  asking for the same model again. Capped, since a session can paste any number of links. */
+const CIVITAI_CACHE = new Map<string, Promise<unknown>>();
+const CIVITAI_CACHE_LIMIT = 16;
+
 /** One Civitai API call through the server's proxy. Answers null for anything that went wrong —
  *  a bad id, a rate limit and an outage all leave the caller with the same "no metadata". */
-async function civitaiGet<T>(path: string): Promise<T | null> {
-    try {
-        const result = await api.post<{ response?: T }>('ForwardMetadataRequest', {
-            url: `${CIVITAI_PREFIX}${path}`
+function civitaiGet<T>(path: string): Promise<T | null> {
+    const cached = CIVITAI_CACHE.get(path);
+    if (cached) {
+        return cached as Promise<T | null>;
+    }
+    const request = api
+        .post<{ response?: T }>('ForwardMetadataRequest', { url: `${CIVITAI_PREFIX}${path}` })
+        .then(result => result.response ?? null)
+        .catch(() => {
+            // A failure is not worth remembering: the next attempt may well be past the rate limit
+            // or the outage that caused it.
+            CIVITAI_CACHE.delete(path);
+            return null;
         });
-        return result.response ?? null;
+    if (CIVITAI_CACHE.size >= CIVITAI_CACHE_LIMIT) {
+        // Map iterates in insertion order, so this drops the least recently added entry.
+        CIVITAI_CACHE.delete(CIVITAI_CACHE.keys().next().value as string);
     }
-    catch {
-        return null;
-    }
+    CIVITAI_CACHE.set(path, request);
+    return request;
 }
 
-/** Picks the file to download out of a model's versions: the requested version where there is one,
- *  otherwise the newest version that actually holds a model file. */
-function pickVersionFile(
-    model: CivitaiModelData,
-    versionId: string | null
-): { version: CivitaiVersionData; file: CivitaiFileData } | null {
+/** Files of a version the downloader can fetch: model files in a format the server accepts. A text
+ *  encoder ships beside a model rather than being one, so it is never listed; a VAE is, because a
+ *  model page is a legitimate place to get one from even though a bare link never means it. */
+function offeredFiles(version: CivitaiVersionData): CivitaiFileData[] {
+    return (version.files ?? []).filter(
+        file =>
+            !CIVITAI_NON_MODEL_FILES.includes(file.type ?? '') &&
+            hasExtension(file.name, SAFE_EXTENSIONS)
+    );
+}
+
+/** The file a version means when nothing has been picked. Falls back to whatever the version holds
+ *  first, so an unusable file still gets named in the 'not a safetensors' message. */
+function defaultFile(version: CivitaiVersionData): CivitaiFileData | null {
+    const offered = offeredFiles(version);
+    return (
+        offered.find(file => !CIVITAI_SIDE_FILES.includes(file.type ?? '')) ??
+        offered[0] ??
+        version.files?.[0] ??
+        null
+    );
+}
+
+/** Picks the version a link points at: the one it names, or — since a link may carry a download id
+ *  rather than a version id, and a version may hold no model file at all — the newest that has
+ *  something worth downloading. */
+function pickVersion(model: CivitaiModelData, versionId: string | null): CivitaiVersionData | null {
     const versions = model.modelVersions ?? [];
-    for (const version of versions) {
-        for (const file of version.files ?? []) {
-            if (CIVITAI_SIDE_FILES.includes(file.type ?? '')) {
-                continue;
-            }
-            if (!hasExtension(file.name, SAFE_EXTENSIONS)) {
-                continue;
-            }
-            if (versionId && !withoutQuery(file.downloadUrl ?? '').endsWith(`/${versionId}`)) {
-                continue;
-            }
-            return { version, file };
+    if (versionId) {
+        const named = versions.find(version => `${version.id}` === versionId);
+        if (named) {
+            return named;
+        }
+        // An /api/download/models/<id> link names its version only inside the file's download URL.
+        const byDownload = versions.find(version =>
+            offeredFiles(version).some(file =>
+                withoutQuery(file.downloadUrl ?? '').endsWith(`/${versionId}`)
+            )
+        );
+        if (byDownload) {
+            return byDownload;
         }
     }
-    const fallback = versions[0];
-    const file = fallback?.files?.[0];
-    return fallback && file ? { version: fallback, file } : null;
+    return versions.find(version => offeredFiles(version).length > 0) ?? versions[0] ?? null;
 }
 
-async function resolveCivitai(url: string, canLookup: boolean): Promise<ModelSource> {
-    let [modelId, versionId] = parseCivitaiUrl(url);
-    if (!modelId && !versionId) {
+async function resolveCivitai(
+    url: string,
+    canLookup: boolean,
+    choice: CivitaiChoice
+): Promise<ModelSource> {
+    let [modelId, linkVersionId] = parseCivitaiUrl(url);
+    if (!modelId && !linkVersionId) {
         return source('civitaiNotAModel');
     }
+    // A picked version wins over the one the pasted link names, since it is the later statement of
+    // what the user wants out of the same model.
+    let versionId = choice.versionId ?? linkVersionId;
     // A direct download link is usable on its own; the lookup only adds metadata to it.
     const directUrl = versionId ? `${CIVITAI_PREFIX}api/download/models/${versionId}` : '';
     if (!canLookup) {
@@ -323,15 +399,23 @@ async function resolveCivitai(url: string, canLookup: boolean): Promise<ModelSou
         modelId = `${version.modelId}`;
     }
     const model = await civitaiGet<CivitaiModelData>(`api/v1/models/${modelId}`);
-    const picked = model ? pickVersionFile(model, versionId) : null;
-    if (!model || !picked) {
+    const version = model ? pickVersion(model, versionId) : null;
+    if (!model || !version) {
         return source('civitaiFailed', { ok: Boolean(directUrl), downloadUrl: directUrl });
     }
-    const { version, file } = picked;
+    const offered = offeredFiles(version);
+    // A picked file is taken as meant even when it is a VAE or some other extra a bare link would
+    // never resolve to; without one, the version's own model file is what the link meant.
+    const file =
+        (choice.fileId ? offered.find(entry => `${entry.id}` === choice.fileId) : null) ??
+        defaultFile(version);
+    if (!file) {
+        return source('civitaiFailed', { ok: Boolean(directUrl), downloadUrl: directUrl });
+    }
     if (!hasExtension(file.name, SAFE_EXTENSIONS)) {
         return source('civitaiUnsafeFile', { detail: file.name });
     }
-    versionId ??= `${version.id}`;
+    versionId = `${version.id}`;
     const pageUrl = `${CIVITAI_PREFIX}models/${modelId}?modelVersionId=${versionId}`;
     const metadata: Record<string, string> = {
         'modelspec.title': `${model.name} - ${version.name}`,
@@ -358,24 +442,38 @@ async function resolveCivitai(url: string, canLookup: boolean): Promise<ModelSou
     return source('civitaiLoaded', {
         ok: true,
         // The '#.gguf' marker is how the server is told the format; it strips the fragment before
-        // fetching (ModelsAPI.cs:599).
+        // fetching (ModelsAPI.cs:608).
         downloadUrl: hasExtension(file.name, ['.gguf'])
             ? `${file.downloadUrl}#.gguf`
             : (file.downloadUrl ?? directUrl),
         suggestedName: cleanSaveName(`${model.name} - ${version.name}`),
-        subtype: CIVITAI_SUBTYPES[model.type ?? ''] ?? null,
+        // A file states its own kind when it is not simply 'the model' - a VAE listed under a
+        // checkpoint is a VAE - so that beats the model's overall type.
+        subtype: CIVITAI_SUBTYPES[file.type && file.type !== 'Model' ? file.type : (model.type ?? '')] ?? null,
         metadata,
         civitai: {
             modelId: `${model.id}`,
             versionId,
             modelName: model.name,
             versionName: version.name,
+            versions: (model.modelVersions ?? []).map(entry => ({
+                id: `${entry.id}`,
+                label: entry.name
+            })),
+            // The chosen file is listed even when it would not have been offered - a version
+            // holding nothing but a text encoder resolves to it, and the card still has to name
+            // what is about to be downloaded.
+            files: (offered.includes(file) ? offered : [file, ...offered]).map(entry => ({
+                id: `${entry.id}`,
+                label: entry.name,
+                sizeKb: entry.sizeKB ?? null
+            })),
+            fileId: `${file.id}`,
+            paidAccessEndsAt: futureDate(version.paidAccess?.endsAt),
             baseModel: version.baseModel ?? '',
             date: version.createdAt ?? '',
             author: model.creator?.username ?? '',
             triggerWords: (version.trainedWords ?? []).join('; '),
-            fileName: file.name,
-            fileSizeKb: file.sizeKB ?? null,
             description: stripHtml(model.description ?? ''),
             versionDescription: stripHtml(version.description ?? ''),
             pageUrl,
@@ -384,11 +482,28 @@ async function resolveCivitai(url: string, canLookup: boolean): Promise<ModelSou
     });
 }
 
+/** A date that has not passed yet, or null. An early-access window that has already lapsed says
+ *  nothing about downloading the model today. */
+function futureDate(value: string | undefined): string | null {
+    if (!value) {
+        return null;
+    }
+    const when = new Date(value);
+    return Number.isFinite(when.getTime()) && when > new Date() ? value : null;
+}
+
 /** Works out what a pasted link points at, and what should be downloaded from it.
  *
  * `canLookup` is the user's `edit_model_metadata` permission, which is what gates the metadata
- * proxy (ModelsAPI.cs:35). Without it a Civitai link still downloads, just without its metadata. */
-export async function resolveModelSource(rawUrl: string, canLookup: boolean): Promise<ModelSource> {
+ * proxy (ModelsAPI.cs:35). Without it a Civitai link still downloads, just without its metadata.
+ *
+ * `choice` is the version and file picked out of a Civitai model after it first resolved, which is
+ * only ever set for a link that already resolved to that same model. */
+export async function resolveModelSource(
+    rawUrl: string,
+    canLookup: boolean,
+    choice: CivitaiChoice = {}
+): Promise<ModelSource> {
     const url = normalizeCivitaiUrl(rawUrl);
     if (url === '') {
         return source('empty');
@@ -400,7 +515,7 @@ export async function resolveModelSource(rawUrl: string, canLookup: boolean): Pr
         return resolveHuggingFace(url);
     }
     if (url.startsWith(CIVITAI_PREFIX)) {
-        return resolveCivitai(url, canLookup);
+        return resolveCivitai(url, canLookup, choice);
     }
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
         return source('notALink');

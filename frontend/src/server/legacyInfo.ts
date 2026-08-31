@@ -81,18 +81,29 @@ function valueAfter(lines: string[], marker: string): string | undefined {
     return lines[index + 1] || undefined;
 }
 
-/** The body of the card whose header reads `header`. The Local Network card has no id of its own. */
-function cardBody(doc: Document, header: string): Element | null {
+/** The body of the panel headed by `header`, which has no id of its own to go by.
+ *
+ * The legacy page draws such a panel two ways and has moved things between them: as a card of its
+ * own with a `.card-header`, or as a titled section sharing a card with its neighbours. Both are
+ * accepted, so that a panel moving from one to the other does not blank the row here. */
+function panelBody(doc: Document, header: string): Element | null {
     for (const card of Array.from(doc.querySelectorAll('.card'))) {
         if (card.querySelector('.card-header')?.textContent?.trim() === header) {
             return card.querySelector('.card-body');
+        }
+    }
+    for (const title of Array.from(doc.querySelectorAll('.server-status-section-title'))) {
+        if (title.textContent?.trim() === header) {
+            // The section itself: its heading reads back as one more line, which no lookup below
+            // is looking for.
+            return title.parentElement;
         }
     }
     return null;
 }
 
 function parseNetwork(doc: Document): LegacyNetworkInfo {
-    const lines = textLines(blockText(cardBody(doc, 'Local Network')));
+    const lines = textLines(blockText(panelBody(doc, 'Local Network')));
     return {
         localOnly: lines.some(line => line.includes('only accessible from this computer')),
         lanAddresses: valueAfter(lines, 'following addresses:'),
@@ -103,8 +114,9 @@ function parseNetwork(doc: Document): LegacyNetworkInfo {
 }
 
 function parseUpdate(doc: Document): LegacyServerInfo['update'] {
-    // The only <div> inside the Update card's body, and present only when a release is available.
-    const notice = doc.querySelector('#server_updates_card .card-body div');
+    // The only <div> inside the Update panel's text, and present only when a release is available.
+    // Scoped to '.card-text' rather than the panel, whose own heading is a <div> as well.
+    const notice = doc.querySelector('#server_updates_card .card-text div');
     const message = blockText(notice).trim();
     if (!message) {
         return undefined;

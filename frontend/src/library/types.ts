@@ -131,7 +131,7 @@ export function previewUrl(src: string | null | undefined): string | undefined {
  *
  * Those paths are relative to the *user's* output directory, so the route depends on whether the
  * server appends the username to the output path: `View/<user_id>` when it does, `Output` when it
- * does not. Mirrors getImageOutPrefix (src/wwwroot/js/site.js:5). */
+ * does not. Mirrors getImageOutPrefix (src/wwwroot/js/site.js:10). */
 export function imageOutPrefix(userId: string | undefined, appendUser: boolean | undefined): string {
     return appendUser && userId ? `View/${userId}` : 'Output';
 }

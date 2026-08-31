@@ -222,6 +222,7 @@
     "downloader.noBackends": "Er draait geen backend die een gedownload model zou kunnen laden.",
     "downloader.noLocalBackend": "Downloads worden opgeslagen in de modelmappen van deze server, maar alle actieve backends draaien op andere machines en zien het bestand niet.",
     "downloader.otherTypes": "Overige",
+    "downloader.paidAccess": "Vroege toegang tot {date} — vereist een Civitai-account dat voor deze versie heeft betaald.",
     "downloader.previewAlt": "Voorbeeld van {model}",
     "downloader.previousPreview": "Vorig voorbeeld",
     "downloader.saveAsHelp": "Bestandsnaam om onder op te slaan, zonder extensie. Typ een pad met een schuine streep om een nieuwe map te maken.",

@@ -222,6 +222,7 @@
     "downloader.noBackends": "Non è in esecuzione alcun backend in grado di caricare un modello scaricato.",
     "downloader.noLocalBackend": "I download vengono salvati nelle cartelle dei modelli di questo server, ma tutti i backend in esecuzione sono su altre macchine e non vedranno il file.",
     "downloader.otherTypes": "Altri",
+    "downloader.paidAccess": "Accesso anticipato fino al {date}: richiede un account Civitai che abbia pagato per questa versione.",
     "downloader.previewAlt": "Anteprima di {model}",
     "downloader.previousPreview": "Anteprima precedente",
     "downloader.saveAsHelp": "Nome del file con cui salvare, senza estensione. Scrivi un percorso con una barra per creare una nuova cartella.",

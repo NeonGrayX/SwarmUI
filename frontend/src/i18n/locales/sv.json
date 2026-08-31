@@ -222,6 +222,7 @@
     "downloader.noBackends": "Ingen backend körs som skulle kunna ladda en nedladdad modell.",
     "downloader.noLocalBackend": "Nedladdningar sparas i den här serverns modellmappar, men alla körande backends finns på andra maskiner och kommer inte att se filen.",
     "downloader.otherTypes": "Övriga",
+    "downloader.paidAccess": "Tidig åtkomst till {date} – kräver ett Civitai-konto som har betalat för den här versionen.",
     "downloader.previewAlt": "Förhandsvisning av {model}",
     "downloader.previousPreview": "Föregående förhandsvisning",
     "downloader.saveAsHelp": "Filnamn att spara som, utan filändelse. Skriv en sökväg med snedstreck för att skapa en ny mapp.",

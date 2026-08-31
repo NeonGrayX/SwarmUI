@@ -222,6 +222,7 @@
     "downloader.noBackends": "لا توجد خلفية قيد التشغيل قادرة على تحميل نموذج منزَّل.",
     "downloader.noLocalBackend": "تُحفظ التنزيلات في مجلدات النماذج على هذا الخادم، لكن جميع الخلفيات قيد التشغيل موجودة على أجهزة أخرى ولن ترى الملف.",
     "downloader.otherTypes": "أخرى",
+    "downloader.paidAccess": "وصول مبكر حتى {date} — يتطلب حساب Civitai دفع ثمن هذا الإصدار.",
     "downloader.previewAlt": "معاينة {model}",
     "downloader.previousPreview": "المعاينة السابقة",
     "downloader.saveAsHelp": "اسم الملف المراد الحفظ به، بدون امتداد. اكتب مسارًا يحتوي على شرطة مائلة لإنشاء مجلد جديد.",

@@ -222,6 +222,7 @@
     "downloader.noBackends": "No backend is running that could load a downloaded model.",
     "downloader.noLocalBackend": "Downloads are saved to this server's model folders, but every running backend is on another machine and won't see the file.",
     "downloader.otherTypes": "Other",
+    "downloader.paidAccess": "Early access until {date} — needs a Civitai account that has paid for this version.",
     "downloader.previewAlt": "Preview of {model}",
     "downloader.previousPreview": "Previous preview",
     "downloader.saveAsHelp": "File name to save under, without the extension. Type a path with a slash in it to make a new folder.",

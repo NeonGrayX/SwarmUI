@@ -222,6 +222,7 @@
     "downloader.noBackends": "当前没有运行中的后端能够加载下载的模型。",
     "downloader.noLocalBackend": "下载文件会保存到本服务器的模型文件夹，但所有运行中的后端都在其他机器上，看不到该文件。",
     "downloader.otherTypes": "其他",
+    "downloader.paidAccess": "抢先体验至 {date} — 需要已购买此版本的 Civitai 账户。",
     "downloader.previewAlt": "{model} 的预览",
     "downloader.previousPreview": "上一张预览",
     "downloader.saveAsHelp": "保存时使用的文件名，不含扩展名。输入带斜杠的路径可新建文件夹。",

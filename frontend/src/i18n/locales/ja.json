@@ -222,6 +222,7 @@
     "downloader.noBackends": "ダウンロードしたモデルを読み込めるバックエンドが実行されていません。",
     "downloader.noLocalBackend": "ダウンロードはこのサーバーのモデルフォルダーに保存されますが、実行中のバックエンドはすべて別のマシンにあるため、そのファイルを認識できません。",
     "downloader.otherTypes": "その他",
+    "downloader.paidAccess": "{date} まで早期アクセス — このバージョンを購入した Civitai アカウントが必要です。",
     "downloader.previewAlt": "{model} のプレビュー",
     "downloader.previousPreview": "前のプレビュー",
     "downloader.saveAsHelp": "保存するファイル名（拡張子なし）。スラッシュ入りのパスを入力すると新しいフォルダーを作成します。",

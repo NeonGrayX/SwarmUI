@@ -2,8 +2,8 @@
  *
  * A media param's value is either an inline `data:` URL or a server-side path (`inputs/…`,
  * `raw/…`, `Starred/…`); the server accepts both and strips the data prefix itself
- * (T2IParamTypes.cs:1113). List params hold an array of those, which the API joins with its
- * `\n|||\n` splitter (RequestToParams, src/WebAPI/T2IAPI.cs:216).
+ * (T2IParamTypes.cs:1116). List params hold an array of those, which the API joins with its
+ * `\n|||\n` splitter (RequestToParams, src/WebAPI/T2IAPI.cs:217).
  */
 
 import { t } from '@/i18n';
@@ -94,7 +94,7 @@ function extensionMime(path: string): string {
 }
 
 /** Whether a value is a reusable server-side media path rather than inline data.
- *  Mirrors isValidMediaPath (src/wwwroot/js/site.js:1073). */
+ *  Mirrors isValidMediaPath (src/wwwroot/js/site.js:1091). */
 export function isServerMediaPath(value: string): boolean {
     return value.startsWith('inputs/') || value.startsWith('raw/') || value.startsWith('Starred/');
 }
@@ -139,7 +139,7 @@ export async function urlToDataUrl(url: string): Promise<string> {
     });
 }
 
-/** "16:9"-style description of a resolution. Ported from describeAspectRatio (site.js:1310). */
+/** "16:9"-style description of a resolution. Ported from describeAspectRatio (site.js:1328). */
 export function describeAspectRatio(width: number, height: number): string {
     const wh = width / height;
     const hw = height / width;

@@ -222,6 +222,7 @@
     "downloader.noBackends": "Không có backend nào đang chạy để nạp mô hình đã tải.",
     "downloader.noLocalBackend": "Tệp tải về được lưu vào thư mục mô hình của máy chủ này, nhưng mọi backend đang chạy đều nằm trên máy khác và sẽ không thấy tệp đó.",
     "downloader.otherTypes": "Khác",
+    "downloader.paidAccess": "Truy cập sớm đến {date} — cần tài khoản Civitai đã trả phí cho phiên bản này.",
     "downloader.previewAlt": "Ảnh xem trước của {model}",
     "downloader.previousPreview": "Ảnh xem trước trước đó",
     "downloader.saveAsHelp": "Tên tệp để lưu, không có phần mở rộng. Nhập đường dẫn có dấu gạch chéo để tạo thư mục mới.",

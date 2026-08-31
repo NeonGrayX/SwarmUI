@@ -222,6 +222,7 @@
     "downloader.noBackends": "İndirilen bir modeli yükleyebilecek çalışan bir arka uç yok.",
     "downloader.noLocalBackend": "İndirilenler bu sunucunun model klasörlerine kaydedilir, ancak çalışan tüm arka uçlar başka makinelerde olduğu için dosyayı göremez.",
     "downloader.otherTypes": "Diğer",
+    "downloader.paidAccess": "{date} tarihine kadar erken erişim — bu sürüm için ödeme yapmış bir Civitai hesabı gerekir.",
     "downloader.previewAlt": "{model} önizlemesi",
     "downloader.previousPreview": "Önceki önizleme",
     "downloader.saveAsHelp": "Kaydedilecek dosya adı, uzantısız. Yeni klasör oluşturmak için eğik çizgili bir yol yazın.",

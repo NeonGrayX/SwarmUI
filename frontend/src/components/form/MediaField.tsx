@@ -34,7 +34,7 @@ function kindKey(prefix: string, kind: MediaKind): string {
  * the whole control once one is set, so a filled input reads as filled at a glance.
  *
  * Values are stored as `data:` URLs; the server strips the prefix when parsing
- * (T2IParamTypes.cs:1113). Server-side paths (`inputs/…`, `raw/…`) set from elsewhere are kept
+ * (T2IParamTypes.cs:1116). Server-side paths (`inputs/…`, `raw/…`) set from elsewhere are kept
  * as-is, since those are reusable across sessions and far cheaper to send. */
 export function MediaField(props: ControlProps & { emptyLabel?: string }) {
     const { t, tDynamic } = useTranslation();

@@ -21,6 +21,7 @@ import {
     LIBRARY_SUBTYPES,
     previewToThumbnail,
     resolveModelSource,
+    type CivitaiChoice,
     type CivitaiInfo,
     type ModelSource,
     type Preview
@@ -82,6 +83,9 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
     const [folderEdited, setFolderEdited] = useState(false);
     const [previewIndex, setPreviewIndex] = useState(0);
     const [thumbnail, setThumbnail] = useState<string | null>(null);
+    // Which version and file of a Civitai model to take, once the user has said. Cleared whenever
+    // the URL changes, since a different link is a different model to choose within.
+    const [choice, setChoice] = useState<CivitaiChoice>({});
 
     const trimmedUrl = url.trim();
     const [lookupUrl, setLookupUrl] = useState('');
@@ -92,11 +96,16 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
     }, [trimmedUrl]);
 
     const lookup = useQuery({
-        queryKey: ['model-source', lookupUrl, canLookup],
-        queryFn: () => resolveModelSource(lookupUrl, canLookup),
+        queryKey: ['model-source', lookupUrl, canLookup, choice.versionId, choice.fileId],
+        queryFn: () => resolveModelSource(lookupUrl, canLookup, choice),
         enabled: lookupUrl.length > 0,
         staleTime: 5 * 60 * 1000,
-        retry: false
+        retry: false,
+        // Switching version or file re-resolves the same link, so the card it fills stays put
+        // instead of collapsing and reappearing under the cursor. A different link is a different
+        // model, and showing the old one against it would be a lie, so that case still blanks.
+        placeholderData: (previous, previousQuery) =>
+            previousQuery?.queryKey[1] === lookupUrl ? previous : undefined
     });
     // While the URL is being edited the previous answer describes a URL that is no longer typed in.
     const source = lookupUrl.length > 0 && lookupUrl === trimmedUrl ? (lookup.data ?? null) : null;
@@ -196,6 +205,7 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
                         setUrl(e.target.value);
                         setNameEdited(false);
                         setTypeEdited(false);
+                        setChoice({});
                     }}
                     placeholder="https://…"
                     className={INPUT_CLASS}
@@ -211,6 +221,20 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
                     index={previewIndex}
                     onStep={delta =>
                         setPreviewIndex(current => (current + delta + previews.length) % previews.length)
+                    }
+                    // Neither pick clears the 'user edited this' flags: a name or type typed in by
+                    // hand survives switching version, exactly as it survives everything else the
+                    // lookup suggests. Fields still untouched follow the new pick on their own.
+                    onPickVersion={versionId => {
+                        // A file id belongs to one version, so picking a version starts over from
+                        // that version's own default file.
+                        setChoice({ versionId });
+                    }}
+                    onPickFile={fileId =>
+                        setChoice(current => ({
+                            versionId: current.versionId ?? source.civitai?.versionId,
+                            fileId
+                        }))
                     }
                 />
             )}
@@ -394,16 +418,27 @@ function SourcePanel(props: { source: ModelSource | null; resolving: boolean }) 
     );
 }
 
-/** The model behind a Civitai link, so the user can see they are downloading what they meant to. */
+/** The model behind a Civitai link, so the user can see they are downloading what they meant to.
+ *
+ *  Version and file are pickers rather than plain text, because one Civitai page routinely holds
+ *  several of each - a pruned and a full checkpoint, an fp8 and an fp16 - and a link only ever
+ *  names one of them. */
 function CivitaiCard(props: {
     info: CivitaiInfo;
     preview: Preview | null;
     index: number;
     onStep: (delta: number) => void;
+    onPickVersion: (versionId: string) => void;
+    onPickFile: (fileId: string) => void;
 }) {
     const { t } = useTranslation();
     const { info, preview } = props;
     const total = info.previews.length;
+    const file = info.files.find(entry => entry.id === info.fileId);
+    const fileLabel = (option: { label: string; sizeKb: number | null }) =>
+        option.sizeKb
+            ? t('downloader.fileWithSize', { file: option.label, size: Math.round(option.sizeKb / 1024) })
+            : option.label;
 
     return (
         <div className="mt-2 flex gap-3 rounded-lg border border-subtle bg-surface-sunken p-2.5">
@@ -448,23 +483,39 @@ function CivitaiCard(props: {
                 >
                     {info.modelName}
                 </a>
-                <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
-                    <CardRow label={t('downloader.version')} value={info.versionName} />
+                {info.paidAccessEndsAt && (
+                    <p className="mt-1 flex items-start gap-1.5" style={{ color: 'var(--backend-errored)' }}>
+                        <AlertTriangle size={13} aria-hidden className="mt-px shrink-0" />
+                        <span>
+                            {t('downloader.paidAccess', { date: info.paidAccessEndsAt.split('T')[0] })}
+                        </span>
+                    </p>
+                )}
+                <dl className="mt-1 grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1">
+                    {info.versions.length > 1 ? (
+                        <CardPicker
+                            label={t('downloader.version')}
+                            value={info.versionId}
+                            options={info.versions.map(entry => ({ id: entry.id, label: entry.label }))}
+                            onPick={props.onPickVersion}
+                        />
+                    ) : (
+                        <CardRow label={t('downloader.version')} value={info.versionName} />
+                    )}
                     <CardRow label={t('downloader.baseModel')} value={info.baseModel} />
                     <CardRow label={t('modelDetail.field.author')} value={info.author} />
                     <CardRow label={t('modelDetail.field.date')} value={info.date.split('T')[0]} />
                     <CardRow label={t('modelDetail.field.triggerPhrase')} value={info.triggerWords} />
-                    <CardRow
-                        label={t('downloader.file')}
-                        value={
-                            info.fileSizeKb
-                                ? t('downloader.fileWithSize', {
-                                      file: info.fileName,
-                                      size: Math.round(info.fileSizeKb / 1024)
-                                  })
-                                : info.fileName
-                        }
-                    />
+                    {info.files.length > 1 ? (
+                        <CardPicker
+                            label={t('downloader.file')}
+                            value={info.fileId}
+                            options={info.files.map(entry => ({ id: entry.id, label: fileLabel(entry) }))}
+                            onPick={props.onPickFile}
+                        />
+                    ) : (
+                        <CardRow label={t('downloader.file')} value={file ? fileLabel(file) : ''} />
+                    )}
                 </dl>
                 {(info.versionDescription || info.description) && (
                     <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap text-fg-soft">
@@ -473,6 +524,34 @@ function CivitaiCard(props: {
                 )}
             </div>
         </div>
+    );
+}
+
+/** A card row whose value is one of several the user can switch between. */
+function CardPicker(props: {
+    label: string;
+    value: string;
+    options: { id: string; label: string }[];
+    onPick: (id: string) => void;
+}) {
+    return (
+        <>
+            <dt className="text-fg-soft">{props.label}</dt>
+            <dd className="min-w-0">
+                <select
+                    aria-label={props.label}
+                    value={props.value}
+                    onChange={event => props.onPick(event.target.value)}
+                    className="w-full rounded border border-default bg-surface px-1 py-0.5 text-xs text-fg outline-none focus:border-[var(--emphasis)]"
+                >
+                    {props.options.map(option => (
+                        <option key={option.id} value={option.id}>
+                            {option.label}
+                        </option>
+                    ))}
+                </select>
+            </dd>
+        </>
     );
 }
 

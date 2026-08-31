@@ -73,7 +73,7 @@ function formatBytes(bytes: number): string {
 }
 
 /** Human summary of what a user currently has in flight. Mirrors currentGenString
- *  (src/wwwroot/js/genpage/main.js:61), minus the markup it splices in. */
+ *  (src/wwwroot/js/genpage/main.js:59), minus the markup it splices in. */
 function genSummary(user: ConnectedUser): string {
     const parts: string[] = [];
     if (user.waiting_gens > 0) {

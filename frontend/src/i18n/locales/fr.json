@@ -222,6 +222,7 @@
     "downloader.noBackends": "Aucun backend en cours d'exécution ne pourrait charger un modèle téléchargé.",
     "downloader.noLocalBackend": "Les téléchargements sont enregistrés dans les dossiers de modèles de ce serveur, mais tous les backends en cours d'exécution sont sur d'autres machines et ne verront pas le fichier.",
     "downloader.otherTypes": "Autres",
+    "downloader.paidAccess": "Accès anticipé jusqu'au {date} — nécessite un compte Civitai ayant payé pour cette version.",
     "downloader.previewAlt": "Aperçu de {model}",
     "downloader.previousPreview": "Aperçu précédent",
     "downloader.saveAsHelp": "Nom du fichier sous lequel enregistrer, sans extension. Saisissez un chemin avec une barre oblique pour créer un nouveau dossier.",

@@ -2,7 +2,7 @@
  *
  * Every route that takes a password — Login, Register, ChangePassword, AdminAddUser,
  * AdminSetUserPassword — expects the value to already be prehashed by the browser. The server
- * hashes again on top of it (Utilities.HashPassword, src/Utils/Utilities.cs:1339), so sending a
+ * hashes again on top of it (Utilities.HashPassword, src/Utils/Utilities.cs:1418), so sending a
  * raw password stores a hash the login page can never reproduce.
  *
  * The point is that the server owner never sees the raw password a user may reuse across sites;
