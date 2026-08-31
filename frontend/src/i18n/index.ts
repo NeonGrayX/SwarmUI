@@ -21,7 +21,7 @@ import { cleanDynamicTable, t, tDynamic, useI18nStore, type Messages, type Trans
 
 export { LANGUAGES, DEFAULT_LANGUAGE, findLanguage, normalizeLanguage } from './languages';
 export type { LanguageInfo } from './languages';
-export { bootstrapI18n, hasTranslation, t, tDynamic, useI18nStore } from './store';
+export { bootstrapI18n, hasTranslation, t, tDynamic, trailingFragment, useI18nStore } from './store';
 export type { Messages, TranslationVars } from './store';
 
 export interface Translator {

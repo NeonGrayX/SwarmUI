@@ -15,7 +15,7 @@ import {
     type RoleInfo,
     type UserInfo
 } from '@/server/users';
-import { useTranslation } from '@/i18n';
+import { useTranslation, trailingFragment } from '@/i18n';
 
 const INPUT =
     'rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]';
@@ -268,8 +268,8 @@ function RolesPanel(props: {
             <Section title={t('users.tab.roles')}>
                 <p className="mb-2 text-xs text-fg-soft">
                     {t('userDetail.rolesReadOnlyBefore')}{' '}
-                    <code className="font-mono">configure_roles</code>{' '}
-                    {t('userDetail.rolesReadOnlyAfter')}
+                    <code className="font-mono">configure_roles</code>
+                    {trailingFragment(t('userDetail.rolesReadOnlyAfter'))}
                 </p>
                 <p className="text-sm text-fg">
                     {props.current.length > 0 ? props.current.join(', ') : t('userDetail.noRoles')}

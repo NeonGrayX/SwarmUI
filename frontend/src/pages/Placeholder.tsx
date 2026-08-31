@@ -3,9 +3,8 @@ import type { Destination } from '@/nav/destinations';
 import { useTranslation } from '@/i18n';
 
 /** Stand-in for a routed destination with no screen of its own — Extensions is the only one.
- *  `phase` and `summary` come from router.tsx and are deliberately untranslated: they are
- *  developer-facing notes, not interface copy. */
-export function Placeholder(props: { destination: Destination; phase: string; summary: string }) {
+ *  `summaryKey` names the translated one-line description in router.tsx. */
+export function Placeholder(props: { destination: Destination; summaryKey?: string }) {
     const { t } = useTranslation();
     const Icon = props.destination.icon;
     return (
@@ -14,11 +13,11 @@ export function Placeholder(props: { destination: Destination; phase: string; su
                 <Icon size={20} className="text-fg-soft" aria-hidden />
                 <h1 className="text-xl font-semibold text-fg-strong">{t(props.destination.labelKey)}</h1>
             </div>
-            <p className="text-fg-soft mb-6">{props.summary}</p>
+            {props.summaryKey && <p className="text-fg-soft mb-6">{t(props.summaryKey)}</p>}
             <div className="flex items-start gap-3 rounded-lg border border-default bg-surface p-4">
                 <Construction size={18} className="mt-0.5 shrink-0 text-fg-soft" aria-hidden />
                 <div>
-                    <p className="text-fg">{t('placeholder.notBuilt', { phase: props.phase })}</p>
+                    <p className="text-fg">{t('placeholder.notBuilt')}</p>
                     <p className="text-sm text-fg-soft mt-1">
                         {t('placeholder.useLegacyBefore')}{' '}
                         <a href="/Text2Image" className="underline" style={{ color: 'var(--emphasis)' }}>

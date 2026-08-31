@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { DownloaderWarning, useDownloaderForm } from '@/components/tools/DownloaderForm';
-import { useTranslation } from '@/i18n';
+import { useTranslation, trailingFragment } from '@/i18n';
 
 /** The downloader as a full tool screen. The form itself is shared with the popup the Library
  *  raises (src/components/library/DownloadModelDialog.tsx); this page is the frame around it. */
@@ -21,8 +21,8 @@ export function DownloaderPage() {
                         {t('downloader.about3Before')}{' '}
                         <Link to="/settings/account" className="underline" style={{ color: 'var(--emphasis)' }}>
                             {t('nav.destination.account')}
-                        </Link>{' '}
-                        {t('downloader.about3After')}
+                        </Link>
+                        {trailingFragment(t('downloader.about3After'))}
                     </p>
                 </>
             }

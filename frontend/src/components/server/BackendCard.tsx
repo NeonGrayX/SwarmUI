@@ -160,7 +160,7 @@ export function BackendCard(props: {
                     <Link
                         to="/server/logs"
                         search={{ types: props.logName }}
-                        title={t('backendCard.viewLogsHint')}
+                        title={t('backendCard.viewLogs')}
                         aria-label={t('backendCard.viewLogs')}
                         className="shrink-0 rounded border border-default p-1.5 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
                     >

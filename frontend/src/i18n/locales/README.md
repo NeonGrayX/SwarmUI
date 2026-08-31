@@ -16,6 +16,11 @@ back to the English string at runtime (see `../store.ts`).
 - Plurals use paired `.one` / `.other` keys, selected by the numeric `count`
   variable. Languages without a singular/plural split simply repeat the same
   text in both.
+- Some sentences wrap a `<code>` element, so they are split into `…Before` and
+  `…After` halves. The renderer inserts the space before the trailing half only
+  when it does not already start with punctuation (`trailingFragment` in
+  `../store.ts`), so a language that needs nothing but a full stop there can use
+  just `"."` without producing a stray space.
 - These files cover *static* interface text only. Text that comes from the
   server — parameter names, setting descriptions, permission descriptions,
   backend types — is translated by English-source lookup against the legacy

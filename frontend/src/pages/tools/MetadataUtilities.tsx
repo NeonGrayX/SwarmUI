@@ -4,7 +4,7 @@ import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useTranslation } from '@/i18n';
+import { useTranslation, trailingFragment } from '@/i18n';
 
 export function MetadataUtilitiesPage() {
     const { t } = useTranslation();
@@ -35,8 +35,8 @@ export function MetadataUtilitiesPage() {
                         {t('metadataTool.about3Before')}{' '}
                         <a href="/Text2Image" className="underline" style={{ color: 'var(--emphasis)' }}>
                             /Text2Image
-                        </a>{' '}
-                        {t('metadataTool.about3After')}
+                        </a>
+                        {trailingFragment(t('metadataTool.about3After'))}
                     </p>
                 </>
             }
@@ -61,8 +61,8 @@ export function MetadataUtilitiesPage() {
             {!canReset && (
                 <p className="mt-2 text-sm" style={{ color: 'var(--status-bar-warn-color-start-end)' }}>
                     {t('metadataTool.noPermissionBefore')}{' '}
-                    <code className="font-mono">reset_metadata</code>{' '}
-                    {t('metadataTool.noPermissionAfter')}
+                    <code className="font-mono">reset_metadata</code>
+                    {trailingFragment(t('metadataTool.noPermissionAfter'))}
                 </p>
             )}
 

@@ -3,7 +3,7 @@
  */
 
 import type { ReactNode } from 'react';
-import { useTranslation } from '@/i18n';
+import { useTranslation, trailingFragment } from '@/i18n';
 import { useSession } from './hooks';
 
 /** One permission id, or several of which any one suffices. */
@@ -69,8 +69,8 @@ function PermissionDenied(props: { perm?: PermissionRequirement }) {
                         {index > 0 && (index === names.length - 1 ? t('common.orSeparator') : ', ')}
                         <code className="font-mono text-fg">{name}</code>
                     </span>
-                ))}{' '}
-                {t('permissionDenied.after', { count: names.length })}
+                ))}
+                {trailingFragment(t('permissionDenied.after', { count: names.length }))}
             </p>
         </div>
     );

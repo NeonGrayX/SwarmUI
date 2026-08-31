@@ -55,10 +55,11 @@ const IMPLEMENTED: Record<string, ComponentType> = {
     appearance: AppearancePage
 };
 
-/** Destinations with no screen of their own. Extensions is the only one; its work still lives in
- *  the legacy Extensions tab, so the placeholder points there. */
-const UNBUILT: Record<string, { phase: string; summary: string }> = {
-    extensions: { phase: 'a later phase', summary: 'Install, update and enable Swarm extensions.' }
+/** Destinations with no screen of their own, keyed to the translation identifier for their
+ *  one-line description. Extensions is the only one; its work still lives in the legacy
+ *  Extensions tab, so the placeholder points there. */
+const UNBUILT: Record<string, string> = {
+    extensions: 'placeholder.summary.extensions'
 };
 
 /** Search-parameter contracts, for the few screens that are deep-linked into.
@@ -87,7 +88,6 @@ const indexRoute = createRoute({
 });
 
 function routeFor(destination: Destination): AnyRoute {
-    const info = UNBUILT[destination.id] ?? { phase: 'a later phase', summary: '' };
     const Screen = IMPLEMENTED[destination.id];
     return createRoute({
         getParentRoute: () => rootRoute,
@@ -98,7 +98,7 @@ function routeFor(destination: Destination): AnyRoute {
                 {Screen ? (
                     <Screen />
                 ) : (
-                    <Placeholder destination={destination} phase={info.phase} summary={info.summary} />
+                    <Placeholder destination={destination} summaryKey={UNBUILT[destination.id]} />
                 )}
             </RequirePermission>
         )

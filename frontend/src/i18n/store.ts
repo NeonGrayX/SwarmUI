@@ -83,6 +83,16 @@ export function t(key: string, vars?: TranslationVars): string {
     return interpolate(resolved, vars);
 }
 
+/** Joins a sentence-tail fragment onto the element before it.
+ *
+ * Sentences like "Your account doesn't have the `x` permission." are assembled from a leading
+ * fragment, a `<code>` element, and a trailing one, so the trailing fragment needs a space in
+ * front of it — except where a language reduced it to bare punctuation, which would then render
+ * as "`x` ." Languages that end the sentence with a comma clause have the same problem. */
+export function trailingFragment(text: string): string {
+    return /^[\s]*[.,;:!?。、，؟،]/.test(text) ? text : ` ${text}`;
+}
+
 /** True when a static identifier exists at all, for optional labels. */
 export function hasTranslation(key: string): boolean {
     return key in activeMessages || key in ENGLISH;
