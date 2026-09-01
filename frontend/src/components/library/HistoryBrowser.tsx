@@ -18,6 +18,8 @@ import { DetailSheet } from '../ui/DetailSheet';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ImageLightbox } from '../ui/ImageLightbox';
+import { OutputPlayer, OutputThumbnail, outputKind } from '../ui/OutputMedia';
+import { useVideoEditor } from '../video/useVideoEditor';
 import { MetadataView } from '../ui/MetadataView';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
 import { useTranslation } from '@/i18n';
@@ -89,6 +91,7 @@ export function HistoryBrowser() {
     const reuseParameters = useReuseParameters();
     const mediaParam = useMediaParamAction();
     const contextMenu = useContextMenu();
+    const videoEditor = useVideoEditor();
     const prefix = imageOutPrefix(session.data?.user_id, session.data?.output_append_user);
     const urlForPath = (full: string) => `/${prefix}/${full}`;
     // ListImages returns `src` relative to the *requested path*, not to the output root, so the
@@ -238,6 +241,12 @@ export function HistoryBrowser() {
         if (mediaParam.available('initimage')) {
             actions.push({ label: t('history.useAsInit'), onSelect: () => void useAsInit(image) });
         }
+        if (videoEditor.available && outputKind(entry.src) === 'video') {
+            actions.push({
+                label: t('videoEditor.open'),
+                onSelect: () => videoEditor.edit(urlForPath(image.full), image.full)
+            });
+        }
         if (canDelete) {
             actions.push({
                 label: t('modelBrowser.action.delete'),
@@ -329,10 +338,9 @@ export function HistoryBrowser() {
                                         title={`${file.src}\n${t('browser.rightClickForActions')}`}
                                         className="block h-full w-full"
                                     >
-                                        <img
+                                        <OutputThumbnail
                                             src={urlFor(file.src)}
-                                            alt=""
-                                            loading="lazy"
+                                            alt={file.src}
                                             className="h-full w-full object-cover"
                                         />
                                         <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-left text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
@@ -383,10 +391,9 @@ export function HistoryBrowser() {
                                         className="flex min-w-0 flex-1 items-center gap-3 py-1.5 text-left"
                                     >
                                         <span className="size-9 shrink-0 overflow-hidden rounded bg-surface-sunken">
-                                            <img
+                                            <OutputThumbnail
                                                 src={urlFor(file.src)}
-                                                alt=""
-                                                loading="lazy"
+                                                alt={file.src}
                                                 className="h-full w-full object-cover"
                                             />
                                         </span>
@@ -406,6 +413,11 @@ export function HistoryBrowser() {
                     starred={detail.starred}
                     canDelete={canDelete}
                     canUseAsInit={mediaParam.available('initimage')}
+                    onEditVideo={
+                        videoEditor.available && outputKind(detail.entry.src) === 'video'
+                            ? () => videoEditor.edit(urlForPath(detail.full), detail.full)
+                            : undefined
+                    }
                     onStar={() => star(detail.full)}
                     onDownload={() => downloadImage(urlForPath(detail.full), detail.entry.src)}
                     onReuse={() => reuse(detail.entry)}
@@ -473,6 +485,7 @@ export function HistoryBrowser() {
             )}
 
             {contextMenu.menu}
+            {videoEditor.dialog}
         </div>
     );
 }
@@ -483,6 +496,8 @@ function ImageSheet(props: {
     starred: boolean;
     canDelete: boolean;
     canUseAsInit: boolean;
+    /** Only for a video, and only for a user who may run the editing routes. */
+    onEditVideo?: () => void;
     onStar: () => void;
     onDownload: () => void;
     onReuse: () => void;
@@ -524,23 +539,38 @@ function ImageSheet(props: {
                 {props.canUseAsInit && (
                     <SheetButton label={t('history.useAsInit')} onClick={props.onUseAsInit} />
                 )}
+                {props.onEditVideo && (
+                    <SheetButton label={t('videoEditor.open')} onClick={props.onEditVideo} />
+                )}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 {/* The panel is only ever a few hundred pixels wide, so the image here is a
-                    thumbnail of the detail being read; clicking it opens the real view of it. */}
-                <button
-                    type="button"
-                    onClick={props.onOpenViewer}
-                    title={t('viewer.open')}
-                    className="mb-3 block w-full cursor-zoom-in"
-                >
-                    <img
-                        src={props.url}
-                        alt=""
-                        className="max-h-72 w-full rounded border border-subtle object-contain lg:max-h-none"
-                    />
-                </button>
+                    thumbnail of the detail being read; clicking it opens the real view of it.
+                    A video or an audio file plays here instead: it carries its own controls, and
+                    a click that both plays and zooms would do neither reliably. */}
+                {outputKind(props.url) === 'image' ? (
+                    <button
+                        type="button"
+                        onClick={props.onOpenViewer}
+                        title={t('viewer.open')}
+                        className="mb-3 block w-full cursor-zoom-in"
+                    >
+                        <img
+                            src={props.url}
+                            alt=""
+                            className="max-h-72 w-full rounded border border-subtle object-contain lg:max-h-none"
+                        />
+                    </button>
+                ) : (
+                    <div className="mb-3">
+                        <OutputPlayer
+                            src={props.url}
+                            label={props.entry.src}
+                            className="max-h-72 w-full rounded border border-subtle object-contain"
+                        />
+                    </div>
+                )}
                 <MetadataView metadata={props.entry.metadata} empty={t('history.noMetadata')} />
             </div>
         </DetailSheet>

@@ -2,6 +2,7 @@ import { Settings2, X } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { imageUrl, useGenerateStore } from '@/generate/store';
 import type { BatchItem } from '@/generate/types';
+import { OutputThumbnail } from '../ui/OutputMedia';
 import { useTranslation } from '@/i18n';
 
 /** The batch strip: one tile per image in the run, with live progress. */
@@ -111,7 +112,7 @@ function BatchTile(props: { item: BatchItem; active: boolean; onSelect: () => vo
             }}
         >
             {src ? (
-                <img
+                <OutputThumbnail
                     src={src}
                     alt={t('batch.imageAlt', { index: item.batchIndex })}
                     className="h-full w-full object-cover"

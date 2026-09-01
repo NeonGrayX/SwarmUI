@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ImageIcon, Info, Pencil } from 'lucide-react';
+import { ImageIcon, Info, Pencil, Scissors } from 'lucide-react';
 import { imageUrl, useGenerateStore } from '@/generate/store';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
 import { useOpenEditor } from '@/editor/useOpenEditor';
+import { useVideoEditor } from '../video/useVideoEditor';
 import { MetadataView } from '../ui/MetadataView';
 import { DetailSheet } from '../ui/DetailSheet';
+import { OutputPlayer, outputKind } from '../ui/OutputMedia';
 import { ZoomableImage } from '../ui/ZoomableImage';
 import { useTranslation } from '@/i18n';
 
@@ -18,11 +20,15 @@ export function Canvas() {
     const [reuse, setReuse] = useState<string | null>(null);
     const mediaParam = useMediaParamAction();
     const editor = useOpenEditor();
+    const videoEditor = useVideoEditor();
 
     const current = batch.find(item => item.id === selected);
     const src = imageUrl(current?.src);
     // Previews are half-finished renders; feeding one back in as an input is never what was meant.
     const canReuse = Boolean(src) && !current?.isPreview;
+    // A video model's previews are still images, so what is on screen mid-run is an image even
+    // when the finished output will not be.
+    const kind = src && !current?.isPreview ? outputKind(src) : 'image';
 
     /** Sends the shown image to a media param, inlining it so the param survives a page reload. */
     function sendTo(paramId: string, label: string) {
@@ -62,12 +68,16 @@ export function Canvas() {
                 )}
 
                 {src ? (
-                    <ZoomableImage
-                        src={src}
-                        alt={current?.isPreview ? t('canvas.previewAlt') : t('canvas.imageAlt')}
-                        isPreview={current?.isPreview}
-                        resetKey={current?.id}
-                    />
+                    kind === 'image' ? (
+                        <ZoomableImage
+                            src={src}
+                            alt={current?.isPreview ? t('canvas.previewAlt') : t('canvas.imageAlt')}
+                            isPreview={current?.isPreview}
+                            resetKey={current?.id}
+                        />
+                    ) : (
+                        <OutputPlayer src={src} label={t('canvas.mediaAlt')} />
+                    )
                 ) : (
                     <div className="text-center text-fg-soft">
                         <ImageIcon size={40} className="mx-auto mb-3 opacity-40" aria-hidden />
@@ -87,7 +97,7 @@ export function Canvas() {
 
                 {current && (
                     <div className="absolute right-3 top-3 flex items-center gap-1.5">
-                        {canReuse && editor.available && (
+                        {canReuse && kind === 'image' && editor.available && (
                             <ReuseButton
                                 label={t('canvas.editImage')}
                                 icon={<Pencil size={13} aria-hidden />}
@@ -97,6 +107,15 @@ export function Canvas() {
                                         .catch((e: unknown) =>
                                             setReuse(e instanceof Error ? e.message : t('canvas.editFailed'))
                                         )
+                                }
+                            />
+                        )}
+                        {canReuse && kind === 'video' && videoEditor.available && (
+                            <ReuseButton
+                                label={t('videoEditor.open')}
+                                icon={<Scissors size={13} aria-hidden />}
+                                onClick={() =>
+                                    videoEditor.edit(src!, src!.slice(src!.lastIndexOf('/') + 1))
                                 }
                             />
                         )}
@@ -145,6 +164,8 @@ export function Canvas() {
                     </div>
                 </DetailSheet>
             )}
+
+            {videoEditor.dialog}
         </div>
     );
 }

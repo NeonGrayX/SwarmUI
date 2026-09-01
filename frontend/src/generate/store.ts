@@ -24,6 +24,9 @@ interface GenerateStore {
     close: (() => void) | null;
 
     start: (images: number, params: Record<string, unknown>) => void;
+    /** Adds an already-finished file to the rail - a video edit or an audio split, neither of
+     *  which the generation socket ever sees. */
+    addResult: (src: string, metadata?: string | null) => void;
     /** Refuses a run that failed pre-flight validation, without touching the socket. */
     fail: (issue: GenIssue) => void;
     clearInputError: () => void;
@@ -164,6 +167,21 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
         );
 
         set({ close });
+    },
+
+    /** Given a run of its own, so arriving mid-batch neither claims a pending slot nor renumbers
+     *  one. It is always selected: the user asked for this file, so this file is what to show. */
+    addResult: (src, metadata = null) => {
+        const runId = get().nextRunId;
+        const id = slotId(runId, '0');
+        set(s => ({
+            nextRunId: runId + 1,
+            batch: [
+                ...s.batch,
+                { id, runId, batchIndex: '0', status: 'done' as const, src, metadata, overallPercent: 1 }
+            ],
+            selected: id
+        }));
     },
 
     /** Stops "generate forever" too, so a bad request cannot re-fire on a loop. */

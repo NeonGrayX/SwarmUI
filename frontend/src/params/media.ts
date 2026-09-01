@@ -99,6 +99,32 @@ export function isServerMediaPath(value: string): boolean {
     return value.startsWith('inputs/') || value.startsWith('raw/') || value.startsWith('Starred/');
 }
 
+/** The reverse of `mediaSrc`: the output-relative path behind a view URL.
+ *
+ * Both view routes are stripped, since which one a URL uses depends on a server setting the path
+ * itself knows nothing about - `Output/<path>`, or `View/<user id>/<path>` when the server appends
+ * the user name (imageOutPrefix). Anything else is handed back unchanged, and reads as "not one of
+ * ours" to `isServerMediaPath`. Mirrors getImageFullSrc
+ * (src/wwwroot/js/genpage/gentab/currentimagehandler.js:924). */
+export function serverMediaPath(url: string): string {
+    let path = url;
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+        const host = path.indexOf('/', path.indexOf('//') + 2);
+        // A bare origin has no path to take, and slicing at -1 would take its last character.
+        path = host === -1 ? '' : path.slice(host);
+    }
+    path = path.replace(/^\//, '');
+    if (path.startsWith('Output/')) {
+        return path.slice('Output/'.length);
+    }
+    if (path.startsWith('View/')) {
+        const rest = path.slice('View/'.length);
+        const slash = rest.indexOf('/');
+        return slash === -1 ? rest : rest.slice(slash + 1);
+    }
+    return path;
+}
+
 /** Resolves a stored value to something an <img>/<video>/<audio> can load. Server paths are
  *  relative to the user's output directory, so they need the same prefix the Library uses. */
 export function mediaSrc(value: string, outPrefix: string): string {

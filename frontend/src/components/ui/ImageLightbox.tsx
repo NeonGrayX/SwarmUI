@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { OutputPlayer, outputKind } from './OutputMedia';
 import { ZoomableImage } from './ZoomableImage';
 import { useTranslation } from '@/i18n';
 
-/** Full-screen image viewer: one image at a time, zoomable, with the rest of its set a click,
- *  an arrow key or a swipe away.
+/** Full-screen output viewer: one file at a time, zoomable if it is an image, with the rest of its
+ *  set a click, an arrow key or a swipe away.
  *
  * The caller owns which image is shown - it passes the current one and the steps either side - so
  * whatever opened the viewer (a browser's detail panel, say) stays in step with it rather than the
@@ -24,6 +25,7 @@ export function ImageLightbox(props: {
 }) {
     const { t } = useTranslation();
     const { onClose } = props;
+    const kind = outputKind(props.src);
 
     // Captured at the document, ahead of every other Escape handler in the page, so closing the
     // viewer leaves the detail panel it was opened from open behind it.
@@ -67,15 +69,26 @@ export function ImageLightbox(props: {
                 className="relative min-h-0 flex-1"
                 onClick={e => e.target === e.currentTarget && onClose()}
             >
-                <ZoomableImage
-                    src={props.src}
-                    alt={props.alt}
-                    resetKey={props.src}
-                    autoFocus
-                    onPrev={props.onPrev}
-                    onNext={props.onNext}
-                    onBackdropClick={onClose}
-                />
+                {kind === 'image' ? (
+                    <ZoomableImage
+                        src={props.src}
+                        alt={props.alt}
+                        resetKey={props.src}
+                        autoFocus
+                        onPrev={props.onPrev}
+                        onNext={props.onNext}
+                        onBackdropClick={onClose}
+                    />
+                ) : (
+                    // Held clear of the step columns either side, so the player's own controls are
+                    // never buried under one of them.
+                    <div
+                        className="flex h-full items-center justify-center px-[clamp(4rem,16vw,20rem)] py-4"
+                        onClick={e => e.target === e.currentTarget && onClose()}
+                    >
+                        <OutputPlayer src={props.src} label={props.alt} />
+                    </div>
+                )}
 
                 {/* Sat outside the image's own viewport, so a click on one never lands on the pan
                     handler underneath it. */}
