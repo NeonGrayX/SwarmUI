@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import { comfyKeys, useSavedWorkflows, type ComfyBuildResult } from '@/comfy/actions';
 import { IconButton, type ComfyNotice } from './ComfyBarParts';
-import { ComfySaveDialog, type ReplaceTarget } from './ComfySaveDialog';
-import { ComfyWorkflowLibrary } from './ComfyWorkflowLibrary';
+import { ComfySaveDialog } from './ComfySaveDialog';
 import { WorkflowPicker } from './WorkflowPicker';
 import { useTranslation } from '@/i18n';
 
-/** The workflow library, as a strip of three controls: save what is open, browse what is stored,
- *  reopen one by name.
+/** The workflow library, as a strip of two controls: save what is open, reopen one by name.
  *
  * Kept apart from the bar around it so that what a workflow is - a graph, with an editor behind it
  * - stays separate from the library's own business of naming and storing one.
@@ -26,9 +24,6 @@ export function ComfyLibraryControls(props: {
     const { t } = useTranslation();
     const queryClient = useQueryClient();
     const [saveOpen, setSaveOpen] = useState(false);
-    const [libraryOpen, setLibraryOpen] = useState(false);
-    /** Pre-fills the save dialog when the library asked to save over an existing workflow. */
-    const [replacing, setReplacing] = useState<ReplaceTarget | null>(null);
 
     const canEdit = usePermission('comfy_edit_workflows');
     const canRead = usePermission('comfy_read_workflows');
@@ -50,18 +45,8 @@ export function ComfyLibraryControls(props: {
 
     return (
         <>
-            <IconButton
-                onClick={() => {
-                    setReplacing(null);
-                    setSaveOpen(true);
-                }}
-                disabled={!canEdit}
-                label={t('comfy.bar.save')}
-            >
+            <IconButton onClick={() => setSaveOpen(true)} disabled={!canEdit} label={t('comfy.bar.save')}>
                 <Save size={13} aria-hidden />
-            </IconButton>
-            <IconButton onClick={() => setLibraryOpen(true)} disabled={!canRead} label={t('comfy.bar.browse')}>
-                <FolderOpen size={13} aria-hidden />
             </IconButton>
             {/* Quick load reopens a workflow rather than settling on one, so the picker holds no
                 selection: it goes back to reading "Quick load", and picking the same workflow twice
@@ -87,30 +72,10 @@ export function ComfyLibraryControls(props: {
 
             <ComfySaveDialog
                 open={saveOpen}
-                replacing={replacing}
                 existingNames={names}
                 onClose={() => setSaveOpen(false)}
                 onNotice={props.notice.show}
                 build={props.build}
-            />
-            <ComfyWorkflowLibrary
-                open={libraryOpen}
-                onClose={() => setLibraryOpen(false)}
-                canEdit={canEdit}
-                onOpenWorkflow={name => {
-                    setLibraryOpen(false);
-                    props.onLoad(name);
-                }}
-                onReplace={workflow => {
-                    setLibraryOpen(false);
-                    setReplacing({
-                        name: workflow.name,
-                        description: workflow.description ?? '',
-                        simple: workflow.enable_in_simple
-                    });
-                    setSaveOpen(true);
-                }}
-                onDelete={deleteWorkflow}
             />
         </>
     );

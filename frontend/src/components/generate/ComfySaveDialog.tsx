@@ -8,13 +8,6 @@ import { ComfyWorkflowError } from '@/comfy/params';
 import { useGenerateStore } from '@/generate/store';
 import { useTranslation } from '@/i18n';
 
-/** What the library offered when the user chose "save over this". */
-export interface ReplaceTarget {
-    name: string;
-    description: string;
-    simple: boolean;
-}
-
 /** Saves the graph currently open in the editor into the workflow library.
  *
  * The stored entry is the graph plus the parameter set built from it, so reopening it in the
@@ -23,7 +16,6 @@ export interface ReplaceTarget {
  */
 export function ComfySaveDialog(props: {
     open: boolean;
-    replacing: ReplaceTarget | null;
     existingNames: string[];
     onClose: () => void;
     onNotice: (message: string, isError?: boolean) => void;
@@ -46,12 +38,12 @@ export function ComfySaveDialog(props: {
 
     useEffect(() => {
         if (props.open) {
-            setName(props.replacing?.name ?? '');
-            setDescription(props.replacing?.description ?? '');
-            setEnableSimple(props.replacing?.simple ?? false);
+            setName('');
+            setDescription('');
+            setEnableSimple(false);
             setUseThumbnail(false);
         }
-    }, [props.open, props.replacing]);
+    }, [props.open]);
 
     // Read once as the dialog opens: the graph cannot change while it is up, and this is a plain
     // reach into the editor rather than the full parameter build the save itself does.
@@ -102,8 +94,7 @@ export function ComfySaveDialog(props: {
                 prompt,
                 custom_params: customParams,
                 param_values: input.paramVal,
-                image: useThumbnail && thumbnailSrc ? await toDataUrl(thumbnailSrc) : null,
-                replace: props.replacing?.name ?? ''
+                image: useThumbnail && thumbnailSrc ? await toDataUrl(thumbnailSrc) : null
             });
             await queryClient.invalidateQueries({ queryKey: comfyKeys.workflows });
             props.onNotice(t('comfy.notice.saved'));
@@ -149,16 +140,10 @@ export function ComfySaveDialog(props: {
                             <option key={existing} value={existing} />
                         ))}
                     </datalist>
-                    {props.replacing ? (
-                        <p className="mt-1 text-xs text-fg-soft">
-                            {t('comfy.save.replacing', { name: props.replacing.name })}
+                    {overwriting && (
+                        <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
+                            {t('comfy.save.overwriteBody', { name: trimmed })}
                         </p>
-                    ) : (
-                        overwriting && (
-                            <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
-                                {t('comfy.save.overwriteBody', { name: trimmed })}
-                            </p>
-                        )
                     )}
 
                     <label className="mb-1 mt-3 block text-xs text-fg-soft" htmlFor="comfy-save-description">
