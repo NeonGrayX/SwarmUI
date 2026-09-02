@@ -31,6 +31,10 @@ interface ParamStore {
     reset: (id: string) => void;
     /** Clears everything. */
     resetAll: () => void;
+    /** Swaps one set of param ids for another in a single step: drops `stale`, then merges
+     *  `next`. Used when a Comfy workflow takes over the panel, since its parameter ids are
+     *  derived from its own nodes and none of the previous ones survive. */
+    applyBundle: (stale: string[], next: Record<string, ParamValue>) => void;
 }
 
 export const useParamStore = create<ParamStore>(set => ({
@@ -57,12 +61,28 @@ export const useParamStore = create<ParamStore>(set => ({
             return { values, toggles, media };
         }),
 
-    resetAll: () => set({ values: {}, toggles: {}, groupToggles: {}, media: {} })
+    resetAll: () => set({ values: {}, toggles: {}, groupToggles: {}, media: {} }),
+
+    applyBundle: (stale, next) =>
+        set(s => {
+            const values = { ...s.values };
+            const toggles = { ...s.toggles };
+            const media = { ...s.media };
+            for (const id of stale) {
+                delete values[id];
+                delete toggles[id];
+                delete media[id];
+            }
+            return { values: { ...values, ...next }, toggles, media };
+        })
 }));
 
-/** The schema default coerced to the shape the control expects. */
-export function defaultValue(param: ParamSchema): ParamValue {
-    const raw = param.default;
+/** A raw string in the shape the control expects.
+ *
+ * Schema defaults and stored presets are both flat strings - the server keeps a preset's
+ * `param_map` as string to string - so both have to come back through here to land in the store as
+ * the real type, and going through the same function is what keeps them agreeing. */
+export function coerceValue(param: ParamSchema, raw: string | null): ParamValue {
     switch (param.type) {
         case 'boolean':
             return raw === 'true' || raw === 'True';
@@ -77,6 +97,11 @@ export function defaultValue(param: ParamSchema): ParamValue {
         default:
             return raw ?? '';
     }
+}
+
+/** The schema default coerced to the shape the control expects. */
+export function defaultValue(param: ParamSchema): ParamValue {
+    return coerceValue(param, param.default);
 }
 
 /** Current value for a param, falling back to its schema default. */

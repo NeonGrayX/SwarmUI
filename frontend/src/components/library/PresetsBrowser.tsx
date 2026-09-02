@@ -5,7 +5,8 @@ import { api } from '@/api/client';
 import { libraryKeys, useMyUserData } from '@/library/hooks';
 import { previewUrl, type PresetEntry, type ViewMode } from '@/library/types';
 import { usePermission } from '@/api/permissions';
-import { useParamStore } from '@/params/store';
+import { applyPresetMap } from '@/params/presets';
+import { useParamSchema } from '@/params/schema';
 import { BrowserToolbar, EmptyState } from './BrowserChrome';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -24,7 +25,7 @@ export function PresetsBrowser() {
     const userData = useMyUserData();
     const queryClient = useQueryClient();
     const canManage = usePermission('manage_presets');
-    const setValue = useParamStore(s => s.setValue);
+    const schema = useParamSchema();
     const contextMenu = useContextMenu();
 
     const presets = userData.data?.presets ?? [];
@@ -44,11 +45,11 @@ export function PresetsBrowser() {
         await queryClient.invalidateQueries({ queryKey: libraryKeys.userData });
     }
 
-    /** Applies a preset's stored parameter map to the generation form. */
+    /** Applies a preset's stored parameter map to the generation form. Shared with the Generate
+     *  panel's own preset bar, so a preset lands the same way from either place - values coerced
+     *  to the type each control expects, and the toggles a value needs switched on with it. */
     function apply(paramMap: Record<string, unknown> | undefined) {
-        for (const [key, value] of Object.entries(paramMap ?? {})) {
-            setValue(key, value as never);
-        }
+        applyPresetMap(paramMap, schema);
     }
 
     /** Deletes every selected preset. One request each - the API has no batch form. */

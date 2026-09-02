@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { useCurrentStatus, useSession, useT2IParams } from '@/api/hooks';
+import { useComfyWorkflowStore } from '@/comfy/store';
 import { EDITOR_OWNED_PARAMS, useEditorStore } from '@/editor/store';
 import { useParamSchema } from '@/params/schema';
 import { computeVisibility, type FilterMode } from '@/params/visibility';
@@ -72,6 +73,7 @@ export function ParamForm() {
         // The panel is narrow, so it overrides the default label column width; the wide settings
         // screens keep the roomier default from tokens.css.
         <div className="flex flex-col h-full min-h-0" style={{ ['--sw-field-label-width' as string]: '6.5rem' }}>
+            <ComfyWorkflowNotice />
             <div className="shrink-0 p-2 border-b border-subtle space-y-2">
                 <div className="relative">
                     <Search
@@ -166,6 +168,39 @@ export function ParamForm() {
                 {t('params.shownCount', { shown: visibility.visible.size, total: schema.params.length })}
                 {modifiedCount > 0 && ` · ${t('params.changedCount', { count: modifiedCount })}`}
             </div>
+        </div>
+    );
+}
+
+/** Says so when the parameters below are a Comfy workflow's rather than Swarm's own, and offers
+ *  the way back. Without it the panel would silently be a different set of controls than the one
+ *  the user configured. */
+function ComfyWorkflowNotice() {
+    const { t } = useTranslation();
+    const active = useComfyWorkflowStore(s => s.active);
+    const name = useComfyWorkflowStore(s => s.name);
+    const clear = useComfyWorkflowStore(s => s.clear);
+    if (!active) {
+        return null;
+    }
+    return (
+        <div
+            className="flex shrink-0 items-start gap-2 border-b border-subtle px-2 py-1.5 text-xs"
+            style={{ background: 'var(--sw-chip-bg)' }}
+        >
+            <div className="min-w-0 flex-1">
+                <p className="truncate font-medium text-fg-strong">
+                    {name ? t('comfy.active.named', { name }) : t('comfy.active.title')}
+                </p>
+                <p className="text-fg-soft">{t('comfy.active.body')}</p>
+            </div>
+            <button
+                type="button"
+                onClick={clear}
+                className="shrink-0 rounded border border-default px-2 py-0.5 text-xs text-fg hover:bg-[var(--sw-hover)]"
+            >
+                {t('comfy.active.remove')}
+            </button>
         </div>
     );
 }

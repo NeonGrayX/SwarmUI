@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { ParamForm } from '@/components/form/ParamForm';
-import { PromptComposer } from '@/components/generate/PromptComposer';
+import { PromptComposer, SHOW_PARAMS_EVENT } from '@/components/generate/PromptComposer';
 import { Canvas } from '@/components/generate/Canvas';
 import { BatchRail } from '@/components/generate/BatchRail';
-import { ContextStrip } from '@/components/generate/ContextStrip';
 import { Splitter } from '@/components/generate/Splitter';
 import { ComfyWorkflow } from '@/components/generate/ComfyWorkflow';
+import { PresetBar } from '@/components/generate/PresetBar';
+import { ComfyWorkflowBar } from '@/components/generate/ComfyWorkflowBar';
 import { ImageEditor } from '@/components/editor/ImageEditor';
 import { useEditorStore } from '@/editor/store';
 import { PRESETS, useLayoutStore, type LayoutPreset } from '@/generate/layout';
@@ -27,6 +28,10 @@ type Pane = 'image' | 'params' | 'batch';
 export function GeneratePage() {
     const [mode, setMode] = useState<WorkspaceMode>('standard');
     const compact = useIsCompact();
+    // Changing this remounts the embedded editor. It lives up here because the controls that
+    // trigger a reload sit in the header, a level above the frame itself.
+    const [comfyReloadKey, setComfyReloadKey] = useState(0);
+    const reloadComfy = useCallback(() => setComfyReloadKey(key => key + 1), []);
 
     const forever = useGenerateStore(s => s.forever);
     const running = useGenerateStore(s => s.running);
@@ -42,13 +47,30 @@ export function GeneratePage() {
     }, [forever, running, startGenerate]);
 
     // The mode switch sits above the whole workspace, not inside the middle column: Comfy drives
-    // its own parameters and prompt, so in that mode there are no side panes to sit between.
+    // its own parameters and prompt, so in that mode there are no side panes to sit between. Its
+    // workflow tools share that same strip, so the editor keeps the entire pane below. The
+    // standard mode gets its presets on that strip instead: workflows are the Comfy mode's
+    // business, and what the standard mode has to keep under a name is its own parameters.
     return (
         <div className="flex h-full min-h-0 flex-col">
-            <WorkspaceHeader mode={mode} onMode={setMode} presets={!compact && mode === 'standard'} />
+            <WorkspaceHeader
+                mode={mode}
+                onMode={setMode}
+                presets={!compact && mode === 'standard'}
+                tools={
+                    mode === 'comfy' ? (
+                        <ComfyWorkflowBar
+                            onUseInGenerate={() => setMode('standard')}
+                            onReloadFrame={reloadComfy}
+                        />
+                    ) : (
+                        <PresetBar />
+                    )
+                }
+            />
             {mode === 'comfy' ? (
                 <div className="min-h-0 flex-1">
-                    <ComfyWorkflow />
+                    <ComfyWorkflow reloadKey={comfyReloadKey} />
                 </div>
             ) : compact ? (
                 <StackedWorkspace />
@@ -90,7 +112,6 @@ function SplitWorkspace() {
                 </aside>
             </div>
 
-            <ContextStrip />
             <PromptComposer />
         </div>
     );
@@ -98,8 +119,8 @@ function SplitWorkspace() {
 
 /** The same workspace on a screen too narrow for three columns.
  *
- * The prompt, the generate button and the model/LoRA context stay pinned to the bottom - what
- * every run touches, and what a thumb reaches. The three panes above them take turns as tabs
+ * The prompt and the generate button stay pinned to the bottom - what every run touches, and what
+ * a thumb reaches. The three panes above them take turns as tabs
  * rather than sharing the width; at 360px, three columns would leave the image about 90px.
  * Selecting a batch tile switches back to the image tab. */
 function StackedWorkspace() {
@@ -115,6 +136,14 @@ function StackedWorkspace() {
             setPane(current => (current === 'batch' ? 'image' : current));
         }
     }, [selected]);
+
+    // Something below the panes (the composer's "choose a model" notice) needs a parameter in
+    // reach, and only this layout can hide one.
+    useEffect(() => {
+        const show = () => setPane('params');
+        document.addEventListener(SHOW_PARAMS_EVENT, show);
+        return () => document.removeEventListener(SHOW_PARAMS_EVENT, show);
+    }, []);
 
     const tabs: { id: Pane; label: string; badge?: number }[] = [
         { id: 'image', label: t('generate.pane.image') },
@@ -172,7 +201,6 @@ function StackedWorkspace() {
                 </PanePanel>
             </div>
 
-            <ContextStrip />
             <PromptComposer />
         </div>
     );
@@ -210,11 +238,16 @@ function WorkspaceHeader(props: {
     onMode: (mode: WorkspaceMode) => void;
     /** Shows the pane-size presets, which only the split standard layout has panes to size for. */
     presets: boolean;
+    /** Controls belonging to the current mode, beside the switch. Wraps to a second line rather
+     *  than scrolling, so nothing is lost on a narrow screen. A mode may push part of its own
+     *  tools to the far end of the strip with `ml-auto`, which is why nothing else claims the
+     *  space between. */
+    tools?: React.ReactNode;
 }) {
     const { t } = useTranslation();
 
     return (
-        <div className="flex shrink-0 items-center gap-2 border-b border-subtle bg-surface px-3 py-1">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-surface px-3 py-1">
             <div className="flex overflow-hidden rounded border border-default">
                 {(
                     [
@@ -238,8 +271,12 @@ function WorkspaceHeader(props: {
                     </button>
                 ))}
             </div>
-            <div className="flex-1" />
-            {props.presets && <LayoutPresetMenu />}
+            {props.tools}
+            {props.presets && (
+                <div className="ml-auto">
+                    <LayoutPresetMenu />
+                </div>
+            )}
         </div>
     );
 }

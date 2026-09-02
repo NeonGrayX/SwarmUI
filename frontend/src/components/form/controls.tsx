@@ -320,11 +320,16 @@ function IconButton(props: {
  * Dispatch
  * ------------------------------------------------------------------------------------------- */
 
+/** Id of the base model picker in the parameter form, so the composer's "no model selected" notice
+ *  can jump to it. Fixed rather than generated because it is the one control something outside the
+ *  form has to be able to find. */
+export const MODEL_SELECT_ID = 'param-model-select';
+
 /** Picks the control for a param. `view_type` wins where it is meaningful, otherwise the data type
  *  decides. Mirrors the switch in getHtmlForParam (src/wwwroot/js/genpage/gentab/params.js:182). */
 export function ParamControl(props: Omit<ControlProps, 'inputId'>) {
     const generatedId = useId();
-    const inputId = `param-${props.param.id}-${generatedId}`;
+    const inputId = props.param.id === 'model' ? MODEL_SELECT_ID : `param-${props.param.id}-${generatedId}`;
     const inner = { ...props, inputId };
     const { param } = props;
 

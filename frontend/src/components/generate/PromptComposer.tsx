@@ -6,7 +6,7 @@ import { useParamStore } from '@/params/store';
 import { useGenerateStore } from '@/generate/store';
 import { useStartGenerate } from '@/generate/start';
 import type { GenIssue } from '@/generate/validate';
-import { MODEL_SELECT_ID } from './ContextStrip';
+import { MODEL_SELECT_ID } from '@/components/form/controls';
 import { PromptAttachments } from './PromptAttachments';
 import { useTranslation } from '@/i18n';
 
@@ -150,6 +150,10 @@ export function PromptComposer() {
     );
 }
 
+/** Asks the workspace to bring the parameter panel into view. Only the narrow layout, where the
+ *  panes are tabs, has anything to do about it — in the split layout the panel is always up. */
+export const SHOW_PARAMS_EVENT = 'sw:show-params';
+
 /** Why the last Generate press did not send anything.
  *
  * Sits by the button that was pressed rather than in the canvas banner (which is for errors the
@@ -170,7 +174,17 @@ function InputErrorNotice(props: { issue: GenIssue }) {
             {props.issue.paramId === 'model' && (
                 <button
                     type="button"
-                    onClick={() => document.getElementById(MODEL_SELECT_ID)?.focus()}
+                    onClick={() => {
+                        // The picker lives in the parameter panel, which on a narrow screen is a
+                        // tab that may not be the one showing - so ask for it first, then reach for
+                        // the control once that tab has rendered.
+                        document.dispatchEvent(new CustomEvent(SHOW_PARAMS_EVENT));
+                        requestAnimationFrame(() => {
+                            const picker = document.getElementById(MODEL_SELECT_ID);
+                            picker?.scrollIntoView({ block: 'center' });
+                            picker?.focus();
+                        });
+                    }}
                     className="rounded border border-default px-2 py-0.5 text-xs hover:bg-[var(--sw-hover)]"
                 >
                     {t('generate.chooseModel')}

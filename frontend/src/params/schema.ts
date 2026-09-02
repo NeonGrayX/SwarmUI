@@ -1,10 +1,12 @@
 /** Normalizes the raw ListT2IParams payload into something renderable. Two jobs:
  *   1. Apply the user's `param_edits` overrides on top of the server schema.
- *   2. Turn the flat group list + `parent` ids into an actual tree, ordered by priority.
+ *   2. Turn the flat group list + `parent` ids into an actual tree, ordered by priority (./tree).
  */
 
 import { useMemo } from 'react';
 import { useSession, useT2IParams } from '@/api/hooks';
+import { applyComfyWorkflow } from '@/comfy/schema';
+import { useComfyWorkflowStore } from '@/comfy/store';
 import type {
     ListT2IParamsResponse,
     ModelClassInfo,
@@ -12,19 +14,14 @@ import type {
     ParamGroupSchema,
     ParamSchema
 } from '@/api/types';
+import { indexParams, type GroupNode } from './tree';
+
+export type { GroupNode } from './tree';
 
 /** User overrides of param/group metadata, as stored by SetParamEdits. */
 export interface ParamEdits {
     groups?: Record<string, Partial<ParamGroupSchema>>;
     params?: Record<string, Partial<ParamSchema> & { examples?: string }>;
-}
-
-export interface GroupNode {
-    group: ParamGroupSchema;
-    params: ParamSchema[];
-    children: GroupNode[];
-    /** Group ids of this node and every descendant, for aggregate counting. */
-    subtreeIds: string[];
 }
 
 export interface NormalizedSchema {
@@ -103,56 +100,7 @@ export function normalizeSchema(data: ListT2IParamsResponse): NormalizedSchema {
         })
         .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
 
-    const byId = new Map(params.map(p => [p.id, p]));
-
-    // Bucket params by group, preserving the priority order established above.
-    const paramsByGroup = new Map<string, ParamSchema[]>();
-    const ungrouped: ParamSchema[] = [];
-    for (const param of params) {
-        if (param.group && groupsById.has(param.group)) {
-            const bucket = paramsByGroup.get(param.group);
-            if (bucket) {
-                bucket.push(param);
-            }
-            else {
-                paramsByGroup.set(param.group, [param]);
-            }
-        }
-        else {
-            ungrouped.push(param);
-        }
-    }
-
-    // Build the tree. Groups arrive priority-ordered from the server; keep that order at each level.
-    const nodesById = new Map<string, GroupNode>();
-    for (const group of groupsById.values()) {
-        nodesById.set(group.id, {
-            group,
-            params: paramsByGroup.get(group.id) ?? [],
-            children: [],
-            subtreeIds: []
-        });
-    }
-    const tree: GroupNode[] = [];
-    for (const node of nodesById.values()) {
-        const parent = node.group.parent ? nodesById.get(node.group.parent) : undefined;
-        if (parent) {
-            parent.children.push(node);
-        }
-        else {
-            tree.push(node);
-        }
-    }
-
-    const byPriority = (a: GroupNode, b: GroupNode) =>
-        a.group.priority - b.group.priority || a.group.name.localeCompare(b.group.name);
-    function sortAndIndex(node: GroupNode): string[] {
-        node.children.sort(byPriority);
-        node.subtreeIds = [node.group.id, ...node.children.flatMap(sortAndIndex)];
-        return node.subtreeIds;
-    }
-    tree.sort(byPriority);
-    tree.forEach(sortAndIndex);
+    const { byId, tree, ungrouped } = indexParams(params, groupsById);
 
     // Model dropdowns want plain name lists; the API sends [name, modelClass] pairs. The class id
     // half is kept beside it, because it is what the compatibility rules in the pickers read.
@@ -186,11 +134,21 @@ export function normalizeSchema(data: ListT2IParamsResponse): NormalizedSchema {
 }
 
 /** The normalized schema for the current session, or null until it has loaded. Shared by the
- *  param panel and by everything that needs to look a param up by id. */
+ *  param panel and by everything that needs to look a param up by id.
+ *
+ * A custom Comfy workflow replaces the parameter set here rather than in the panel, so that the
+ * request builder, the metadata reader and the pickers all agree on what a parameter is. */
 export function useParamSchema(): NormalizedSchema | null {
     const session = useSession();
     const params = useT2IParams(session.isSuccess);
-    return useMemo(() => (params.data ? normalizeSchema(params.data) : null), [params.data]);
+    const workflow = useComfyWorkflowStore(s => s.active);
+    return useMemo(() => {
+        if (!params.data) {
+            return null;
+        }
+        const base = normalizeSchema(params.data);
+        return workflow ? applyComfyWorkflow(base, workflow) : base;
+    }, [params.data, workflow]);
 }
 
 /** A model's name as everything except the raw file list spells it: without `.safetensors`.
