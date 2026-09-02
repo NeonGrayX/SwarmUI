@@ -67,16 +67,24 @@ export function useMyUserData(enabled = true): UseQueryResult<MyUserData> {
     });
 }
 
-/** Toggles a model's starred state.
- *  SetStarredModels replaces the whole map, so we read-modify-write the cached copy. */
+/** Toggles one name's starred state within a bucket of the user's star map.
+ *
+ * `bucket` is a model subtype for models, but the map itself is untyped: SetStarredModels stores
+ * whatever object it is handed (src/WebAPI/BasicAPIFeatures.cs:429) and GetMyUserData reads the
+ * whole thing back, so things that are not models can keep stars in a bucket of their own - see
+ * `useWorkflowStars` in src/comfy/stars.ts.
+ *
+ * SetStarredModels replaces the whole map, so we read-modify-write the cached copy. Every writer
+ * does the same, this UI and the legacy one alike (src/wwwroot/js/genpage/gentab/models.js:605),
+ * which is what lets buckets one of them has never heard of survive the other's writes. */
 export function useToggleStar() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ subtype, name }: { subtype: string; name: string }) => {
+        mutationFn: async ({ bucket, name }: { bucket: string; name: string }) => {
             const current = queryClient.getQueryData<MyUserData>(libraryKeys.userData);
             const starred = { ...(current?.starred_models ?? {}) };
-            const list = starred[subtype] ?? [];
-            starred[subtype] = list.includes(name) ? list.filter(n => n !== name) : [...list, name];
+            const list = starred[bucket] ?? [];
+            starred[bucket] = list.includes(name) ? list.filter(n => n !== name) : [...list, name];
             await api.post('SetStarredModels', { raw: starred });
             return starred;
         },

@@ -1,6 +1,7 @@
 import { ModelBrowser } from '@/components/library/ModelBrowser';
 import { HistoryBrowser } from '@/components/library/HistoryBrowser';
 import { PresetsBrowser } from '@/components/library/PresetsBrowser';
+import { WorkflowBrowser } from '@/components/library/WorkflowBrowser';
 import type { ModelSubtype } from '@/library/types';
 import { subtypeNoun } from '@/library/catalog';
 import { useTranslation } from '@/i18n';
@@ -18,8 +19,8 @@ const SUBTYPES: Record<string, { subtype: ModelSubtype; emptyHintKey: string }> 
     wildcards: { subtype: 'Wildcards', emptyHintKey: 'library.emptyHint.wildcards' }
 };
 
-/** One Library screen, picked by destination id: history and presets have browsers of their own,
- *  everything else is <ModelBrowser> over the subtype below. */
+/** One Library screen, picked by destination id: history, presets and workflows have browsers of
+ *  their own, everything else is <ModelBrowser> over the subtype below. */
 export function LibraryPage(props: { destinationId: string }) {
     const { t } = useTranslation();
     if (props.destinationId === 'history') {
@@ -27,6 +28,9 @@ export function LibraryPage(props: { destinationId: string }) {
     }
     if (props.destinationId === 'presets') {
         return <PresetsBrowser />;
+    }
+    if (props.destinationId === 'workflows') {
+        return <WorkflowBrowser />;
     }
     const entry = SUBTYPES[props.destinationId];
     if (!entry) {

@@ -15,16 +15,30 @@ import { useComfyWorkflowStore } from './store';
 interface SimpleWorkflowStore {
     /** Name of the chosen workflow, or null while the picker is showing. */
     workflow: string | null;
+    /** Set when somewhere outside the workspace - the Library's workflow browser - chose a
+     *  workflow and expects the Generate page to open it. Deliberately not persisted: it is a
+     *  hand-off between two screens, and a reload should not reopen the workspace on its own. */
+    handoff: boolean;
     select: (name: string | null) => void;
+    /** Chooses a workflow and asks the Generate page to switch to the Simple workspace for it. */
+    open: (name: string) => void;
+    takeHandoff: () => void;
 }
 
 export const useSimpleWorkflowStore = create<SimpleWorkflowStore>()(
     persist(
         set => ({
             workflow: null,
-            select: name => set({ workflow: name })
+            handoff: false,
+            select: name => set({ workflow: name }),
+            open: name => set({ workflow: name, handoff: true }),
+            takeHandoff: () => set({ handoff: false })
         }),
-        { name: 'swarm-ui-simple-workflow', storage: createJSONStorage(() => localStorage) }
+        {
+            name: 'swarm-ui-simple-workflow',
+            storage: createJSONStorage(() => localStorage),
+            partialize: state => ({ workflow: state.workflow })
+        }
     )
 );
 

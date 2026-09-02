@@ -3,7 +3,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { Command } from 'cmdk';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Check, ChevronDown, Grid3x3, ImageOff, List, Search, Star, X } from 'lucide-react';
+import { ChevronDown, Star, X } from 'lucide-react';
 import {
     isArchCompatible,
     subtypeNoun,
@@ -13,6 +13,16 @@ import {
     type ModelOption
 } from '@/library/catalog';
 import { useToggleStar } from '@/library/hooks';
+import {
+    PickerCard,
+    PickerChip,
+    PickerGroup,
+    PickerRow,
+    PickerSearch,
+    PickerStar,
+    PickerThumb,
+    PickerViewToggle
+} from './PickerParts';
 import type { ViewMode } from '@/library/types';
 import { t as translate, useTranslation } from '@/i18n';
 
@@ -53,8 +63,6 @@ const TRIGGER_CLASS =
     'flex w-full items-center gap-2 rounded border border-default bg-surface-sunken text-left ' +
     'text-fg outline-none hover:border-[var(--emphasis)] focus:border-[var(--emphasis)] ' +
     'disabled:cursor-not-allowed disabled:opacity-60';
-
-const CHIP_CLASS = 'rounded-full border px-2 py-0.5 text-xs transition-colors';
 
 const SELECT_CLASS =
     'rounded-full border border-default bg-surface-sunken px-1.5 py-0.5 text-xs text-fg-soft ' +
@@ -266,70 +274,34 @@ export function ModelOptionList(props: {
     return (
         <Command shouldFilter={false} loop label={t('modelPicker.chooseLabel', { noun: props.noun })}>
             <div className="border-b border-subtle p-2">
-                <div className="relative">
-                    <Search
-                        size={14}
-                        aria-hidden
-                        className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-fg-soft"
-                    />
-                    <Command.Input
-                        value={search}
-                        onValueChange={setSearch}
-                        placeholder={t('modelPicker.searchPlaceholder', { noun: props.noun })}
-                        className="w-full rounded border border-default bg-surface-sunken py-1.5 pl-7 pr-7 text-sm text-fg outline-none focus:border-[var(--emphasis)] placeholder:text-fg-soft"
-                    />
-                    {search && (
-                        <button
-                            type="button"
-                            onClick={() => setSearch('')}
-                            aria-label={t('common.clearSearch')}
-                            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
-                        >
-                            <X size={13} aria-hidden />
-                        </button>
-                    )}
-                </div>
+                <PickerSearch
+                    value={search}
+                    onChange={setSearch}
+                    placeholder={t('modelPicker.searchPlaceholder', { noun: props.noun })}
+                />
 
                 <div className="mt-2 flex flex-wrap items-center gap-1">
                     {usesCompat && current.compatClass && (
-                        <button
-                            type="button"
-                            onClick={() => prefs.setFits(props.subtype, !fits)}
-                            aria-pressed={fits}
+                        <PickerChip
+                            pressed={fits}
+                            onToggle={() => prefs.setFits(props.subtype, !fits)}
                             title={t('modelPicker.fitsHint', {
                                 noun: props.noun,
                                 model: current.label ?? current.compatClass ?? ''
                             })}
-                            className={[
-                                CHIP_CLASS,
-                                fits
-                                    ? 'border-transparent bg-[var(--emphasis)] text-[var(--sw-accent-fg)]'
-                                    : 'border-default text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg'
-                            ].join(' ')}
-                        >
-                            {t('modelPicker.fitsChip', { model: current.label ?? t('modelPicker.fitsFallback') })}
-                        </button>
-                    )}
-                    <button
-                        type="button"
-                        onClick={() => prefs.setStarredOnly(!prefs.starredOnly)}
-                        aria-pressed={prefs.starredOnly}
-                        title={t('modelPicker.starredOnlyHint')}
-                        className={[
-                            CHIP_CLASS,
-                            'inline-flex items-center gap-1',
-                            prefs.starredOnly
-                                ? 'border-transparent bg-[var(--emphasis)] text-[var(--sw-accent-fg)]'
-                                : 'border-default text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg'
-                        ].join(' ')}
-                    >
-                        <Star
-                            size={11}
-                            aria-hidden
-                            fill={prefs.starredOnly ? 'currentColor' : 'none'}
+                            label={t('modelPicker.fitsChip', {
+                                model: current.label ?? t('modelPicker.fitsFallback')
+                            })}
                         />
-                        {t('modelPicker.starred')}
-                    </button>
+                    )}
+                    <PickerChip
+                        pressed={prefs.starredOnly}
+                        onToggle={() => prefs.setStarredOnly(!prefs.starredOnly)}
+                        title={t('modelPicker.starredOnlyHint')}
+                        label={t('modelPicker.starred')}
+                    >
+                        <Star size={11} aria-hidden fill={prefs.starredOnly ? 'currentColor' : 'none'} />
+                    </PickerChip>
                     {archOptions.length > 1 && (
                         <select
                             value={arch}
@@ -361,31 +333,7 @@ export function ModelOptionList(props: {
                         </select>
                     )}
                     <div className="flex-1" />
-                    <div className="flex overflow-hidden rounded border border-default">
-                        {(
-                            [
-                                ['grid', Grid3x3, 'view.grid'],
-                                ['list', List, 'view.list']
-                            ] as const
-                        ).map(([mode, Icon, labelKey]) => (
-                            <button
-                                key={mode}
-                                type="button"
-                                onClick={() => prefs.setView(mode)}
-                                aria-pressed={prefs.view === mode}
-                                aria-label={t(labelKey)}
-                                title={t(labelKey)}
-                                className={[
-                                    'p-1 transition-colors',
-                                    prefs.view === mode
-                                        ? 'bg-[var(--sw-active)] text-fg-strong'
-                                        : 'text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg'
-                                ].join(' ')}
-                            >
-                                <Icon size={13} aria-hidden />
-                            </button>
-                        ))}
-                    </div>
+                    <PickerViewToggle view={prefs.view} onView={prefs.setView} />
                 </div>
             </div>
 
@@ -398,13 +346,7 @@ export function ModelOptionList(props: {
                     </p>
                 )}
 
-                <Command.Group
-                    className={
-                        prefs.view === 'grid'
-                            ? '[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] [&_[cmdk-group-items]]:gap-2'
-                            : ''
-                    }
-                >
+                <PickerGroup view={prefs.view}>
                     {matches.map(option => {
                         const incompatible =
                             usesCompat &&
@@ -419,7 +361,7 @@ export function ModelOptionList(props: {
                             picked: chosen.has(option.name),
                             onPick: () => props.onPick(option),
                             onStar: rawName
-                                ? () => toggleStar.mutate({ subtype: props.subtype, name: rawName })
+                                ? () => toggleStar.mutate({ bucket: props.subtype, name: rawName })
                                 : undefined
                         };
                         return prefs.view === 'grid' ? (
@@ -428,7 +370,7 @@ export function ModelOptionList(props: {
                             <OptionRow key={option.name} {...shared} />
                         );
                     })}
-                </Command.Group>
+                </PickerGroup>
             </Command.List>
 
             <div className="flex items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
@@ -473,23 +415,16 @@ interface EntryProps {
 function OptionCard(props: EntryProps) {
     const { option } = props;
     return (
-        <Command.Item
+        <PickerCard
             value={option.name}
-            onSelect={props.onPick}
-            title={describe(option, props.incompatible)}
-            className={[
-                'group relative cursor-pointer overflow-hidden rounded-lg border bg-surface text-left',
-                'data-[selected=true]:border-[var(--emphasis)]',
-                props.picked ? 'border-[var(--emphasis)]' : 'border-default'
-            ].join(' ')}
-        >
-            <div className="relative flex aspect-square items-center justify-center bg-surface-sunken">
-                {option.preview ? (
-                    <img src={option.preview} alt="" loading="lazy" className="h-full w-full object-cover" />
-                ) : (
-                    <ImageOff size={20} aria-hidden className="text-fg-soft opacity-40" />
-                )}
-                {option.shortCode && (
+            onPick={props.onPick}
+            tooltip={describe(option, props.incompatible)}
+            picked={props.picked}
+            preview={option.preview}
+            title={option.title}
+            subtitle={option.folder || option.className}
+            badge={
+                option.shortCode && (
                     <span
                         className="absolute bottom-1 right-1 rounded px-1 text-[10px]"
                         style={
@@ -500,63 +435,39 @@ function OptionCard(props: EntryProps) {
                     >
                         {option.shortCode}
                     </span>
-                )}
-            </div>
-            <div className="p-1.5">
-                <p className="truncate text-xs text-fg-strong">{option.title}</p>
-                <p className="truncate text-[10px] text-fg-soft">
-                    {option.folder || option.className || ' '}
-                </p>
-            </div>
-            <div className="absolute left-1 top-1 flex items-center gap-1">
-                {props.picked && (
-                    <span className="rounded-full bg-[var(--emphasis)] p-0.5 text-[var(--sw-accent-fg)]">
-                        <Check size={11} aria-hidden />
-                    </span>
-                )}
-                {option.loaded && <LoadedDot />}
-            </div>
-            <div className="absolute right-1 top-1 flex items-center gap-1">
-                <StarToggle starred={option.starred} onStar={props.onStar} overlay />
-            </div>
-        </Command.Item>
+                )
+            }
+            marks={option.loaded && <LoadedDot />}
+            actions={<PickerStar starred={option.starred} onStar={props.onStar} overlay />}
+        />
     );
 }
 
 function OptionRow(props: EntryProps) {
     const { option } = props;
     return (
-        <Command.Item
+        <PickerRow
             value={option.name}
-            onSelect={props.onPick}
-            title={describe(option, props.incompatible)}
-            className="group flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 data-[selected=true]:bg-[var(--sw-active)]"
-        >
-            <ModelThumb option={option} size="sm" />
-            <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1">
-                    {props.picked && <Check size={12} aria-hidden className="shrink-0 text-[var(--emphasis)]" />}
-                    <span className="truncate text-sm text-fg">{option.leaf}</span>
-                </span>
-                {option.folder && <span className="block truncate text-[11px] text-fg-soft">{option.folder}</span>}
-            </span>
-            {option.loaded && <LoadedDot />}
-            <ShortCode option={option} incompatible={props.incompatible} />
-            <StarToggle starred={option.starred} onStar={props.onStar} />
-        </Command.Item>
+            onPick={props.onPick}
+            tooltip={describe(option, props.incompatible)}
+            picked={props.picked}
+            preview={option.preview}
+            title={option.leaf}
+            subtitle={option.folder}
+            trailing={
+                <>
+                    {option.loaded && <LoadedDot />}
+                    <ShortCode option={option} incompatible={props.incompatible} />
+                </>
+            }
+            actions={<PickerStar starred={option.starred} onStar={props.onStar} />}
+        />
     );
 }
 
 /** Preview thumbnail, or a neutral placeholder so rows keep a stable rhythm. */
 export function ModelThumb(props: { option: ModelOption | undefined; size: 'xs' | 'sm' }) {
-    const side = props.size === 'xs' ? 'size-5' : 'size-7';
-    return (
-        <span className={`${side} shrink-0 overflow-hidden rounded bg-surface-sunken`}>
-            {props.option?.preview && (
-                <img src={props.option.preview} alt="" loading="lazy" className="h-full w-full object-cover" />
-            )}
-        </span>
-    );
+    return <PickerThumb preview={props.option?.preview} size={props.size} />;
 }
 
 /** Compat-family badge, eg 'SDXL'. Turns to the error colour when the entry cannot work with the
@@ -589,40 +500,6 @@ function LoadedDot() {
     );
 }
 
-/** Starring is available only for models the metadata routes know by name, since that is the key
- *  SetStarredModels stores. */
-function StarToggle(props: { starred: boolean; onStar?: () => void; overlay?: boolean }) {
-    if (!props.onStar) {
-        return null;
-    }
-    const label = props.starred ? translate('common.unstar') : translate('common.star');
-    return (
-        <button
-            type="button"
-            aria-label={label}
-            aria-pressed={props.starred}
-            title={label}
-            onClick={event => {
-                // The row itself is the pick action, so starring must not also select the model.
-                event.stopPropagation();
-                event.preventDefault();
-                props.onStar?.();
-            }}
-            className={[
-                'shrink-0 rounded-full p-1 transition-[color,opacity]',
-                props.overlay ? 'bg-black/60' : 'hover:bg-[var(--sw-hover)]',
-                props.starred
-                    ? ''
-                    : props.overlay
-                      ? 'text-white/80 opacity-0 hover:text-white focus-visible:opacity-100 group-hover:opacity-100'
-                      : 'text-fg-soft hover:text-fg'
-            ].join(' ')}
-            style={props.starred ? { color: 'var(--star)' } : undefined}
-        >
-            <Star size={11} fill={props.starred ? 'currentColor' : 'none'} aria-hidden />
-        </button>
-    );
-}
 
 /** Hover text: everything known about the entry that the row itself has no room for. */
 function describe(option: ModelOption, incompatible: boolean): string {

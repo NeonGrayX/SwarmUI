@@ -97,7 +97,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
             { label: t('modelBrowser.action.details'), onSelect: () => setSelected(file) },
             {
                 label: starred.includes(file.name) ? t('common.unstar') : t('common.star'),
-                onSelect: () => toggleStar.mutate({ subtype: props.subtype, name: file.name })
+                onSelect: () => toggleStar.mutate({ bucket: props.subtype, name: file.name })
             }
         ];
         if (isModelCard(file)) {
@@ -204,7 +204,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                                     starred={starred.includes(file.name)}
                                     checked={selection.isSelected(file.name)}
                                     onCheck={() => selection.toggle(file.name)}
-                                    onStar={() => toggleStar.mutate({ subtype: props.subtype, name: file.name })}
+                                    onStar={() => toggleStar.mutate({ bucket: props.subtype, name: file.name })}
                                     onOpen={event => selection.click(event, file.name, () => setSelected(file))}
                                     onMenu={event => contextMenu.open(event, actionsFor(file))}
                                     longPress={contextMenu.touch(actionsFor(file))}
@@ -220,7 +220,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                                     starred={starred.includes(file.name)}
                                     checked={selection.isSelected(file.name)}
                                     onCheck={() => selection.toggle(file.name)}
-                                    onStar={() => toggleStar.mutate({ subtype: props.subtype, name: file.name })}
+                                    onStar={() => toggleStar.mutate({ bucket: props.subtype, name: file.name })}
                                     onOpen={event => selection.click(event, file.name, () => setSelected(file))}
                                     onMenu={event => contextMenu.open(event, actionsFor(file))}
                                     longPress={contextMenu.touch(actionsFor(file))}

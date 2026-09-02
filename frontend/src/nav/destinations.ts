@@ -25,6 +25,7 @@ import {
     Type,
     Users,
     Wand2,
+    Workflow,
     Wrench,
     type LucideIcon
 } from 'lucide-react';
@@ -144,6 +145,15 @@ export const DESTINATIONS: Destination[] = [
         icon: Palette,
         path: '/library/presets',
         keywords: ['preset', 'saved settings', 'style']
+    },
+    {
+        id: 'workflows',
+        section: 'library',
+        labelKey: 'nav.destination.workflows',
+        icon: Workflow,
+        path: '/library/workflows',
+        permission: 'comfy_read_workflows',
+        keywords: ['workflow', 'comfy', 'comfyui', 'graph', 'simple']
     },
 
     // --- Tools ----------------------------------------------------------------------------------

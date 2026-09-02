@@ -32,7 +32,17 @@ const IMPLEMENTED: Record<string, ComponentType> = {
     workspace: GeneratePage,
     // Every Library destination shares one shell, keyed by destination id.
     ...Object.fromEntries(
-        ['history', 'models', 'loras', 'vaes', 'embeddings', 'controlnets', 'wildcards', 'presets'].map(
+        [
+            'history',
+            'models',
+            'loras',
+            'vaes',
+            'embeddings',
+            'controlnets',
+            'wildcards',
+            'presets',
+            'workflows'
+        ].map(
             id => [id, () => <LibraryPage destinationId={id} />] as const
         )
     ),

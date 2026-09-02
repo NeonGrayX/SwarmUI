@@ -11,7 +11,6 @@ import { ComfyWorkflow } from '@/components/generate/ComfyWorkflow';
 import { PresetBar } from '@/components/generate/PresetBar';
 import { ComfyWorkflowBar } from '@/components/generate/ComfyWorkflowBar';
 import { SimpleWorkflowBar } from '@/components/generate/SimpleWorkflowBar';
-import { SimpleWorkflowPicker } from '@/components/generate/SimpleWorkflowPicker';
 import { useSimpleWorkflowSession, useSimpleWorkflowStore } from '@/comfy/simple';
 import { usePermission } from '@/api/permissions';
 import { ImageEditor } from '@/components/editor/ImageEditor';
@@ -42,8 +41,18 @@ export function GeneratePage() {
 
     // Installs the chosen workflow's parameters while Simple is the mode on screen, and takes them
     // back out again when it is not.
-    const simpleWorkflow = useSimpleWorkflowStore(s => s.workflow);
     const simpleSession = useSimpleWorkflowSession(mode === 'simple');
+
+    // A workflow opened from the Library lands here with the mode still on standard, so the
+    // hand-off it left behind is what switches the workspace over to it.
+    const handoff = useSimpleWorkflowStore(s => s.handoff);
+    const takeHandoff = useSimpleWorkflowStore(s => s.takeHandoff);
+    useEffect(() => {
+        if (handoff) {
+            takeHandoff();
+            setMode('simple');
+        }
+    }, [handoff, takeHandoff]);
 
     const forever = useGenerateStore(s => s.forever);
     const running = useGenerateStore(s => s.running);
@@ -58,10 +67,6 @@ export function GeneratePage() {
         }
     }, [forever, running, startGenerate]);
 
-    // Simple has nothing to show in the panes until a workflow has been chosen, so until then the
-    // picker takes the whole area the way the Comfy editor does.
-    const picking = mode === 'simple' && !simpleWorkflow;
-    const panes = mode !== 'comfy' && !picking;
     const footer = mode === 'simple' ? <SimpleRunBar /> : <PromptComposer />;
 
     // The mode switch sits above the whole workspace, not inside the middle column: Comfy drives
@@ -75,7 +80,7 @@ export function GeneratePage() {
             <WorkspaceHeader
                 mode={mode}
                 onMode={setMode}
-                presets={!compact && panes}
+                presets={!compact && mode !== 'comfy'}
                 tools={
                     mode === 'comfy' ? (
                         <ComfyWorkflowBar
@@ -93,8 +98,6 @@ export function GeneratePage() {
                 <div className="min-h-0 flex-1">
                     <ComfyWorkflow reloadKey={comfyReloadKey} />
                 </div>
-            ) : picking ? (
-                <SimpleWorkflowPicker />
             ) : compact ? (
                 <StackedWorkspace footer={footer} />
             ) : (
@@ -285,8 +288,8 @@ function WorkspaceHeader(props: {
     const canReadWorkflows = usePermission('comfy_read_workflows');
 
     const modes: [WorkspaceMode, string][] = [
-        ['standard', 'generate.mode.standard'],
         ...(canReadWorkflows ? ([['simple', 'generate.mode.simple']] as [WorkspaceMode, string][]) : []),
+        ['standard', 'generate.mode.standard'],
         ['comfy', 'generate.mode.comfy']
     ];
 
