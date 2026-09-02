@@ -12,7 +12,7 @@ import { PresetBar } from '@/components/generate/PresetBar';
 import { ComfyWorkflowBar } from '@/components/generate/ComfyWorkflowBar';
 import { SimpleWorkflowBar } from '@/components/generate/SimpleWorkflowBar';
 import { useSimpleWorkflowSession, useSimpleWorkflowStore } from '@/comfy/simple';
-import { useWorkflowHandoffStore } from '@/comfy/handoff';
+import { useWorkspaceHandoffStore, type WorkspaceMode } from '@/generate/handoff';
 import { usePermission } from '@/api/permissions';
 import { ImageEditor } from '@/components/editor/ImageEditor';
 import { useEditorStore } from '@/editor/store';
@@ -22,16 +22,16 @@ import { useStartGenerate } from '@/generate/start';
 import { useIsCompact } from '@/shell/viewport';
 import { useTranslation } from '@/i18n';
 
-/** The Generate workspace: parameters, canvas, batch rail, and the prompt composer beneath. */
-/** Comfy Workflow and Simple are modes of this workspace rather than destinations of their own:
- *  each is another way to drive the same generation. Simple keeps the workspace exactly as it is
- *  and swaps what fills it - a saved workflow's own controls in the parameter panel, and its run
- *  button where the prompt box would be, since the prompt is one of those controls. */
-type WorkspaceMode = 'standard' | 'comfy' | 'simple';
-
 /** Which of the three panes a narrow screen is showing. */
 type Pane = 'image' | 'params' | 'batch';
 
+/** The Generate workspace: parameters, canvas, batch rail, and the prompt composer beneath.
+ *
+ * Comfy Workflow and Simple are modes of this workspace rather than destinations of their own:
+ * each is another way to drive the same generation. Simple keeps the workspace exactly as it is
+ * and swaps what fills it - a saved workflow's own controls in the parameter panel, and its run
+ * button where the prompt box would be, since the prompt is one of those controls. The mode itself
+ * is declared in ../generate/handoff, since screens outside this page choose it too. */
 export function GeneratePage() {
     const [mode, setMode] = useState<WorkspaceMode>('standard');
     const compact = useIsCompact();
@@ -44,12 +44,13 @@ export function GeneratePage() {
     // back out again when it is not.
     const simpleSession = useSimpleWorkflowSession(mode === 'simple');
 
-    // A workflow opened from the Library lands here with the mode still on standard, so the
-    // hand-off it left behind is what switches the workspace over to it. Which workspace that is
-    // was decided there: a workflow with its own controls goes to Simple, one without goes to the
-    // editor, where a graph is the thing on offer rather than a panel of inputs.
-    const handoff = useWorkflowHandoffStore(s => s.pending);
-    const takeHandoff = useWorkflowHandoffStore(s => s.take);
+    // Something opened from the Library lands here on the mode this page starts in, so the hand-off
+    // it left behind is what switches the workspace over to what it was chosen for. Which workspace
+    // that is was decided there: a workflow with its own controls goes to Simple, one without goes
+    // to the editor, where a graph is the thing on offer rather than a panel of inputs, and a
+    // preset goes to the standard panel, which is where the parameters it carries live.
+    const handoff = useWorkspaceHandoffStore(s => s.pending);
+    const takeHandoff = useWorkspaceHandoffStore(s => s.take);
     const selectSimple = useSimpleWorkflowStore(s => s.select);
     // Held here rather than left in the store because the editor cannot take it immediately: the
     // frame is still booting when the hand-off arrives.
@@ -59,14 +60,13 @@ export function GeneratePage() {
             return;
         }
         takeHandoff();
-        if (handoff.mode === 'simple') {
-            selectSimple(handoff.name);
-            setMode('simple');
+        if (handoff.workflow && handoff.mode === 'simple') {
+            selectSimple(handoff.workflow);
         }
-        else {
-            setPendingGraph(handoff.name);
-            setMode('comfy');
+        else if (handoff.workflow) {
+            setPendingGraph(handoff.workflow);
         }
+        setMode(handoff.mode);
     }, [handoff, takeHandoff, selectSimple]);
 
     const forever = useGenerateStore(s => s.forever);

@@ -5,7 +5,7 @@
  * workspace hands back when it closes - so the name is the one piece of the choice that has to
  * outlive both the panel and a reload.
  *
- * Choosing a workflow from outside the workspace - the Library - goes through ./handoff.ts
+ * Choosing a workflow from outside the workspace - the Library - goes through ../generate/handoff
  * instead, which is about reaching a workspace rather than about which workflow it is driving.
  */
 

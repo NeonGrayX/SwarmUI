@@ -5,7 +5,7 @@ import { ImageOff, Star, Trash2 } from 'lucide-react';
 import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import { comfyKeys, useSavedWorkflows, type SavedWorkflow } from '@/comfy/actions';
-import { useWorkflowHandoffStore } from '@/comfy/handoff';
+import { useWorkspaceHandoffStore } from '@/generate/handoff';
 import { useWorkflowStars } from '@/library/stars';
 import type { ViewMode } from '@/library/types';
 import { BrowserToolbar, EmptyState, StarButton } from './BrowserChrome';
@@ -41,7 +41,7 @@ export function WorkflowBrowser() {
     const saved = useSavedWorkflows(true);
     const stars = useWorkflowStars();
     const contextMenu = useContextMenu();
-    const handOver = useWorkflowHandoffStore(s => s.open);
+    const handOver = useWorkspaceHandoffStore(s => s.openWorkflow);
 
     const workflows = useMemo(() => saved.data?.workflows ?? [], [saved.data]);
 

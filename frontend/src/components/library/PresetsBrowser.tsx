@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Copy, ImageOff, Star, Trash2 } from 'lucide-react';
+import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { libraryKeys, useMyUserData } from '@/library/hooks';
 import { usePresetStars } from '@/library/stars';
 import { previewUrl, type PresetEntry, type ViewMode } from '@/library/types';
 import { usePermission } from '@/api/permissions';
+import { useWorkspaceHandoffStore } from '@/generate/handoff';
 import { applyPresetMap } from '@/params/presets';
 import { useParamSchema } from '@/params/schema';
 import { BrowserToolbar, EmptyState, StarButton } from './BrowserChrome';
@@ -25,11 +27,13 @@ export function PresetsBrowser() {
     const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
 
     const userData = useMyUserData();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const canManage = usePermission('manage_presets');
     const schema = useParamSchema();
     const stars = usePresetStars();
     const contextMenu = useContextMenu();
+    const handOver = useWorkspaceHandoffStore(s => s.openWorkspace);
 
     const presets = userData.data?.presets ?? [];
     // Starred first, then by title - the same ordering the workflow library and the pickers use,
@@ -58,11 +62,17 @@ export function PresetsBrowser() {
         await queryClient.invalidateQueries({ queryKey: libraryKeys.userData });
     }
 
-    /** Applies a preset's stored parameter map to the generation form. Shared with the Generate
-     *  panel's own preset bar, so a preset lands the same way from either place - values coerced
-     *  to the type each control expects, and the toggles a value needs switched on with it. */
+    /** Applies a preset's stored parameter map to the generation form, and goes to the form.
+     *
+     * The values themselves land the same way as from the Generate panel's own preset bar - coerced
+     * to the type each control expects, with the toggles a value needs switched on. What this
+     * screen has to add is the trip there: a preset holds standard parameters, so the standard
+     * workspace is where it can be seen and run, and applying one here would otherwise change a
+     * panel on a page the user is not looking at. */
     function apply(paramMap: Record<string, unknown> | undefined) {
         applyPresetMap(paramMap, schema);
+        handOver('standard');
+        void navigate({ to: '/generate' });
     }
 
     /** Deletes every selected preset. One request each - the API has no batch form. */
