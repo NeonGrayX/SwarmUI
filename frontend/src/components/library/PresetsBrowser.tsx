@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Copy, ImageOff, Trash2 } from 'lucide-react';
+import { Copy, ImageOff, Star, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { libraryKeys, useMyUserData } from '@/library/hooks';
+import { usePresetStars } from '@/library/stars';
 import { previewUrl, type PresetEntry, type ViewMode } from '@/library/types';
 import { usePermission } from '@/api/permissions';
 import { applyPresetMap } from '@/params/presets';
 import { useParamSchema } from '@/params/schema';
-import { BrowserToolbar, EmptyState } from './BrowserChrome';
+import { BrowserToolbar, EmptyState, StarButton } from './BrowserChrome';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
@@ -19,6 +20,7 @@ export function PresetsBrowser() {
     const [search, setSearch] = useState('');
     const [view, setView] = useState<ViewMode>('grid');
     const [reverse, setReverse] = useState(false);
+    const [starredOnly, setStarredOnly] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
     const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
 
@@ -26,17 +28,28 @@ export function PresetsBrowser() {
     const queryClient = useQueryClient();
     const canManage = usePermission('manage_presets');
     const schema = useParamSchema();
+    const stars = usePresetStars();
     const contextMenu = useContextMenu();
 
     const presets = userData.data?.presets ?? [];
+    // Starred first, then by title - the same ordering the workflow library and the pickers use,
+    // so the presets worth reaching for are the ones at the top of every list that shows them.
     const shown = useMemo(() => {
         const query = search.trim().toLowerCase();
-        const list = query
-            ? presets.filter(p => `${p.title} ${p.description}`.toLowerCase().includes(query))
-            : presets;
+        const list = presets.filter(p => {
+            if (starredOnly && !stars.isStarred(p.title)) {
+                return false;
+            }
+            return !query || `${p.title} ${p.description}`.toLowerCase().includes(query);
+        });
         const sorted = [...list].sort((a, b) => a.title.localeCompare(b.title));
-        return reverse ? sorted.reverse() : sorted;
-    }, [presets, search, reverse]);
+        if (reverse) {
+            sorted.reverse();
+        }
+        return sorted.sort(
+            (a, b) => Number(stars.isStarred(b.title)) - Number(stars.isStarred(a.title))
+        );
+    }, [presets, search, starredOnly, reverse, stars]);
 
     const ids = useMemo(() => shown.map(preset => preset.title), [shown]);
     const selection = useSelection(ids);
@@ -65,7 +78,11 @@ export function PresetsBrowser() {
     /** Everything one preset can do, for its right-click menu. */
     function actionsFor(preset: PresetEntry): MenuAction[] {
         const actions: MenuAction[] = [
-            { label: t('presets.applyParameters'), onSelect: () => apply(preset.param_map) }
+            { label: t('presets.applyParameters'), onSelect: () => apply(preset.param_map) },
+            {
+                label: stars.isStarred(preset.title) ? t('common.unstar') : t('common.star'),
+                onSelect: () => stars.toggle(preset.title)
+            }
         ];
         if (canManage) {
             actions.push({
@@ -96,7 +113,23 @@ export function PresetsBrowser() {
                 onReverse={setReverse}
                 count={shown.length}
                 total={presets.length}
-            />
+            >
+                <button
+                    type="button"
+                    onClick={() => setStarredOnly(!starredOnly)}
+                    aria-pressed={starredOnly}
+                    title={t('browser.starredOnlyHint')}
+                    className={[
+                        'flex items-center gap-1 rounded border px-2 py-1 text-xs',
+                        starredOnly
+                            ? 'border-transparent bg-[var(--emphasis)] text-[var(--sw-accent-fg)]'
+                            : 'border-default text-fg hover:bg-[var(--sw-hover)]'
+                    ].join(' ')}
+                >
+                    <Star size={13} aria-hidden fill={starredOnly ? 'currentColor' : 'none'} />
+                    {t('browser.starredOnly')}
+                </button>
+            </BrowserToolbar>
 
             {selection.count > 0 && (
                 <SelectionBar
@@ -123,11 +156,13 @@ export function PresetsBrowser() {
                 ) : shown.length === 0 ? (
                     <EmptyState
                         title={
-                            search
-                                ? t('presets.noSearchMatches', { search: search.trim() })
-                                : t('presets.noneSaved')
+                            presets.length === 0
+                                ? t('presets.noneSaved')
+                                : search
+                                  ? t('presets.noSearchMatches', { search: search.trim() })
+                                  : t('presets.noneStarred')
                         }
-                        hint={search ? undefined : t('presets.noneSavedHint')}
+                        hint={presets.length === 0 ? t('presets.noneSavedHint') : undefined}
                     />
                 ) : view === 'grid' ? (
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3">
@@ -149,6 +184,13 @@ export function PresetsBrowser() {
                                         checked={selection.isSelected(preset.title)}
                                         onToggle={() => selection.toggle(preset.title)}
                                         label={t('browser.selectEntry', { name: preset.title })}
+                                    />
+                                </span>
+                                <span className="absolute right-1.5 top-1.5 z-10">
+                                    <StarButton
+                                        starred={stars.isStarred(preset.title)}
+                                        variant="overlay"
+                                        onClick={() => stars.toggle(preset.title)}
                                     />
                                 </span>
                                 <button
@@ -219,6 +261,11 @@ export function PresetsBrowser() {
                                     checked={selection.isSelected(preset.title)}
                                     onToggle={() => selection.toggle(preset.title)}
                                     label={t('browser.selectEntry', { name: preset.title })}
+                                />
+                                <StarButton
+                                    starred={stars.isStarred(preset.title)}
+                                    variant="plain"
+                                    onClick={() => stars.toggle(preset.title)}
                                 />
                                 <button
                                     type="button"

@@ -72,7 +72,7 @@ export function useMyUserData(enabled = true): UseQueryResult<MyUserData> {
  * `bucket` is a model subtype for models, but the map itself is untyped: SetStarredModels stores
  * whatever object it is handed (src/WebAPI/BasicAPIFeatures.cs:429) and GetMyUserData reads the
  * whole thing back, so things that are not models can keep stars in a bucket of their own - see
- * `useWorkflowStars` in src/comfy/stars.ts.
+ * `useWorkflowStars` and `usePresetStars` in src/library/stars.ts.
  *
  * SetStarredModels replaces the whole map, so we read-modify-write the cached copy. Every writer
  * does the same, this UI and the legacy one alike (src/wwwroot/js/genpage/gentab/models.js:605),

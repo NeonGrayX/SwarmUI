@@ -1,13 +1,26 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import * as Popover from '@radix-ui/react-popover';
+import { Command } from 'cmdk';
 import { useQueryClient } from '@tanstack/react-query';
-import { Bookmark, Download, Upload } from 'lucide-react';
+import { Bookmark, ChevronDown, Download, Star, Upload } from 'lucide-react';
 import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
+import {
+    PickerCard,
+    PickerChip,
+    PickerGroup,
+    PickerRow,
+    PickerSearch,
+    PickerStar,
+    PickerViewToggle,
+    usePickerPrefs
+} from '@/components/form/PickerParts';
 import { libraryKeys, useMyUserData } from '@/library/hooks';
-import type { PresetEntry } from '@/library/types';
+import { usePresetStars } from '@/library/stars';
+import { previewUrl, type PresetEntry } from '@/library/types';
 import { useParamSchema } from '@/params/schema';
 import { applyPresetMap, importBody, parsePresetFile } from '@/params/presets';
-import { ComfyNoticeText, IconButton, SELECT_CLASS, useComfyNotice } from './ComfyBarParts';
+import { ComfyNoticeText, IconButton, useComfyNotice } from './ComfyBarParts';
 import { PresetSaveDialog } from './PresetSaveDialog';
 import { useTranslation } from '@/i18n';
 
@@ -30,7 +43,10 @@ export function PresetBar() {
     const canManage = usePermission('manage_presets');
     const userData = useMyUserData();
     const presets = userData.data?.presets ?? [];
-    const titles = presets.map(preset => preset.title).sort((a, b) => a.localeCompare(b));
+    const titles = useMemo(
+        () => presets.map(preset => preset.title).sort((a, b) => a.localeCompare(b)),
+        [presets]
+    );
 
     function apply(title: string): void {
         const preset = presets.find(entry => entry.title === title);
@@ -123,7 +139,11 @@ export function PresetBar() {
             >
                 <Download size={13} aria-hidden />
             </IconButton>
-            <QuickApply names={titles} onPick={apply} />
+            <PresetDropdown
+                presets={presets}
+                loading={userData.isPending}
+                onPick={apply}
+            />
 
             {/* Kept out of the button so the button stays a button; clicking it opens this. */}
             <input
@@ -152,29 +172,164 @@ export function PresetBar() {
     );
 }
 
-/** Applies a preset without leaving the panel. Resets to its label after each pick, so choosing
- *  the same preset twice in a row applies it twice - which matters, since applying one is an
- *  overlay that a later edit can undo. */
-function QuickApply(props: { names: string[]; onPick: (name: string) => void }) {
+/** Applies a preset without leaving the panel, out of the same dropdown the Simple workspace picks
+ *  a workflow from - search, stars, and a thumbnail apiece.
+ *
+ * Unlike those pickers this one holds no selection: applying a preset is an overlay on whatever is
+ * in the panel, which the next edit can undo, so there is nothing for it to go on showing. That is
+ * also why picking the same preset twice in a row applies it twice.
+ */
+function PresetDropdown(props: { presets: PresetEntry[]; loading: boolean; onPick: (title: string) => void }) {
     const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+
     return (
-        <select
-            className={SELECT_CLASS}
-            value=""
-            disabled={props.names.length === 0}
-            aria-label={t('presets.bar.quickApply')}
-            onChange={e => {
-                if (e.target.value) {
-                    props.onPick(e.target.value);
-                }
-            }}
-        >
-            <option value="">{t('presets.bar.quickApply')}</option>
-            {props.names.map(name => (
-                <option key={name} value={name}>
-                    {name}
-                </option>
-            ))}
-        </select>
+        <Popover.Root open={open} onOpenChange={setOpen}>
+            <Popover.Trigger asChild>
+                <button
+                    type="button"
+                    aria-label={t('presets.bar.quickApply')}
+                    className="flex w-40 max-w-full items-center gap-1.5 rounded border border-default bg-surface-sunken px-1.5 py-0.5 text-left text-xs text-fg outline-none hover:border-[var(--emphasis)] focus:border-[var(--emphasis)]"
+                >
+                    <span className="min-w-0 flex-1 truncate text-fg-soft">{t('presets.bar.quickApply')}</span>
+                    <ChevronDown size={13} aria-hidden className="shrink-0 text-fg-soft" />
+                </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+                <Popover.Content
+                    align="start"
+                    sideOffset={4}
+                    collisionPadding={8}
+                    className="z-50 w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
+                >
+                    <PresetOptionList
+                        presets={props.presets}
+                        loading={props.loading}
+                        onPick={title => {
+                            props.onPick(title);
+                            setOpen(false);
+                        }}
+                    />
+                </Popover.Content>
+            </Popover.Portal>
+        </Popover.Root>
+    );
+}
+
+/** The searchable body of the dropdown: the same cards, rows, search and scrolling the model and
+ *  workflow pickers use, over the presets GetMyUserData already brought down with the rest of the
+ *  user's data - so opening it costs no request. */
+function PresetOptionList(props: { presets: PresetEntry[]; loading: boolean; onPick: (title: string) => void }) {
+    const { t } = useTranslation();
+    const [search, setSearch] = useState('');
+    const prefs = usePickerPrefs('swarm-ui-preset-picker');
+    const stars = usePresetStars();
+
+    // Starred first, then by title - the same rule the other pickers follow, so the presets worth
+    // reaching for are the ones already on screen when the list opens.
+    const matches = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        const shown = props.presets.filter(preset => {
+            if (prefs.starredOnly && !stars.isStarred(preset.title)) {
+                return false;
+            }
+            return !query || `${preset.title}\n${preset.description ?? ''}`.toLowerCase().includes(query);
+        });
+        return shown.sort(
+            (a, b) =>
+                Number(stars.isStarred(b.title)) - Number(stars.isStarred(a.title))
+                || a.title.localeCompare(b.title)
+        );
+    }, [props.presets, search, prefs.starredOnly, stars]);
+
+    return (
+        <Command shouldFilter={false} loop label={t('presets.bar.quickApply')}>
+            <div className="border-b border-subtle p-2">
+                <PickerSearch
+                    value={search}
+                    onChange={setSearch}
+                    placeholder={t('presets.picker.searchPlaceholder')}
+                />
+                <div className="mt-2 flex items-center gap-1">
+                    <PickerChip
+                        pressed={prefs.starredOnly}
+                        onToggle={() => prefs.setStarredOnly(!prefs.starredOnly)}
+                        title={t('modelPicker.starredOnlyHint')}
+                        label={t('modelPicker.starred')}
+                    >
+                        <Star size={11} aria-hidden fill={prefs.starredOnly ? 'currentColor' : 'none'} />
+                    </PickerChip>
+                    <div className="flex-1" />
+                    <PickerViewToggle view={prefs.view} onView={prefs.setView} />
+                </div>
+            </div>
+
+            <Command.List className="max-h-80 overflow-y-auto p-2">
+                {props.loading ? (
+                    <p className="px-2 py-6 text-center text-sm text-fg-soft">{t('common.loading')}</p>
+                ) : (
+                    matches.length === 0 && (
+                        <div className="px-2 py-6 text-center text-sm text-fg-soft">
+                            <p>
+                                {props.presets.length === 0
+                                    ? t('presets.noneSaved')
+                                    : prefs.starredOnly && stars.count === 0
+                                      ? t('presets.noneStarred')
+                                      : t('presets.picker.noMatches')}
+                            </p>
+                            {props.presets.length === 0 && (
+                                <p className="mt-1 text-xs">{t('presets.noneSavedHint')}</p>
+                            )}
+                        </div>
+                    )
+                )}
+
+                <PickerGroup view={prefs.view}>
+                    {matches.map(preset => {
+                        const starred = stars.isStarred(preset.title);
+                        const shared = {
+                            value: preset.title,
+                            onPick: () => props.onPick(preset.title),
+                            tooltip: preset.description || preset.title,
+                            picked: false,
+                            preview: previewUrl(preset.preview_image),
+                            title: preset.title,
+                            subtitle:
+                                preset.description
+                                || t('presets.paramCountShort', {
+                                    count: Object.keys(preset.param_map ?? {}).length
+                                })
+                        };
+                        return prefs.view === 'grid' ? (
+                            <PickerCard
+                                key={preset.title}
+                                {...shared}
+                                actions={
+                                    <PickerStar
+                                        starred={starred}
+                                        onStar={() => stars.toggle(preset.title)}
+                                        overlay
+                                    />
+                                }
+                            />
+                        ) : (
+                            <PickerRow
+                                key={preset.title}
+                                {...shared}
+                                actions={
+                                    <PickerStar starred={starred} onStar={() => stars.toggle(preset.title)} />
+                                }
+                            />
+                        );
+                    })}
+                </PickerGroup>
+            </Command.List>
+
+            <div className="flex items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
+                <span>
+                    {t('modelPicker.countOf', { shown: matches.length, total: props.presets.length })}
+                </span>
+            </div>
+        </Command>
     );
 }

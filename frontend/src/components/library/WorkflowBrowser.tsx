@@ -6,7 +6,7 @@ import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import { comfyKeys, useSavedWorkflows, type SavedWorkflow } from '@/comfy/actions';
 import { useSimpleWorkflowStore } from '@/comfy/simple';
-import { useWorkflowStars } from '@/comfy/stars';
+import { useWorkflowStars } from '@/library/stars';
 import type { ViewMode } from '@/library/types';
 import { BrowserToolbar, EmptyState, StarButton } from './BrowserChrome';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';

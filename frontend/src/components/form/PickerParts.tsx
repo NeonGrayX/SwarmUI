@@ -1,5 +1,7 @@
 import { Command } from 'cmdk';
 import { Check, Grid3x3, ImageOff, List, Search, Star, X } from 'lucide-react';
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { ViewMode } from '@/library/types';
 import { t as translate, useTranslation } from '@/i18n';
 
@@ -12,6 +14,44 @@ import { t as translate, useTranslation } from '@/i18n';
  * picker offers and what its entries carry are passed in as slots; the chip and the star are here
  * because they are the same control wherever they appear.
  */
+
+/** How a picker was left last time: grid or list, and whether it was down to starred entries
+ *  only. */
+export interface PickerPrefs {
+    view: ViewMode;
+    starredOnly: boolean;
+    setView: (view: ViewMode) => void;
+    setStarredOnly: (on: boolean) => void;
+}
+
+/** One persisted store per name, made on first use.
+ *
+ * Each picker remembers its own view and filter - the model pickers already did, and a picker that
+ * reset to thumbnails every time it opened would undo a choice the user made on purpose. The store
+ * has to outlive the component for that, so it is made once here and kept, rather than created in
+ * a render. */
+const prefsStores = new Map<string, () => PickerPrefs>();
+
+/** The remembered preferences of the picker stored under `name`. `name` is the localStorage key and
+ *  must be constant for a given picker, the way any hook's identity must be. */
+export function usePickerPrefs(name: string): PickerPrefs {
+    let store = prefsStores.get(name);
+    if (!store) {
+        store = create<PickerPrefs>()(
+            persist(
+                set => ({
+                    view: 'grid',
+                    starredOnly: false,
+                    setView: view => set({ view }),
+                    setStarredOnly: starredOnly => set({ starredOnly })
+                }),
+                { name }
+            )
+        );
+        prefsStores.set(name, store);
+    }
+    return store();
+}
 
 /** Search field with a clear button, sitting above a `Command.List`. */
 export function PickerSearch(props: {

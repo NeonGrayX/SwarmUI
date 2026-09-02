@@ -4,9 +4,10 @@ import { FolderOpen, Save } from 'lucide-react';
 import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import { comfyKeys, useSavedWorkflows, type ComfyBuildResult } from '@/comfy/actions';
-import { IconButton, SELECT_CLASS, type ComfyNotice } from './ComfyBarParts';
+import { IconButton, type ComfyNotice } from './ComfyBarParts';
 import { ComfySaveDialog, type ReplaceTarget } from './ComfySaveDialog';
 import { ComfyWorkflowLibrary } from './ComfyWorkflowLibrary';
+import { WorkflowPicker } from './WorkflowPicker';
 import { useTranslation } from '@/i18n';
 
 /** The workflow library, as a strip of three controls: save what is open, browse what is stored,
@@ -32,7 +33,8 @@ export function ComfyLibraryControls(props: {
     const canEdit = usePermission('comfy_edit_workflows');
     const canRead = usePermission('comfy_read_workflows');
     const saved = useSavedWorkflows(canRead);
-    const names = saved.data?.workflows.map(w => w.name) ?? [];
+    const workflows = saved.data?.workflows ?? [];
+    const names = workflows.map(w => w.name);
 
     const deleteWorkflow = async (name: string) => {
         try {
@@ -61,7 +63,26 @@ export function ComfyLibraryControls(props: {
             <IconButton onClick={() => setLibraryOpen(true)} disabled={!canRead} label={t('comfy.bar.browse')}>
                 <FolderOpen size={13} aria-hidden />
             </IconButton>
-            <QuickLoad names={names} disabled={!canRead} onPick={props.onLoad} />
+            {/* Quick load reopens a workflow rather than settling on one, so the picker holds no
+                selection: it goes back to reading "Quick load", and picking the same workflow twice
+                in a row loads it twice. */}
+            <WorkflowPicker
+                label={t('comfy.bar.quickLoad')}
+                workflows={workflows}
+                loading={saved.isPending}
+                error={
+                    saved.isError
+                        ? saved.error instanceof Error
+                            ? saved.error.message
+                            : t('workflows.loadFailed')
+                        : null
+                }
+                disabled={!canRead}
+                prefsKey="swarm-ui-comfy-quick-load-picker"
+                emptyText={t('workflows.none')}
+                emptyHint={t('workflows.noneHint')}
+                onPick={props.onLoad}
+            />
 
             <ComfySaveDialog
                 open={saveOpen}
@@ -91,31 +112,5 @@ export function ComfyLibraryControls(props: {
                 onDelete={deleteWorkflow}
             />
         </>
-    );
-}
-
-/** Reopens a saved workflow without leaving the current mode. Resets to its label after each pick,
- *  so choosing the same workflow twice in a row still loads it. */
-function QuickLoad(props: { names: string[]; disabled?: boolean; onPick: (name: string) => void }) {
-    const { t } = useTranslation();
-    return (
-        <select
-            className={SELECT_CLASS}
-            value=""
-            disabled={props.disabled || props.names.length === 0}
-            aria-label={t('comfy.bar.quickLoad')}
-            onChange={e => {
-                if (e.target.value) {
-                    props.onPick(e.target.value);
-                }
-            }}
-        >
-            <option value="">{t('comfy.bar.quickLoad')}</option>
-            {props.names.map(name => (
-                <option key={name} value={name}>
-                    {name}
-                </option>
-            ))}
-        </select>
     );
 }
