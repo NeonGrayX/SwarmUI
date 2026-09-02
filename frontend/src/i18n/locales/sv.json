@@ -784,6 +784,7 @@
     "presets.applyParameters": "Tillämpa parametrar",
     "presets.applyTitle": "Tillämpa ”{title}”",
     "presets.bar.applied": "”{name}” tillämpad.",
+    "presets.bar.deleted": "”{name}” borttagen.",
     "presets.bar.export": "Exportera förinställningar",
     "presets.bar.exported.one": "{count} förinställning exporterad.",
     "presets.bar.exported.other": "{count} förinställningar exporterade.",

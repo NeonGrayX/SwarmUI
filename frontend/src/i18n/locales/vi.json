@@ -784,6 +784,7 @@
     "presets.applyParameters": "Áp dụng tham số",
     "presets.applyTitle": "Áp dụng \"{title}\"",
     "presets.bar.applied": "Đã áp dụng “{name}”.",
+    "presets.bar.deleted": "Đã xóa “{name}”.",
     "presets.bar.export": "Xuất cài đặt sẵn",
     "presets.bar.exported.one": "Đã xuất {count} cài đặt sẵn.",
     "presets.bar.exported.other": "Đã xuất {count} cài đặt sẵn.",

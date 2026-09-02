@@ -14,6 +14,13 @@ import {
     usePickerPrefs
 } from '@/components/form/PickerParts';
 import type { SavedWorkflow } from '@/comfy/actions';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import {
+    insideContextMenu,
+    useContextMenu,
+    type ContextMenuHandle,
+    type MenuAction
+} from '@/components/ui/ContextMenu';
 import { useWorkflowStars } from '@/library/stars';
 import { useTranslation } from '@/i18n';
 
@@ -27,6 +34,10 @@ import { useTranslation } from '@/i18n';
  * What differs is what a pick means. The Simple workspace holds a selection and shows it on the
  * trigger; Quick load performs an action and goes back to reading "Quick load", which is what
  * `current` being undefined says.
+ *
+ * Right-clicking an entry offers what can be done to the workflow itself rather than with it -
+ * starring it, and deleting it where the bar above allows that - so tidying the list up is done
+ * where the list is read, without a trip to the Library.
  */
 export function WorkflowPicker(props: {
     /** Names the control, and labels the list for screen readers. */
@@ -45,61 +56,103 @@ export function WorkflowPicker(props: {
     emptyText: string;
     emptyHint?: string;
     onPick: (name: string) => void;
+    /** Deletes a workflow, for the right-click menu. Left out where the user may not: the menu
+     *  then offers only what they can do. Confirmation happens here, before this is called. */
+    onDelete?: (name: string) => void;
     /** Width of the trigger button. */
     className?: string;
 }) {
     const { t } = useTranslation();
     const [open, setOpen] = useState(false);
+    const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+    const contextMenu = useContextMenu();
     const selecting = props.current !== undefined;
     const option = props.workflows.find(w => w.name === props.current);
 
     return (
-        <Popover.Root open={open} onOpenChange={setOpen}>
-            <Popover.Trigger asChild>
-                <button
-                    type="button"
-                    disabled={props.disabled}
-                    aria-label={props.label}
-                    title={props.current ?? undefined}
-                    className={[
-                        props.className ?? 'w-40',
-                        'flex max-w-full items-center gap-1.5 rounded border border-default bg-surface-sunken py-0.5 pl-1 pr-1.5 text-left text-xs text-fg outline-none hover:border-[var(--emphasis)] focus:border-[var(--emphasis)] disabled:opacity-50'
-                    ].join(' ')}
-                >
-                    {selecting && <PickerThumb preview={option?.image} size="xs" />}
-                    <span
+        <>
+            <Popover.Root open={open} onOpenChange={setOpen}>
+                <Popover.Trigger asChild>
+                    <button
+                        type="button"
+                        disabled={props.disabled}
+                        aria-label={props.label}
+                        title={props.current ?? undefined}
                         className={[
-                            'min-w-0 flex-1 truncate',
-                            selecting && props.current ? 'text-fg-strong' : 'text-fg-soft',
-                            selecting ? '' : 'pl-0.5'
+                            props.className ?? 'w-40',
+                            'flex max-w-full items-center gap-1.5 rounded border border-default bg-surface-sunken py-0.5 pl-1 pr-1.5 text-left text-xs text-fg outline-none hover:border-[var(--emphasis)] focus:border-[var(--emphasis)] disabled:opacity-50'
                         ].join(' ')}
                     >
-                        {selecting
-                            ? props.current
-                                ? leafOf(props.current)
-                                : t('modelPicker.noneSelected')
-                            : props.label}
-                    </span>
-                    <ChevronDown size={13} aria-hidden className="shrink-0 text-fg-soft" />
-                </button>
-            </Popover.Trigger>
-            <Popover.Portal>
-                <Popover.Content
-                    align="start"
-                    sideOffset={4}
-                    collisionPadding={8}
-                    className="z-50 w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
-                >
-                    <WorkflowOptionList
-                        {...props}
-                        onPick={name => {
-                            props.onPick(name);
-                            setOpen(false);
+                        {selecting && <PickerThumb preview={option?.image} size="xs" />}
+                        <span
+                            className={[
+                                'min-w-0 flex-1 truncate',
+                                selecting && props.current ? 'text-fg-strong' : 'text-fg-soft',
+                                selecting ? '' : 'pl-0.5'
+                            ].join(' ')}
+                        >
+                            {selecting
+                                ? props.current
+                                    ? leafOf(props.current)
+                                    : t('modelPicker.noneSelected')
+                                : props.label}
+                        </span>
+                        <ChevronDown size={13} aria-hidden className="shrink-0 text-fg-soft" />
+                    </button>
+                </Popover.Trigger>
+                <Popover.Portal>
+                    <Popover.Content
+                        align="start"
+                        sideOffset={4}
+                        collisionPadding={8}
+                        // The right-click menu is a popup of its own, so using it reads as a click away
+                        // from this list; without this the list would close under the menu it opened.
+                        onInteractOutside={event => {
+                            if (insideContextMenu(event.target)) {
+                                event.preventDefault();
+                            }
                         }}
-                    />
-                </Popover.Content>
-            </Popover.Portal>
-        </Popover.Root>
+                        className="z-50 w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
+                    >
+                        <WorkflowOptionList
+                            {...props}
+                            menu={contextMenu}
+                            onPick={name => {
+                                props.onPick(name);
+                                setOpen(false);
+                            }}
+                            onDelete={
+                                props.onDelete &&
+                                (name => {
+                                    // The confirmation is a modal dialog, and a list left open behind
+                                    // it is a list the user cannot get back to until they answer.
+                                    setOpen(false);
+                                    setPendingDelete(name);
+                                })
+                            }
+                        />
+                    </Popover.Content>
+                </Popover.Portal>
+            </Popover.Root>
+
+            {contextMenu.menu}
+
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={t('comfy.library.deleteTitle')}
+                body={t('comfy.library.deleteBody', { name: pendingDelete ?? '' })}
+                confirmLabel={t('common.delete')}
+                destructive
+                onConfirm={() => {
+                    const name = pendingDelete;
+                    setPendingDelete(null);
+                    if (name) {
+                        props.onDelete?.(name);
+                    }
+                }}
+                onCancel={() => setPendingDelete(null)}
+            />
+        </>
     );
 }
 
@@ -115,11 +168,14 @@ function WorkflowOptionList(props: {
     emptyText: string;
     emptyHint?: string;
     onPick: (name: string) => void;
+    onDelete?: (name: string) => void;
+    menu: ContextMenuHandle;
 }) {
     const { t } = useTranslation();
     const [search, setSearch] = useState('');
     const prefs = usePickerPrefs(props.prefsKey);
     const stars = useWorkflowStars();
+    const onDelete = props.onDelete;
 
     // Starred first, then the server's name ordering - the same rule the model pickers follow, so
     // the workflows worth reaching for are the ones already on screen when the list opens.
@@ -185,6 +241,20 @@ function WorkflowOptionList(props: {
                 <PickerGroup view={prefs.view}>
                     {matches.map(workflow => {
                         const starred = stars.isStarred(workflow.name);
+                        const menuActions: MenuAction[] = [
+                            {
+                                label: starred ? t('common.unstar') : t('common.star'),
+                                onSelect: () => stars.toggle(workflow.name)
+                            }
+                        ];
+                        if (onDelete) {
+                            menuActions.push({
+                                label: t('common.delete'),
+                                destructive: true,
+                                separated: true,
+                                onSelect: () => onDelete(workflow.name)
+                            });
+                        }
                         const shared = {
                             value: workflow.name,
                             onPick: () => props.onPick(workflow.name),
@@ -192,7 +262,9 @@ function WorkflowOptionList(props: {
                             picked: workflow.name === props.current,
                             preview: workflow.image,
                             title: leafOf(workflow.name),
-                            subtitle: folderOf(workflow.name)
+                            subtitle: folderOf(workflow.name),
+                            onContextMenu: (event: React.MouseEvent) => props.menu.open(event, menuActions),
+                            longPress: props.menu.touch(menuActions)
                         };
                         return prefs.view === 'grid' ? (
                             <PickerCard

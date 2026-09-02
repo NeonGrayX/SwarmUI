@@ -784,6 +784,7 @@
     "presets.applyParameters": "Apply parameters",
     "presets.applyTitle": "Apply \"{title}\"",
     "presets.bar.applied": "Applied “{name}”.",
+    "presets.bar.deleted": "Deleted “{name}”.",
     "presets.bar.export": "Export Presets",
     "presets.bar.exported.one": "Exported {count} preset.",
     "presets.bar.exported.other": "Exported {count} presets.",

@@ -784,6 +784,7 @@
     "presets.applyParameters": "Appliquer les paramètres",
     "presets.applyTitle": "Appliquer « {title} »",
     "presets.bar.applied": "« {name} » appliqué.",
+    "presets.bar.deleted": "« {name} » supprimé.",
     "presets.bar.export": "Exporter les préréglages",
     "presets.bar.exported.one": "{count} préréglage exporté.",
     "presets.bar.exported.other": "{count} préréglages exportés.",

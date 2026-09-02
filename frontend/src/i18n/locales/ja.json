@@ -784,6 +784,7 @@
     "presets.applyParameters": "パラメーターを適用",
     "presets.applyTitle": "「{title}」を適用",
     "presets.bar.applied": "「{name}」を適用しました。",
+    "presets.bar.deleted": "「{name}」を削除しました。",
     "presets.bar.export": "プリセットをエクスポート",
     "presets.bar.exported.one": "{count} 件のプリセットをエクスポートしました。",
     "presets.bar.exported.other": "{count} 件のプリセットをエクスポートしました。",

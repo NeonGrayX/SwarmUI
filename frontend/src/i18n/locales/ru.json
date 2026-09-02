@@ -784,6 +784,7 @@
     "presets.applyParameters": "Применить параметры",
     "presets.applyTitle": "Применить «{title}»",
     "presets.bar.applied": "«{name}» применён.",
+    "presets.bar.deleted": "«{name}» удалён.",
     "presets.bar.export": "Экспорт пресетов",
     "presets.bar.exported.one": "Экспортирован {count} пресет.",
     "presets.bar.exported.other": "Экспортировано пресетов: {count}.",

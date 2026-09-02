@@ -784,6 +784,7 @@
     "presets.applyParameters": "应用参数",
     "presets.applyTitle": "应用“{title}”",
     "presets.bar.applied": "已应用“{name}”。",
+    "presets.bar.deleted": "已删除“{name}”。",
     "presets.bar.export": "导出预设",
     "presets.bar.exported.one": "已导出 {count} 个预设。",
     "presets.bar.exported.other": "已导出 {count} 个预设。",

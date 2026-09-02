@@ -15,6 +15,13 @@ import {
     PickerViewToggle,
     usePickerPrefs
 } from '@/components/form/PickerParts';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import {
+    insideContextMenu,
+    useContextMenu,
+    type ContextMenuHandle,
+    type MenuAction
+} from '@/components/ui/ContextMenu';
 import { libraryKeys, useMyUserData } from '@/library/hooks';
 import { usePresetStars } from '@/library/stars';
 import { previewUrl, type PresetEntry } from '@/library/types';
@@ -55,6 +62,20 @@ export function PresetBar() {
         }
         applyPresetMap(preset.param_map, schema);
         notice.show(t('presets.bar.applied', { name: preset.title }));
+    }
+
+    /** Removes a preset, from the dropdown's own right-click menu, so a preset that has outlived
+     *  its use can go without a trip to the Presets library. Applying one is an overlay on the
+     *  panel, but this is not: it is gone for good, which is why the dropdown confirms first. */
+    async function remove(title: string): Promise<void> {
+        try {
+            await api.post('DeletePreset', { preset: title });
+            await queryClient.invalidateQueries({ queryKey: libraryKeys.userData });
+            notice.show(t('presets.bar.deleted', { name: title }));
+        }
+        catch (e) {
+            notice.show(e instanceof Error ? e.message : String(e), true);
+        }
     }
 
     /** Writes every preset to a file, previews and all, in the shape ExportUserPresets returns. */
@@ -143,6 +164,7 @@ export function PresetBar() {
                 presets={presets}
                 loading={userData.isPending}
                 onPick={apply}
+                onDelete={canManage ? title => void remove(title) : undefined}
             />
 
             {/* Kept out of the button so the button stays a button; clicking it opens this. */}
@@ -178,52 +200,113 @@ export function PresetBar() {
  * Unlike those pickers this one holds no selection: applying a preset is an overlay on whatever is
  * in the panel, which the next edit can undo, so there is nothing for it to go on showing. That is
  * also why picking the same preset twice in a row applies it twice.
+ *
+ * Right-clicking an entry offers what can be done to the preset itself rather than with it -
+ * starring it, and deleting it where the user may manage presets.
  */
-function PresetDropdown(props: { presets: PresetEntry[]; loading: boolean; onPick: (title: string) => void }) {
+function PresetDropdown(props: {
+    presets: PresetEntry[];
+    loading: boolean;
+    onPick: (title: string) => void;
+    /** Deletes a preset, for the right-click menu. Left out where the user may not. Confirmation
+     *  happens here, before this is called. */
+    onDelete?: (title: string) => void;
+}) {
     const { t } = useTranslation();
     const [open, setOpen] = useState(false);
+    const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+    const contextMenu = useContextMenu();
 
     return (
-        <Popover.Root open={open} onOpenChange={setOpen}>
-            <Popover.Trigger asChild>
-                <button
-                    type="button"
-                    aria-label={t('presets.bar.quickApply')}
-                    className="flex w-40 max-w-full items-center gap-1.5 rounded border border-default bg-surface-sunken px-1.5 py-0.5 text-left text-xs text-fg outline-none hover:border-[var(--emphasis)] focus:border-[var(--emphasis)]"
-                >
-                    <span className="min-w-0 flex-1 truncate text-fg-soft">{t('presets.bar.quickApply')}</span>
-                    <ChevronDown size={13} aria-hidden className="shrink-0 text-fg-soft" />
-                </button>
-            </Popover.Trigger>
-            <Popover.Portal>
-                <Popover.Content
-                    align="start"
-                    sideOffset={4}
-                    collisionPadding={8}
-                    className="z-50 w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
-                >
-                    <PresetOptionList
-                        presets={props.presets}
-                        loading={props.loading}
-                        onPick={title => {
-                            props.onPick(title);
-                            setOpen(false);
+        <>
+            <Popover.Root open={open} onOpenChange={setOpen}>
+                <Popover.Trigger asChild>
+                    <button
+                        type="button"
+                        aria-label={t('presets.bar.quickApply')}
+                        className="flex w-40 max-w-full items-center gap-1.5 rounded border border-default bg-surface-sunken px-1.5 py-0.5 text-left text-xs text-fg outline-none hover:border-[var(--emphasis)] focus:border-[var(--emphasis)]"
+                    >
+                        <span className="min-w-0 flex-1 truncate text-fg-soft">{t('presets.bar.quickApply')}</span>
+                        <ChevronDown size={13} aria-hidden className="shrink-0 text-fg-soft" />
+                    </button>
+                </Popover.Trigger>
+                <Popover.Portal>
+                    <Popover.Content
+                        align="start"
+                        sideOffset={4}
+                        collisionPadding={8}
+                        // The right-click menu is a popup of its own, so using it reads as a click away
+                        // from this list; without this the list would close under the menu it opened.
+                        onInteractOutside={event => {
+                            if (insideContextMenu(event.target)) {
+                                event.preventDefault();
+                            }
                         }}
-                    />
-                </Popover.Content>
-            </Popover.Portal>
-        </Popover.Root>
+                        className="z-50 w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
+                    >
+                        <PresetOptionList
+                            presets={props.presets}
+                            loading={props.loading}
+                            menu={contextMenu}
+                            onPick={title => {
+                                props.onPick(title);
+                                setOpen(false);
+                            }}
+                            onDelete={
+                                props.onDelete &&
+                                (title => {
+                                    // The confirmation is a modal dialog, and a list left open behind
+                                    // it is a list the user cannot get back to until they answer.
+                                    setOpen(false);
+                                    setPendingDelete(title);
+                                })
+                            }
+                        />
+                    </Popover.Content>
+                </Popover.Portal>
+            </Popover.Root>
+
+            {contextMenu.menu}
+
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={t('presets.deleteTitle')}
+                body={
+                    <>
+                        {t('presets.deleteBodyBefore')} <strong className="text-fg">{pendingDelete}</strong>{' '}
+                        {t('presets.deleteBodyAfter')}
+                    </>
+                }
+                confirmLabel={t('common.delete')}
+                destructive
+                onConfirm={() => {
+                    const title = pendingDelete;
+                    setPendingDelete(null);
+                    if (title) {
+                        props.onDelete?.(title);
+                    }
+                }}
+                onCancel={() => setPendingDelete(null)}
+            />
+        </>
     );
 }
 
 /** The searchable body of the dropdown: the same cards, rows, search and scrolling the model and
  *  workflow pickers use, over the presets GetMyUserData already brought down with the rest of the
  *  user's data - so opening it costs no request. */
-function PresetOptionList(props: { presets: PresetEntry[]; loading: boolean; onPick: (title: string) => void }) {
+function PresetOptionList(props: {
+    presets: PresetEntry[];
+    loading: boolean;
+    onPick: (title: string) => void;
+    onDelete?: (title: string) => void;
+    menu: ContextMenuHandle;
+}) {
     const { t } = useTranslation();
     const [search, setSearch] = useState('');
     const prefs = usePickerPrefs('swarm-ui-preset-picker');
     const stars = usePresetStars();
+    const onDelete = props.onDelete;
 
     // Starred first, then by title - the same rule the other pickers follow, so the presets worth
     // reaching for are the ones already on screen when the list opens.
@@ -287,6 +370,20 @@ function PresetOptionList(props: { presets: PresetEntry[]; loading: boolean; onP
                 <PickerGroup view={prefs.view}>
                     {matches.map(preset => {
                         const starred = stars.isStarred(preset.title);
+                        const menuActions: MenuAction[] = [
+                            {
+                                label: starred ? t('common.unstar') : t('common.star'),
+                                onSelect: () => stars.toggle(preset.title)
+                            }
+                        ];
+                        if (onDelete) {
+                            menuActions.push({
+                                label: t('common.delete'),
+                                destructive: true,
+                                separated: true,
+                                onSelect: () => onDelete(preset.title)
+                            });
+                        }
                         const shared = {
                             value: preset.title,
                             onPick: () => props.onPick(preset.title),
@@ -298,7 +395,9 @@ function PresetOptionList(props: { presets: PresetEntry[]; loading: boolean; onP
                                 preset.description
                                 || t('presets.paramCountShort', {
                                     count: Object.keys(preset.param_map ?? {}).length
-                                })
+                                }),
+                            onContextMenu: (event: React.MouseEvent) => props.menu.open(event, menuActions),
+                            longPress: props.menu.touch(menuActions)
                         };
                         return prefs.view === 'grid' ? (
                             <PickerCard

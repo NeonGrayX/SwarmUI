@@ -43,6 +43,15 @@ export interface ContextMenuHandle {
     menu: ReactNode;
 }
 
+/** True while `target` sits inside an open context menu.
+ *
+ * A menu opened from inside another popup - a picker dropdown, say - lands in its own portal, so
+ * the popup below reads clicks on it as a click outside itself and closes, taking the right-click
+ * action with it. The popup checks this to leave those interactions alone. */
+export function insideContextMenu(target: EventTarget | null): boolean {
+    return target instanceof Element && target.closest('[data-context-menu]') !== null;
+}
+
 /** How long a finger must rest before the press counts as a menu request. */
 const LONG_PRESS_MS = 500;
 /** How far it may drift in that time before the gesture is a scroll instead. */
@@ -205,6 +214,7 @@ export function useContextMenu(): ContextMenuHandle {
                     sideOffset={2}
                     collisionPadding={8}
                     aria-label={t('contextMenu.label')}
+                    data-context-menu=""
                     onKeyDown={moveWithArrows}
                     onPointerDownOutside={() => {
                         dismissedOutside.current = true;

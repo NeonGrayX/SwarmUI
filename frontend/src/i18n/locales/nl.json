@@ -784,6 +784,7 @@
     "presets.applyParameters": "Parameters toepassen",
     "presets.applyTitle": "'{title}' toepassen",
     "presets.bar.applied": "'{name}' toegepast.",
+    "presets.bar.deleted": "'{name}' verwijderd.",
     "presets.bar.export": "Presets exporteren",
     "presets.bar.exported.one": "{count} preset geëxporteerd.",
     "presets.bar.exported.other": "{count} presets geëxporteerd.",

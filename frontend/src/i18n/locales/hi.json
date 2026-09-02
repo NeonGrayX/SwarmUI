@@ -784,6 +784,7 @@
     "presets.applyParameters": "पैरामीटर लागू करें",
     "presets.applyTitle": "“{title}” लागू करें",
     "presets.bar.applied": "“{name}” लागू किया गया।",
+    "presets.bar.deleted": "“{name}” हटा दिया गया।",
     "presets.bar.export": "प्रीसेट निर्यात करें",
     "presets.bar.exported.one": "{count} प्रीसेट निर्यात किया गया।",
     "presets.bar.exported.other": "{count} प्रीसेट निर्यात किए गए।",

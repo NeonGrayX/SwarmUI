@@ -784,6 +784,7 @@
     "presets.applyParameters": "Parametreleri uygula",
     "presets.applyTitle": "\"{title}\" uygula",
     "presets.bar.applied": "“{name}” uygulandı.",
+    "presets.bar.deleted": "“{name}” silindi.",
     "presets.bar.export": "Ön ayarları dışa aktar",
     "presets.bar.exported.one": "{count} ön ayar dışa aktarıldı.",
     "presets.bar.exported.other": "{count} ön ayar dışa aktarıldı.",

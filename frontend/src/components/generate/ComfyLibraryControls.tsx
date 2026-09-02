@@ -79,6 +79,7 @@ export function ComfyLibraryControls(props: {
                 }
                 disabled={!canRead}
                 prefsKey="swarm-ui-comfy-quick-load-picker"
+                onDelete={canEdit ? name => void deleteWorkflow(name) : undefined}
                 emptyText={t('workflows.none')}
                 emptyHint={t('workflows.noneHint')}
                 onPick={props.onLoad}

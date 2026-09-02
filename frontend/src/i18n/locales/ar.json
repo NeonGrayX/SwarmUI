@@ -784,6 +784,7 @@
     "presets.applyParameters": "تطبيق المعاملات",
     "presets.applyTitle": "تطبيق \"{title}\"",
     "presets.bar.applied": "تم تطبيق «{name}».",
+    "presets.bar.deleted": "تم حذف «{name}».",
     "presets.bar.export": "تصدير الإعدادات المسبقة",
     "presets.bar.exported.one": "تم تصدير {count} إعداد مسبق.",
     "presets.bar.exported.other": "تم تصدير {count} إعداد مسبق.",

@@ -1,7 +1,9 @@
+import type { MouseEvent } from 'react';
 import { Command } from 'cmdk';
 import { Check, Grid3x3, ImageOff, List, Search, Star, X } from 'lucide-react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { LongPressHandlers } from '@/components/ui/ContextMenu';
 import type { ViewMode } from '@/library/types';
 import { t as translate, useTranslation } from '@/i18n';
 
@@ -234,6 +236,10 @@ interface EntryProps {
     trailing?: React.ReactNode;
     /** Border colouring for a card that is listed but cannot be used. */
     highlighted?: boolean;
+    /** Opens the entry's right-click menu, where the picker offers one. */
+    onContextMenu?: (event: MouseEvent) => void;
+    /** The long-press equivalent, from the same menu, for touch screens. */
+    longPress?: LongPressHandlers;
 }
 
 export function PickerCard(props: EntryProps) {
@@ -242,6 +248,8 @@ export function PickerCard(props: EntryProps) {
             value={props.value}
             onSelect={props.onPick}
             title={props.tooltip}
+            onContextMenu={props.onContextMenu}
+            {...props.longPress}
             className={[
                 'group relative cursor-pointer overflow-hidden rounded-lg border bg-surface text-left',
                 'data-[selected=true]:border-[var(--emphasis)]',
@@ -279,6 +287,8 @@ export function PickerRow(props: EntryProps) {
             value={props.value}
             onSelect={props.onPick}
             title={props.tooltip}
+            onContextMenu={props.onContextMenu}
+            {...props.longPress}
             className="group flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 data-[selected=true]:bg-[var(--sw-active)]"
         >
             <PickerThumb preview={props.preview} size="sm" />
