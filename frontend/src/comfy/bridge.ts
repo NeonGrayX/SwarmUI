@@ -74,6 +74,30 @@ export function isComfyReady(): boolean {
     return typeof comfyWindow()?.app?.graphToPrompt === 'function';
 }
 
+/** Resolves once Comfy has booted inside the frame, or rejects when it never does.
+ *
+ * The toolbar's own buttons can assume a booted editor - they cannot be pressed before the frame
+ * is up. A workflow handed over from another screen cannot: it arrives at the same moment the
+ * frame starts loading, so it has to wait for it. */
+export function waitForComfy(timeoutMs = 60_000): Promise<void> {
+    if (isComfyReady()) {
+        return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+        const deadline = Date.now() + timeoutMs;
+        const timer = setInterval(() => {
+            if (isComfyReady()) {
+                clearInterval(timer);
+                resolve();
+            }
+            else if (Date.now() > deadline) {
+                clearInterval(timer);
+                reject(new Error('comfy-not-loaded'));
+            }
+        }, 250);
+    });
+}
+
 function requireApp(): ComfyApp {
     const app = comfyWindow()?.app;
     if (!app) {

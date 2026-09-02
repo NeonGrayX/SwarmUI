@@ -38,7 +38,7 @@ export function SimpleWorkflowBar(props: { session: SimpleWorkflowSession }) {
 }
 
 /** The workflows this dropdown offers are the ones their authors marked as fit to be driven by
- *  their own controls: saved with "Show in the Simple tab" ticked, or carrying a
+ *  their own controls: saved with "Show in Simple tab" ticked, or carrying a
  *  SwarmWorkflowDescription node that says so - the same `enable_in_simple` flag the existing
  *  interface's Simple tab filters on (simpletab.js:browserListEntries). */
 function WorkflowDropdown() {

@@ -4,6 +4,9 @@
  * (savedWorkflowInput in ./saved.ts) and installed in the shared workflow store, which the Simple
  * workspace hands back when it closes - so the name is the one piece of the choice that has to
  * outlive both the panel and a reload.
+ *
+ * Choosing a workflow from outside the workspace - the Library - goes through ./handoff.ts
+ * instead, which is about reaching a workspace rather than about which workflow it is driving.
  */
 
 import { useEffect, useState } from 'react';
@@ -15,24 +18,14 @@ import { useComfyWorkflowStore } from './store';
 interface SimpleWorkflowStore {
     /** Name of the chosen workflow, or null while the picker is showing. */
     workflow: string | null;
-    /** Set when somewhere outside the workspace - the Library's workflow browser - chose a
-     *  workflow and expects the Generate page to open it. Deliberately not persisted: it is a
-     *  hand-off between two screens, and a reload should not reopen the workspace on its own. */
-    handoff: boolean;
     select: (name: string | null) => void;
-    /** Chooses a workflow and asks the Generate page to switch to the Simple workspace for it. */
-    open: (name: string) => void;
-    takeHandoff: () => void;
 }
 
 export const useSimpleWorkflowStore = create<SimpleWorkflowStore>()(
     persist(
         set => ({
             workflow: null,
-            handoff: false,
-            select: name => set({ workflow: name }),
-            open: name => set({ workflow: name, handoff: true }),
-            takeHandoff: () => set({ handoff: false })
+            select: name => set({ workflow: name })
         }),
         {
             name: 'swarm-ui-simple-workflow',

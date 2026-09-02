@@ -5,7 +5,7 @@ import { ImageOff, Star, Trash2 } from 'lucide-react';
 import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import { comfyKeys, useSavedWorkflows, type SavedWorkflow } from '@/comfy/actions';
-import { useSimpleWorkflowStore } from '@/comfy/simple';
+import { useWorkflowHandoffStore } from '@/comfy/handoff';
 import { useWorkflowStars } from '@/library/stars';
 import type { ViewMode } from '@/library/types';
 import { BrowserToolbar, EmptyState, StarButton } from './BrowserChrome';
@@ -18,8 +18,9 @@ import { useTranslation } from '@/i18n';
  *
  * The Comfy editor has a library dialog too, but that one is about the graph behind a workflow -
  * reopening it, saving over it. This screen is about the workflow as a thing to keep: which ones
- * are worth starring, and which have outlived their use. Opening one therefore hands it to the
- * Simple workspace, where a workflow is driven by its own controls rather than edited.
+ * are worth starring, and which have outlived their use. Opening one takes it wherever it is meant
+ * to be driven: the Simple workspace for a workflow whose author declared its own controls, and
+ * the Comfy editor for one that has none, where the graph itself is what there is to work with.
  *
  * Workflows are shared server-wide rather than owned per user, so deleting one takes it away from
  * everybody - starring, which is the user's own, is the half of this screen that is not.
@@ -40,7 +41,7 @@ export function WorkflowBrowser() {
     const saved = useSavedWorkflows(true);
     const stars = useWorkflowStars();
     const contextMenu = useContextMenu();
-    const openInSimple = useSimpleWorkflowStore(s => s.open);
+    const handOver = useWorkflowHandoffStore(s => s.open);
 
     const workflows = useMemo(() => saved.data?.workflows ?? [], [saved.data]);
 
@@ -68,11 +69,13 @@ export function WorkflowBrowser() {
     const ids = useMemo(() => ordered.map(workflow => workflow.name), [ordered]);
     const selection = useSelection(ids);
 
-    /** Hands a workflow to the Simple workspace and goes there. Workflows not marked for that
-     *  workspace open just as well - the flag governs which ones its own dropdown offers, not what
-     *  can be driven. */
-    function open(name: string): void {
-        openInSimple(name);
+    /** Hands a workflow to the workspace it belongs in and goes there.
+     *
+     *  Every workflow runs in the Simple workspace - the flag gates nothing in the engine - but one
+     *  without SwarmInput nodes has no controls of its own to show there, only its raw node inputs.
+     *  So an unmarked workflow goes to the editor instead, where the graph is the point. */
+    function open(workflow: SavedWorkflow): void {
+        handOver(workflow.name, workflow.enable_in_simple ? 'simple' : 'comfy');
         navigate({ to: '/generate' });
     }
 
@@ -98,7 +101,10 @@ export function WorkflowBrowser() {
     /** Everything one workflow can do, for its right-click menu. */
     function actionsFor(workflow: SavedWorkflow): MenuAction[] {
         const actions: MenuAction[] = [
-            { label: t('workflows.open'), onSelect: () => open(workflow.name) },
+            {
+                label: workflow.enable_in_simple ? t('workflows.open') : t('workflows.openInEditor'),
+                onSelect: () => open(workflow)
+            },
             {
                 label: stars.isStarred(workflow.name) ? t('common.unstar') : t('common.star'),
                 onSelect: () => stars.toggle(workflow.name)
@@ -193,7 +199,7 @@ export function WorkflowBrowser() {
                                 onCheck={() => selection.toggle(workflow.name)}
                                 onStar={() => stars.toggle(workflow.name)}
                                 onOpen={event =>
-                                    selection.click(event, workflow.name, () => open(workflow.name))
+                                    selection.click(event, workflow.name, () => open(workflow))
                                 }
                                 onMenu={event => contextMenu.open(event, actionsFor(workflow))}
                                 longPress={contextMenu.touch(actionsFor(workflow))}
@@ -211,7 +217,7 @@ export function WorkflowBrowser() {
                                 onCheck={() => selection.toggle(workflow.name)}
                                 onStar={() => stars.toggle(workflow.name)}
                                 onOpen={event =>
-                                    selection.click(event, workflow.name, () => open(workflow.name))
+                                    selection.click(event, workflow.name, () => open(workflow))
                                 }
                                 onMenu={event => contextMenu.open(event, actionsFor(workflow))}
                                 longPress={contextMenu.touch(actionsFor(workflow))}

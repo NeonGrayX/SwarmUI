@@ -12,6 +12,7 @@ import { PresetBar } from '@/components/generate/PresetBar';
 import { ComfyWorkflowBar } from '@/components/generate/ComfyWorkflowBar';
 import { SimpleWorkflowBar } from '@/components/generate/SimpleWorkflowBar';
 import { useSimpleWorkflowSession, useSimpleWorkflowStore } from '@/comfy/simple';
+import { useWorkflowHandoffStore } from '@/comfy/handoff';
 import { usePermission } from '@/api/permissions';
 import { ImageEditor } from '@/components/editor/ImageEditor';
 import { useEditorStore } from '@/editor/store';
@@ -44,15 +45,29 @@ export function GeneratePage() {
     const simpleSession = useSimpleWorkflowSession(mode === 'simple');
 
     // A workflow opened from the Library lands here with the mode still on standard, so the
-    // hand-off it left behind is what switches the workspace over to it.
-    const handoff = useSimpleWorkflowStore(s => s.handoff);
-    const takeHandoff = useSimpleWorkflowStore(s => s.takeHandoff);
+    // hand-off it left behind is what switches the workspace over to it. Which workspace that is
+    // was decided there: a workflow with its own controls goes to Simple, one without goes to the
+    // editor, where a graph is the thing on offer rather than a panel of inputs.
+    const handoff = useWorkflowHandoffStore(s => s.pending);
+    const takeHandoff = useWorkflowHandoffStore(s => s.take);
+    const selectSimple = useSimpleWorkflowStore(s => s.select);
+    // Held here rather than left in the store because the editor cannot take it immediately: the
+    // frame is still booting when the hand-off arrives.
+    const [pendingGraph, setPendingGraph] = useState<string | null>(null);
     useEffect(() => {
-        if (handoff) {
-            takeHandoff();
+        if (!handoff) {
+            return;
+        }
+        takeHandoff();
+        if (handoff.mode === 'simple') {
+            selectSimple(handoff.name);
             setMode('simple');
         }
-    }, [handoff, takeHandoff]);
+        else {
+            setPendingGraph(handoff.name);
+            setMode('comfy');
+        }
+    }, [handoff, takeHandoff, selectSimple]);
 
     const forever = useGenerateStore(s => s.forever);
     const running = useGenerateStore(s => s.running);
@@ -86,6 +101,7 @@ export function GeneratePage() {
                         <ComfyWorkflowBar
                             onUseInGenerate={() => setMode('standard')}
                             onReloadFrame={reloadComfy}
+                            pendingLoad={pendingGraph}
                         />
                     ) : mode === 'simple' ? (
                         <SimpleWorkflowBar session={simpleSession} />

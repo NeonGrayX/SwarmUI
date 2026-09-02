@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, ExternalLink, RefreshCw, Upload } from 'lucide-react';
 import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
@@ -7,6 +7,7 @@ import {
     loadApiPrompt,
     loadGraph,
     readMultiGpuMode,
+    waitForComfy,
     writeMultiGpuMode,
     type MultiGpuMode
 } from '@/comfy/bridge';
@@ -30,7 +31,12 @@ import { useTranslation } from '@/i18n';
  * how the frame itself is driven - the backend it talks to, reloading it, opening it on its own -
  * pushed to the right, away from the workflow tools.
  */
-export function ComfyWorkflowBar(props: { onUseInGenerate: () => void; onReloadFrame: () => void }) {
+export function ComfyWorkflowBar(props: {
+    onUseInGenerate: () => void;
+    onReloadFrame: () => void;
+    /** A workflow the Library handed over for editing, to open as soon as the frame is up. */
+    pendingLoad?: string | null;
+}) {
     const { t } = useTranslation();
     /** Name of the saved workflow last opened here, so the Generate panel can say which one it is
      *  showing. Editing the graph afterwards makes it a guess, but a useful one. */
@@ -88,6 +94,46 @@ export function ComfyWorkflowBar(props: { onUseInGenerate: () => void; onReloadF
             setLoadedName(name);
             notice.show(t('comfy.notice.loaded'));
         });
+
+    // A workflow arriving from the Library gets here while the frame is still booting, so this
+    // waits for it rather than going through `run`, which reports an editor that is not up yet.
+    // Loading is tracked by name so a re-render cannot open the same graph twice over the user's
+    // edits to it.
+    const { pendingLoad } = props;
+    const handedOver = useRef<string | null>(null);
+    useEffect(() => {
+        if (!pendingLoad || handedOver.current === pendingLoad) {
+            return;
+        }
+        handedOver.current = pendingLoad;
+        let cancelled = false;
+        notice.show(t('comfy.notice.loading'));
+        void (async () => {
+            try {
+                const [data] = await Promise.all([fetchSavedWorkflow(pendingLoad), waitForComfy()]);
+                if (cancelled) {
+                    return;
+                }
+                loadGraph(savedWorkflowGraph(data));
+                setLoadedName(pendingLoad);
+                notice.show(t('comfy.notice.loaded'));
+            }
+            catch (e) {
+                if (!cancelled) {
+                    notice.show(
+                        e instanceof Error && e.message === 'comfy-not-loaded'
+                            ? t('comfy.error.notLoaded')
+                            : e instanceof Error ? e.message : String(e),
+                        true
+                    );
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the hand-off is the only trigger
+    }, [pendingLoad]);
 
     return (
         <>

@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { comfyKeys, type ComfyBuildResult } from '@/comfy/actions';
+import { graphToPrompt, type ComfyGraph } from '@/comfy/bridge';
 import { ComfyWorkflowError } from '@/comfy/params';
 import { useGenerateStore } from '@/generate/store';
 import { useTranslation } from '@/i18n';
@@ -35,6 +36,9 @@ export function ComfySaveDialog(props: {
     const [enableSimple, setEnableSimple] = useState(false);
     const [useThumbnail, setUseThumbnail] = useState(false);
     const [busy, setBusy] = useState(false);
+    /** Whether the graph declares controls of its own. Assumed until the graph has been read, so
+     *  the advice below only ever appears on a graph actually known to lack them. */
+    const [declaresInputs, setDeclaresInputs] = useState(true);
 
     const currentImage = useGenerateStore(s => s.batch.find(item => item.id === s.selected));
     // Only a finished image is worth keeping; a live preview is half-rendered by definition.
@@ -48,6 +52,23 @@ export function ComfySaveDialog(props: {
             setUseThumbnail(false);
         }
     }, [props.open, props.replacing]);
+
+    // Read once as the dialog opens: the graph cannot change while it is up, and this is a plain
+    // reach into the editor rather than the full parameter build the save itself does.
+    useEffect(() => {
+        if (!props.open) {
+            return;
+        }
+        let cancelled = false;
+        setDeclaresInputs(true);
+        graphToPrompt().then(
+            ({ workflow }) => !cancelled && setDeclaresInputs(declaresOwnInputs(workflow)),
+            () => undefined
+        );
+        return () => {
+            cancelled = true;
+        };
+    }, [props.open]);
 
     const trimmed = name.trim();
     const overwriting = props.existingNames.some(existing => existing.toLowerCase() === trimmed.toLowerCase());
@@ -156,6 +177,9 @@ export function ComfySaveDialog(props: {
                         <Checkbox id="comfy-save-simple" checked={enableSimple} onChange={setEnableSimple}>
                             {t('comfy.save.enableSimple')}
                         </Checkbox>
+                        {enableSimple && !declaresInputs && (
+                            <p className="pl-6 text-xs text-fg-soft">{t('comfy.save.simpleNoInputs')}</p>
+                        )}
                         <Checkbox
                             id="comfy-save-thumb"
                             checked={useThumbnail}
@@ -212,6 +236,18 @@ function Checkbox(props: {
             />
             {props.children}
         </label>
+    );
+}
+
+/** Whether the graph declares its own controls, ie carries SwarmInput nodes.
+ *
+ * That is what the Simple workspace is for: a panel the workflow's author designed. Without them
+ * Swarm falls back to auto-claiming raw node inputs (buildComfyParams, `doAutoClaim`), which still
+ * runs, but presents the graph's internals rather than a set of controls. Group nodes only arrange
+ * the others, so one on its own declares nothing. */
+function declaresOwnInputs(workflow: ComfyGraph): boolean {
+    return (workflow.nodes ?? []).some(
+        node => node.type?.startsWith('SwarmInput') && node.type !== 'SwarmInputGroup'
     );
 }
 
