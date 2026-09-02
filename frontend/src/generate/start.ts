@@ -39,21 +39,37 @@ function applyEditorOverrides(input: Record<string, unknown>, schema: Normalized
     input.extra_metadata = { ...extra, used_image_editor: 'true' };
 }
 
+/** The model name a run sends when it has none of its own to send. A recognised sentinel rather
+ *  than an omission: the server reads it as "this workflow loads its own" and skips the model
+ *  pressure it would otherwise apply to a backend (BackendHandler.cs:755). */
+const NO_MODEL = '(none)';
+
+export interface StartOptions {
+    /** True for a run driven by a custom Comfy workflow, whose graph names its own checkpoint.
+     *  Mirrors SimpleTabGenerateHandler in the existing interface, which turns the model check off
+     *  and sends `(none)` (simpletab.js:getGenInput). */
+    modelOptional?: boolean;
+}
+
 /** Starts a run, or records why it could not start. Reads the param store at call time so the
  *  Generate button does not re-render on every keystroke, the same way useGenInput does. */
-export function useStartGenerate(): () => void {
+export function useStartGenerate(options: StartOptions = {}): () => void {
     const schema = useParamSchema();
     const buildInput = useGenInput();
+    const modelOptional = options.modelOptional ?? false;
     return useCallback(() => {
         const input = buildInput();
         applyEditorOverrides(input, schema);
+        if (modelOptional && !String(input.model ?? '').trim()) {
+            input.model = NO_MODEL;
+        }
         const images = Number(useParamStore.getState().values.images ?? 1);
-        const issue = validateGenInput(schema, input, images);
+        const issue = validateGenInput(schema, input, images, modelOptional);
         const store = useGenerateStore.getState();
         if (issue) {
             store.fail(issue);
             return;
         }
         store.start(images, input);
-    }, [schema, buildInput]);
+    }, [schema, buildInput, modelOptional]);
 }

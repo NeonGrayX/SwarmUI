@@ -3,13 +3,10 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Save, Search, Trash2, X } from 'lucide-react';
 import { useSavedWorkflows, type SavedWorkflow } from '@/comfy/actions';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { WorkflowCard, WorkflowCardButton } from './WorkflowCard';
 import { useTranslation } from '@/i18n';
 
-/** The saved workflow library: pick one to open it in the editor, or manage what is stored.
- *
- * Workflow names carry their folder as a path prefix ('Examples/Basic'), which is shown as a
- * subtitle rather than as a folder tree - the list is short enough that search beats navigation.
- */
+/** The saved workflow library: pick one to open it in the editor, or manage what is stored. */
 export function ComfyWorkflowLibrary(props: {
     open: boolean;
     canEdit: boolean;
@@ -84,10 +81,26 @@ export function ComfyWorkflowLibrary(props: {
                                         <WorkflowCard
                                             key={workflow.name}
                                             workflow={workflow}
-                                            canEdit={props.canEdit}
                                             onOpen={() => props.onOpenWorkflow(workflow.name)}
-                                            onReplace={() => props.onReplace(workflow)}
-                                            onDelete={() => setPendingDelete(workflow.name)}
+                                            actions={
+                                                props.canEdit && (
+                                                    <>
+                                                        <WorkflowCardButton
+                                                            label={t('comfy.library.replace')}
+                                                            onClick={() => props.onReplace(workflow)}
+                                                        >
+                                                            <Save size={13} aria-hidden />
+                                                        </WorkflowCardButton>
+                                                        <WorkflowCardButton
+                                                            label={t('common.delete')}
+                                                            onClick={() => setPendingDelete(workflow.name)}
+                                                            destructive
+                                                        >
+                                                            <Trash2 size={13} aria-hidden />
+                                                        </WorkflowCardButton>
+                                                    </>
+                                                )
+                                            }
                                         />
                                     ))}
                                 </ul>
@@ -113,72 +126,5 @@ export function ComfyWorkflowLibrary(props: {
                 }}
             />
         </>
-    );
-}
-
-function WorkflowCard(props: {
-    workflow: SavedWorkflow;
-    canEdit: boolean;
-    onOpen: () => void;
-    onReplace: () => void;
-    onDelete: () => void;
-}) {
-    const { t } = useTranslation();
-    const { name, description, image } = props.workflow;
-    const slash = name.lastIndexOf('/');
-    const folder = slash > 0 ? name.substring(0, slash) : null;
-    const label = slash > 0 ? name.substring(slash + 1) : name;
-
-    return (
-        <li className="group relative overflow-hidden rounded-lg border border-subtle bg-surface">
-            <button type="button" onClick={props.onOpen} className="block w-full text-left" title={description || name}>
-                <img
-                    src={image}
-                    alt=""
-                    loading="lazy"
-                    className="aspect-square w-full bg-surface-sunken object-cover"
-                />
-                <span className="block px-2 py-1.5">
-                    <span className="block truncate text-sm text-fg-strong">{label}</span>
-                    {folder && <span className="block truncate text-[11px] text-fg-soft">{folder}</span>}
-                    {description && <span className="mt-0.5 block line-clamp-2 text-xs text-fg-soft">{description}</span>}
-                </span>
-            </button>
-            {props.canEdit && (
-                // Kept out of the way until the card is reached for: opening is the common action,
-                // and a delete button under the pointer is a bad default.
-                <div className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-                    <IconButton label={t('comfy.library.replace')} onClick={props.onReplace}>
-                        <Save size={13} aria-hidden />
-                    </IconButton>
-                    <IconButton label={t('common.delete')} onClick={props.onDelete} destructive>
-                        <Trash2 size={13} aria-hidden />
-                    </IconButton>
-                </div>
-            )}
-        </li>
-    );
-}
-
-function IconButton(props: {
-    label: string;
-    destructive?: boolean;
-    onClick: () => void;
-    children: React.ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={props.onClick}
-            aria-label={props.label}
-            title={props.label}
-            className="rounded p-1.5 backdrop-blur"
-            style={{
-                background: props.destructive ? 'var(--sw-danger-surface)' : 'var(--sw-surface-raised)',
-                color: props.destructive ? 'var(--backend-errored)' : 'var(--text)'
-            }}
-        >
-            {props.children}
-        </button>
     );
 }

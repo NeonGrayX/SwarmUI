@@ -21,30 +21,38 @@ function modelSubtype(schema: NormalizedSchema | null): string {
 
 /** The first blocking problem with a request body, or null if it looks sendable.
  *  Only checks things that are certainly wrong - anything the server may legitimately accept
- *  (an empty prompt, an unusual resolution) is left to the server. */
+ *  (an empty prompt, an unusual resolution) is left to the server.
+ *
+ *  `modelOptional` is for a run driven by a custom Comfy workflow, which loads whatever checkpoint
+ *  its own graph names: there is nothing for the user to fix, so there is nothing to insist on. */
 export function validateGenInput(
     schema: NormalizedSchema | null,
     input: Record<string, unknown>,
-    images: number
+    images: number,
+    modelOptional = false
 ): GenIssue | null {
     const model = String(input.model ?? '').trim();
     const installed = schema?.models[modelSubtype(schema)] ?? [];
 
-    if (!model) {
-        return {
-            paramId: 'model',
-            message:
-                installed.length === 0
-                    ? t('validate.noModelInstalled')
-                    : t('validate.noModelSelected')
-        };
-    }
-    // A model can come from reused metadata or a saved preset, so it need not exist here.
-    if (installed.length > 0 && !installed.includes(model)) {
-        return {
-            paramId: 'model',
-            message: `Model "${model}" is not on this server. Pick a model that is installed.`
-        };
+    // Skipped rather than checked leniently when the model is optional: the run then sends the
+    // `(none)` sentinel the server knows (BackendHandler.cs:755), which is in no model list.
+    if (!modelOptional) {
+        if (!model) {
+            return {
+                paramId: 'model',
+                message:
+                    installed.length === 0
+                        ? t('validate.noModelInstalled')
+                        : t('validate.noModelSelected')
+            };
+        }
+        // A model can come from reused metadata or a saved preset, so it need not exist here.
+        if (installed.length > 0 && !installed.includes(model)) {
+            return {
+                paramId: 'model',
+                message: `Model "${model}" is not on this server. Pick a model that is installed.`
+            };
+        }
     }
 
     if (!Number.isFinite(images) || images < 1) {

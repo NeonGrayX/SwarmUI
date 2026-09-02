@@ -12,17 +12,29 @@ import { useParamStore, type ParamValue } from '@/params/store';
 import type { ComfyGraph } from './bridge';
 import type { ComfyWorkflowInput } from './params';
 
+/** Which part of the app put the workflow in the panel. The Simple workspace hands the panel back
+ *  when it closes, and has to know the workflow standing in it is still the one it installed - a
+ *  graph carried over from the Comfy editor is the user's, and stays. */
+export type ComfyWorkflowSource = 'editor' | 'simple';
+
 interface ComfyWorkflowStore {
     /** The active workflow's parameter set, or null when the normal parameters are in use. */
     active: ComfyWorkflowInput | null;
     /** Name of the saved workflow this came from, when it came from the library. */
     name: string | null;
+    /** What installed the active workflow, or null when the normal parameters are in use. */
+    source: ComfyWorkflowSource | null;
     /** The graph behind the active workflow, when it is at hand: what saving it to the library
      *  writes. Deliberately left out of storage - a graph is large, and a workflow that outlives a
      *  reload can be fetched back by name if it has one. */
     graph: ComfyGraph | null;
     /** Installs a workflow and seeds the param store with the values it brings. */
-    activate: (input: ComfyWorkflowInput, name?: string | null, graph?: ComfyGraph | null) => void;
+    activate: (
+        input: ComfyWorkflowInput,
+        name?: string | null,
+        graph?: ComfyGraph | null,
+        source?: ComfyWorkflowSource
+    ) => void;
     /** Returns the panel to Swarm's own parameters. */
     clear: () => void;
 }
@@ -66,22 +78,23 @@ export const useComfyWorkflowStore = create<ComfyWorkflowStore>()(
         (set, get) => ({
             active: null,
             name: null,
+            source: null,
             graph: null,
 
-            activate: (input, name = null, graph = null) => {
+            activate: (input, name = null, graph = null, source = 'editor') => {
                 const previous = get().active;
                 // Parameter ids are derived from node ids and titles, so a different workflow
                 // means different ids - anything left over from the last one is dead weight that
                 // would still be sent with the next generation.
                 const stale = previous ? Object.keys(previous.params) : [];
                 useParamStore.getState().applyBundle(stale, seedValues(input));
-                set({ active: input, name, graph });
+                set({ active: input, name, source, graph });
             },
 
             clear: () => {
                 const previous = get().active;
                 useParamStore.getState().applyBundle(previous ? Object.keys(previous.params) : [], {});
-                set({ active: null, name: null, graph: null });
+                set({ active: null, name: null, source: null, graph: null });
             }
         }),
         {
@@ -96,7 +109,7 @@ export const useComfyWorkflowStore = create<ComfyWorkflowStore>()(
                 }
             },
             // The actions are rebuilt on every load; only the workflow itself is worth storing.
-            partialize: state => ({ active: state.active, name: state.name })
+            partialize: state => ({ active: state.active, name: state.name, source: state.source })
         }
     )
 );

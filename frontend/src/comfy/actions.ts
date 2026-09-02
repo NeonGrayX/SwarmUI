@@ -12,6 +12,8 @@ import { usePermission } from '@/api/permissions';
 import { cleanModelName } from '@/params/schema';
 import { fetchObjectInfo, graphToPrompt, type ComfyGraph, type ComfyPrompt } from './bridge';
 import { buildComfyParams, type ComfyWorkflowInput } from './params';
+import { fetchSavedWorkflow, savedWorkflowInput } from './saved';
+import { useComfyWorkflowStore, type ComfyWorkflowSource } from './store';
 
 export const comfyKeys = {
     objectInfo: ['comfy-object-info'] as const,
@@ -90,5 +92,27 @@ export function useComfyBuilder(): (requireSave: boolean) => Promise<ComfyBuildR
             return { input, workflow, prompt };
         },
         [objectInfoData, knownParamIds, checkpoints, resetBatchSizeToOne]
+    );
+}
+
+/** Opens a saved workflow straight into the Generate panel, with no Comfy editor in between.
+ *
+ * The library stored the parameter set alongside the graph, so this needs neither the editor nor a
+ * running Comfy backend - which is the whole point: a workflow someone else built is meant to be
+ * usable as a set of controls, not as a graph to be understood first.
+ */
+export function useOpenSavedWorkflow(source: ComfyWorkflowSource): (name: string) => Promise<void> {
+    const session = useSession();
+    const params = useT2IParams(session.isSuccess);
+    const activate = useComfyWorkflowStore(s => s.activate);
+    const knownParamIds = params.data?.list;
+
+    return useCallback(
+        async (name: string) => {
+            const data = await fetchSavedWorkflow(name);
+            const known = new Set((knownParamIds ?? []).map(p => p.id));
+            activate(savedWorkflowInput(data, known), name, null, source);
+        },
+        [knownParamIds, activate, source]
     );
 }

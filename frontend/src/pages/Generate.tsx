@@ -2,13 +2,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { ParamForm } from '@/components/form/ParamForm';
-import { PromptComposer, SHOW_PARAMS_EVENT } from '@/components/generate/PromptComposer';
+import { PromptComposer } from '@/components/generate/PromptComposer';
+import { GenerateActions, SHOW_PARAMS_EVENT } from '@/components/generate/GenerateActions';
 import { Canvas } from '@/components/generate/Canvas';
 import { BatchRail } from '@/components/generate/BatchRail';
 import { Splitter } from '@/components/generate/Splitter';
 import { ComfyWorkflow } from '@/components/generate/ComfyWorkflow';
 import { PresetBar } from '@/components/generate/PresetBar';
 import { ComfyWorkflowBar } from '@/components/generate/ComfyWorkflowBar';
+import { SimpleWorkflowBar } from '@/components/generate/SimpleWorkflowBar';
+import { SimpleWorkflowPicker } from '@/components/generate/SimpleWorkflowPicker';
+import { useSimpleWorkflowSession, useSimpleWorkflowStore } from '@/comfy/simple';
+import { usePermission } from '@/api/permissions';
 import { ImageEditor } from '@/components/editor/ImageEditor';
 import { useEditorStore } from '@/editor/store';
 import { PRESETS, useLayoutStore, type LayoutPreset } from '@/generate/layout';
@@ -18,9 +23,11 @@ import { useIsCompact } from '@/shell/viewport';
 import { useTranslation } from '@/i18n';
 
 /** The Generate workspace: parameters, canvas, batch rail, and the prompt composer beneath. */
-/** Comfy Workflow is a mode of this workspace rather than its own destination: it is another way
- *  to drive the same generation. */
-type WorkspaceMode = 'standard' | 'comfy';
+/** Comfy Workflow and Simple are modes of this workspace rather than destinations of their own:
+ *  each is another way to drive the same generation. Simple keeps the workspace exactly as it is
+ *  and swaps what fills it - a saved workflow's own controls in the parameter panel, and its run
+ *  button where the prompt box would be, since the prompt is one of those controls. */
+type WorkspaceMode = 'standard' | 'comfy' | 'simple';
 
 /** Which of the three panes a narrow screen is showing. */
 type Pane = 'image' | 'params' | 'batch';
@@ -33,9 +40,14 @@ export function GeneratePage() {
     const [comfyReloadKey, setComfyReloadKey] = useState(0);
     const reloadComfy = useCallback(() => setComfyReloadKey(key => key + 1), []);
 
+    // Installs the chosen workflow's parameters while Simple is the mode on screen, and takes them
+    // back out again when it is not.
+    const simpleWorkflow = useSimpleWorkflowStore(s => s.workflow);
+    const simpleSession = useSimpleWorkflowSession(mode === 'simple');
+
     const forever = useGenerateStore(s => s.forever);
     const running = useGenerateStore(s => s.running);
-    const startGenerate = useStartGenerate();
+    const startGenerate = useStartGenerate({ modelOptional: mode === 'simple' });
 
     // "Generate forever" re-fires as soon as the previous run finishes. A refused run clears
     // `forever` (useGenerateStore.fail), so a bad request stops the loop rather than spinning it.
@@ -46,23 +58,32 @@ export function GeneratePage() {
         }
     }, [forever, running, startGenerate]);
 
+    // Simple has nothing to show in the panes until a workflow has been chosen, so until then the
+    // picker takes the whole area the way the Comfy editor does.
+    const picking = mode === 'simple' && !simpleWorkflow;
+    const panes = mode !== 'comfy' && !picking;
+    const footer = mode === 'simple' ? <SimpleRunBar /> : <PromptComposer />;
+
     // The mode switch sits above the whole workspace, not inside the middle column: Comfy drives
     // its own parameters and prompt, so in that mode there are no side panes to sit between. Its
-    // workflow tools share that same strip, so the editor keeps the entire pane below. The
-    // standard mode gets its presets on that strip instead: workflows are the Comfy mode's
-    // business, and what the standard mode has to keep under a name is its own parameters.
+    // workflow tools share that same strip, so the editor keeps the entire pane below, and Simple
+    // puts its own workflow controls there for the same reason. The standard mode gets its presets
+    // on that strip instead: workflows are the other two modes' business, and what the standard
+    // mode has to keep under a name is its own parameters.
     return (
         <div className="flex h-full min-h-0 flex-col">
             <WorkspaceHeader
                 mode={mode}
                 onMode={setMode}
-                presets={!compact && mode === 'standard'}
+                presets={!compact && panes}
                 tools={
                     mode === 'comfy' ? (
                         <ComfyWorkflowBar
                             onUseInGenerate={() => setMode('standard')}
                             onReloadFrame={reloadComfy}
                         />
+                    ) : mode === 'simple' ? (
+                        <SimpleWorkflowBar session={simpleSession} />
                     ) : (
                         <PresetBar />
                     )
@@ -72,17 +93,31 @@ export function GeneratePage() {
                 <div className="min-h-0 flex-1">
                     <ComfyWorkflow reloadKey={comfyReloadKey} />
                 </div>
+            ) : picking ? (
+                <SimpleWorkflowPicker />
             ) : compact ? (
-                <StackedWorkspace />
+                <StackedWorkspace footer={footer} />
             ) : (
-                <SplitWorkspace />
+                <SplitWorkspace footer={footer} />
             )}
         </div>
     );
 }
 
+/** What sits under the panes in Simple mode. The workflow supplies its own prompt controls, so all
+ *  that is left down here is the run button - and the model is the workflow's business too, which
+ *  is what `modelOptional` says. */
+function SimpleRunBar() {
+    const doGenerate = useStartGenerate({ modelOptional: true });
+    return (
+        <div className="border-t border-subtle bg-surface p-3">
+            <GenerateActions onGenerate={doGenerate} />
+        </div>
+    );
+}
+
 /** Parameters | canvas | batch, side by side and freely resizable. */
-function SplitWorkspace() {
+function SplitWorkspace(props: { footer: React.ReactNode }) {
     const { t } = useTranslation();
     const paramsWidth = useLayoutStore(s => s.params);
     const batchWidth = useLayoutStore(s => s.batch);
@@ -112,7 +147,7 @@ function SplitWorkspace() {
                 </aside>
             </div>
 
-            <PromptComposer />
+            {props.footer}
         </div>
     );
 }
@@ -123,7 +158,7 @@ function SplitWorkspace() {
  * a thumb reaches. The three panes above them take turns as tabs
  * rather than sharing the width; at 360px, three columns would leave the image about 90px.
  * Selecting a batch tile switches back to the image tab. */
-function StackedWorkspace() {
+function StackedWorkspace(props: { footer: React.ReactNode }) {
     const { t } = useTranslation();
     const [pane, setPane] = useState<Pane>('image');
     const selected = useGenerateStore(s => s.selected);
@@ -201,7 +236,7 @@ function StackedWorkspace() {
                 </PanePanel>
             </div>
 
-            <PromptComposer />
+            {props.footer}
         </div>
     );
 }
@@ -245,16 +280,20 @@ function WorkspaceHeader(props: {
     tools?: React.ReactNode;
 }) {
     const { t } = useTranslation();
+    // Simple runs nothing but saved workflows, so without the permission to read them it has
+    // nothing to offer and is left off the switch entirely.
+    const canReadWorkflows = usePermission('comfy_read_workflows');
+
+    const modes: [WorkspaceMode, string][] = [
+        ['standard', 'generate.mode.standard'],
+        ...(canReadWorkflows ? ([['simple', 'generate.mode.simple']] as [WorkspaceMode, string][]) : []),
+        ['comfy', 'generate.mode.comfy']
+    ];
 
     return (
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-surface px-3 py-1">
             <div className="flex overflow-hidden rounded border border-default">
-                {(
-                    [
-                        ['standard', 'generate.mode.standard'],
-                        ['comfy', 'generate.mode.comfy']
-                    ] as const
-                ).map(([id, labelKey]) => (
+                {modes.map(([id, labelKey]) => (
                     <button
                         key={id}
                         type="button"

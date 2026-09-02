@@ -174,13 +174,18 @@ export function ParamForm() {
 
 /** Says so when the parameters below are a Comfy workflow's rather than Swarm's own, and offers
  *  the way back. Without it the panel would silently be a different set of controls than the one
- *  the user configured. */
+ *  the user configured.
+ *
+ *  The Simple workspace is the exception: a workflow is the whole point there, its own bar names
+ *  the one in use, and taking it back out from here would leave that bar describing a panel that
+ *  no longer matches it. */
 function ComfyWorkflowNotice() {
     const { t } = useTranslation();
     const active = useComfyWorkflowStore(s => s.active);
     const name = useComfyWorkflowStore(s => s.name);
+    const source = useComfyWorkflowStore(s => s.source);
     const clear = useComfyWorkflowStore(s => s.clear);
-    if (!active) {
+    if (!active || source === 'simple') {
         return null;
     }
     return (
