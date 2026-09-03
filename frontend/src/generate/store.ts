@@ -1,8 +1,10 @@
-/** Generation run state: the batch rail, the selected image, and the live socket. */
+/** Generation run state: the batch rail, the selected image, and the live sockets. */
 
 import { useMemo } from 'react';
 import { create } from 'zustand';
-import { api, SwarmApiError } from '@/api/client';
+import { api, SOCKET_FAILED, SwarmApiError } from '@/api/client';
+import type { StreamClose } from '@/api/client';
+import { t } from '@/i18n/store';
 import type { BatchItem, GenMessage } from './types';
 import type { GenIssue } from './validate';
 
@@ -19,10 +21,12 @@ interface GenerateStore {
     forever: boolean;
     /** Handed to the next run, to keep its slots distinct from earlier runs'. */
     nextRunId: number;
+    /** Set when a run's socket dropped with slots still unfinished. The server does not stop
+     *  generating when the browser stops listening, so this is a warning about this tab's view of
+     *  the run, not about the run. */
+    disconnected: boolean;
     autoSwapToImages: boolean;
     autoClearBatch: boolean;
-
-    close: (() => void) | null;
 
     start: (images: number, params: Record<string, unknown>) => void;
     /** Adds an already-finished file to the rail - a video edit or an audio split, neither of
@@ -31,6 +35,7 @@ interface GenerateStore {
     /** Refuses a run that failed pre-flight validation, without touching the socket. */
     fail: (issue: GenIssue) => void;
     clearInputError: () => void;
+    dismissDisconnected: () => void;
     interrupt: (all?: boolean) => void;
     select: (id: string | null) => void;
     clearBatch: () => void;
@@ -38,6 +43,15 @@ interface GenerateStore {
     setAutoSwapToImages: (on: boolean) => void;
     setAutoClearBatch: (on: boolean) => void;
 }
+
+/** Disposers for the sockets of runs still in flight, keyed by run id.
+ *
+ * Kept outside the store because they are not state to render, and because their real purpose is
+ * to be honest about how many runs are live: a run is over when its socket has reported closing,
+ * not when a newer run has started. Closing a generation socket does not interrupt the generation
+ * behind it (T2IAPI's claim outlives the socket), so a run that is superseded is left alone to
+ * finish and keep filling in its own slots. */
+const liveRuns = new Map<number, () => void>();
 
 /** Slot ids must be unique across runs, since the server restarts batch_index at 0 each run. */
 function slotId(runId: number, batchIndex: string): string {
@@ -60,6 +74,57 @@ function upsert(
     return next;
 }
 
+/** A slot the server still owes us something for. */
+function isUnfinished(item: BatchItem): boolean {
+    return item.status === 'pending' || item.status === 'running';
+}
+
+/** Settles a run whose socket has closed.
+ *
+ * The distinction this makes is the whole point of it. A socket closing is not evidence that a
+ * generation failed - the server's claim on the backend outlives the connection, so a run whose
+ * socket dropped is still generating and will still save its images to the history. Calling those
+ * slots "failed" is a lie the user can act on, so each way a socket can end gets its own answer:
+ *
+ *  - the server said the run was over (`socket_intention: close`): a slot with no image really did
+ *    fail, and nothing more is coming for it.
+ *  - the socket never connected: the request never reached the server, so nothing was started.
+ *  - we closed it ourselves: the user interrupted, so the slots were cancelled.
+ *  - anything else - a phone switching apps, wi-fi dropping, a proxy timing out - is this tab
+ *    losing sight of a run that is very probably still going.
+ */
+function endRun(
+    runId: number,
+    info: StreamClose,
+    serverEnded: boolean,
+    set: (partial: Partial<GenerateStore> | ((s: GenerateStore) => Partial<GenerateStore>)) => void
+): void {
+    liveRuns.delete(runId);
+    // A socket that never opened means the request never reached the server, so those slots really
+    // did fail - but with an explanation, since bare "failed" reads as a generation problem.
+    const neverStarted = !info.opened;
+    const note = neverStarted ? t('generate.couldNotConnect') : undefined;
+    const status = serverEnded || neverStarted ? 'failed' : info.local ? 'cancelled' : 'disconnected';
+    set(s => {
+        // Only worth saying anything if the run still had work outstanding - a socket closing on a
+        // run that already delivered everything is just the run ending.
+        const outstanding = s.batch.some(item => item.runId === runId && isUnfinished(item));
+        return {
+            // Other runs may still be going: this tab is only idle once every socket has closed.
+            running: liveRuns.size > 0,
+            // A dropped connection must not re-fire the loop, or a phone coming back from sleep
+            // finds a queue of runs nobody asked for.
+            ...(outstanding && status === 'disconnected' ? { disconnected: true, forever: false } : {}),
+            ...(outstanding && note ? { error: note } : {}),
+            batch: s.batch.map(item =>
+                item.runId === runId && isUnfinished(item)
+                    ? { ...item, status, error: note ?? item.error }
+                    : item
+            )
+        };
+    });
+}
+
 export const useGenerateStore = create<GenerateStore>((set, get) => ({
     batch: [],
     selected: null,
@@ -68,19 +133,21 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
     inputError: null,
     forever: false,
     nextRunId: 0,
+    disconnected: false,
     autoSwapToImages: true,
     autoClearBatch: false,
-    close: null,
 
     start: (images, params) => {
         const state = get();
-        state.close?.();
-
         const runId = state.nextRunId;
         if (state.autoClearBatch) {
             set({ batch: [], selected: null });
         }
-        set({ running: true, error: null, inputError: null, nextRunId: runId + 1 });
+        set({ running: true, error: null, inputError: null, disconnected: false, nextRunId: runId + 1 });
+
+        /** Set when the server announces the run is over, which is what separates "this run
+         *  finished" from "this socket stopped talking to us". */
+        let serverEnded = false;
 
         // Seed placeholder slots so the rail shows the shape of the run immediately.
         set(s => ({
@@ -100,6 +167,10 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
             { images, ...params },
             {
                 onMessage: message => {
+                    if (message.socket_intention === 'close') {
+                        serverEnded = true;
+                        return;
+                    }
                     if (message.gen_progress) {
                         const p = message.gen_progress;
                         set(s => ({
@@ -139,35 +210,28 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
                         }));
                     }
                 },
+                // Only an error the server actually reported condemns the run. A socket that
+                // merely dropped is left for `onClose`, which always follows it and can tell a
+                // lost connection from a finished one.
                 onError: (error: SwarmApiError) => {
+                    if (error.errorId === SOCKET_FAILED) {
+                        return;
+                    }
                     set(s => ({
                         error: error.message,
-                        running: false,
                         forever: false,
                         batch: s.batch.map(item =>
-                            item.runId === runId &&
-                            (item.status === 'pending' || item.status === 'running')
+                            item.runId === runId && isUnfinished(item)
                                 ? { ...item, status: 'failed' as const, error: error.message }
                                 : item
                         )
                     }));
                 },
-                onClose: () => {
-                    set(s => ({
-                        running: false,
-                        close: null,
-                        batch: s.batch.map(item =>
-                            item.runId === runId &&
-                            (item.status === 'pending' || item.status === 'running')
-                                ? { ...item, status: 'failed' as const }
-                                : item
-                        )
-                    }));
-                }
+                onClose: info => endRun(runId, info, serverEnded, set)
             }
         );
 
-        set({ close });
+        liveRuns.set(runId, close);
     },
 
     /** Given a run of its own, so arriving mid-batch neither claims a pending slot nor renumbers
@@ -188,14 +252,20 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
     /** Stops "generate forever" too, so a bad request cannot re-fire on a loop. */
     fail: issue => set({ inputError: issue, running: false, forever: false }),
     clearInputError: () => set({ inputError: null }),
+    dismissDisconnected: () => set({ disconnected: false }),
 
     /** `all` interrupts every session this user has open, not just this tab
-     *  (InterruptAll's `other_sessions`, src/WebAPI/BasicAPIFeatures.cs). */
+     *  (InterruptAll's `other_sessions`, src/WebAPI/BasicAPIFeatures.cs).
+     *
+     * The API call is what actually stops the work: closing the sockets only stops us watching,
+     * which is why it is the request, not the close, that lets the slots be called cancelled. */
     interrupt: (all = false) => {
-        get().close?.();
-        set({ running: false, forever: false, close: null });
+        for (const close of liveRuns.values()) {
+            close();
+        }
+        set({ running: false, forever: false, disconnected: false });
         api.post('InterruptAll', { other_sessions: all }).catch(() => {
-            // The socket is already closed locally; a failed interrupt call is not worth a toast.
+            // The sockets are already closed locally; a failed interrupt call is not worth a toast.
         });
     },
 
@@ -258,7 +328,8 @@ export function useRunProgress(): RunProgress {
                 queued++;
             }
             else {
-                // Done, discarded or failed: over either way, and over is over.
+                // Done, discarded, failed, cancelled or disconnected: nothing more is coming down
+                // this socket for the slot either way, and over is over.
                 done += 1;
             }
         }

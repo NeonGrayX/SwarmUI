@@ -25,6 +25,21 @@ export class SwarmApiError extends Error {
     }
 }
 
+/** `errorId` on the error a dropped or refused socket raises, as opposed to one the server sent
+ *  down the socket. The connection failing says nothing about the work behind it. */
+export const SOCKET_FAILED = 'socket_failed';
+
+/** How a stream ended, which is the only way to tell a finished call from a lost connection. */
+export interface StreamClose {
+    /** True when this client closed the socket (the disposer ran), rather than the far end. */
+    local: boolean;
+    /** False when the socket never connected at all, so the call never reached the server. */
+    opened: boolean;
+    /** WebSocket close code; 1000 is a clean close, 1006 an abnormal one. */
+    code: number;
+    reason: string;
+}
+
 const SESSION_COOKIE = 'session_id';
 /** Retry ceiling, so a broken session can't loop forever. */
 const MAX_RETRY_DEPTH = 3;
@@ -176,37 +191,81 @@ export class SwarmApiClient {
         handlers: {
             onMessage: (data: T) => void;
             onError?: (error: SwarmApiError) => void;
-            onClose?: () => void;
+            onClose?: (info: StreamClose) => void;
         }
     ): () => void {
-        let closed = false;
-        const socket = new WebSocket(this.wsUrl(route));
+        let local = false;
+        let current: WebSocket | null = null;
 
-        socket.onopen = () => {
-            socket.send(JSON.stringify({ ...body, session_id: this.session.id }));
+        const open = (depth: number): void => {
+            let opened = false;
+            /** Set once this socket's ending has been accounted for, whether that was by reporting
+             *  it to the caller or by replacing the socket ourselves. */
+            let settled = false;
+            const socket = new WebSocket(this.wsUrl(route));
+            current = socket;
+
+            socket.onopen = () => {
+                opened = true;
+                socket.send(JSON.stringify({ ...body, session_id: this.session.id }));
+            };
+            socket.onmessage = event => {
+                const data = JSON.parse(event.data) as T & ApiError;
+                // A lapsed session (a server restart is the usual cause) is refused before the
+                // route runs at all (API.cs:114), so nothing was started and reconnecting with a
+                // fresh session is invisible to the caller - and far better than reporting a
+                // failure the user can only fix by reloading the page.
+                if (data.error_id === 'invalid_session_id' && !local && depth < MAX_RETRY_DEPTH) {
+                    settled = true;
+                    socket.close();
+                    this.session.clear();
+                    this.session
+                        .acquire(this, true)
+                        .then(() => {
+                            // Disposed while we were fetching a session: the caller is owed the
+                            // close it would have got had the socket still been open.
+                            if (local) {
+                                handlers.onClose?.({ local: true, opened, code: 1000, reason: '' });
+                                return;
+                            }
+                            open(depth + 1);
+                        })
+                        .catch(() => {
+                            handlers.onError?.(new SwarmApiError(route, t('api.socketFailed'), SOCKET_FAILED));
+                            handlers.onClose?.({ local: false, opened: false, code: 1006, reason: '' });
+                        });
+                    return;
+                }
+                if (data.error || data.error_id) {
+                    const message = data.error ?? t('api.streamFailed', { id: data.error_id ?? '' });
+                    handlers.onError?.(new SwarmApiError(route, message, data.error_id));
+                    return;
+                }
+                handlers.onMessage(data);
+            };
+            // A transport-level failure is not a failure of whatever the stream was doing - the
+            // work may well be continuing on the server - so it is tagged for callers that care,
+            // and always followed by `onclose`, which is where the caller decides what it meant.
+            socket.onerror = () => {
+                if (!local && !settled) {
+                    handlers.onError?.(new SwarmApiError(route, t('api.socketFailed'), SOCKET_FAILED));
+                }
+            };
+            socket.onclose = event => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                handlers.onClose?.({ local, opened, code: event.code, reason: event.reason });
+            };
         };
-        socket.onmessage = event => {
-            const data = JSON.parse(event.data) as T & ApiError;
-            if (data.error || data.error_id) {
-                const message = data.error ?? t('api.streamFailed', { id: data.error_id ?? '' });
-                handlers.onError?.(new SwarmApiError(route, message, data.error_id));
-                return;
-            }
-            handlers.onMessage(data);
-        };
-        socket.onerror = () => {
-            if (!closed) {
-                handlers.onError?.(new SwarmApiError(route, t('api.socketFailed')));
-            }
-        };
-        socket.onclose = () => {
-            closed = true;
-            handlers.onClose?.();
-        };
+
+        open(0);
 
         return () => {
-            closed = true;
-            if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+            local = true;
+            const socket = current;
+            if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
                 socket.close();
             }
         };

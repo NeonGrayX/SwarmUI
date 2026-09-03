@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ImageIcon, Info, Pencil, Scissors } from 'lucide-react';
 import { imageUrl, useGenerateStore } from '@/generate/store';
+import { DisconnectedNotice } from './DisconnectedNotice';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
 import { useOpenEditor } from '@/editor/useOpenEditor';
 import { useVideoEditor } from '../video/useVideoEditor';
@@ -66,6 +67,10 @@ export function Canvas() {
                         {error}
                     </div>
                 )}
+
+                {/* Deliberately not styled as an error: the run itself is most likely fine, and
+                    the images it is still producing will be waiting in the history. */}
+                <DisconnectedNotice className="absolute inset-x-4 top-4 z-10" />
 
                 {src ? (
                     kind === 'image' ? (

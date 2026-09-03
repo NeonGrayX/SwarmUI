@@ -3,6 +3,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { imageUrl, useGenerateStore } from '@/generate/store';
 import type { BatchItem } from '@/generate/types';
 import { OutputThumbnail } from '../ui/OutputMedia';
+import { DisconnectedNotice } from './DisconnectedNotice';
 import { useTranslation } from '@/i18n';
 
 /** The batch strip: one tile per image in the run, with live progress. */
@@ -70,6 +71,7 @@ export function BatchRail() {
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-2">
+                <DisconnectedNotice className="mb-2" />
                 {visible.length === 0 ? (
                     <p className="px-1 py-4 text-center text-xs text-fg-soft">
                         {t('batch.empty')}
@@ -93,18 +95,41 @@ export function BatchRail() {
     );
 }
 
+/** Message identifier for what became of a slot, or null while it is still working - in which
+ *  case the tile shows its progress instead. */
+function outcomeKey(item: BatchItem): string | null {
+    switch (item.status) {
+        case 'failed':
+            return 'batch.failed';
+        case 'cancelled':
+            return 'batch.cancelled';
+        // Not a failure: the server carries on generating through a dropped connection, so this
+        // slot's image is most likely finished and sitting in the history.
+        case 'disconnected':
+            return 'batch.disconnected';
+        default:
+            return null;
+    }
+}
+
 function BatchTile(props: { item: BatchItem; active: boolean; onSelect: () => void }) {
     const { t } = useTranslation();
     const { item } = props;
     const src = imageUrl(item.src);
     const percent = Math.round((item.overallPercent ?? 0) * 100);
+    const outcome = outcomeKey(item);
 
     return (
         <button
             type="button"
             onClick={props.onSelect}
             aria-current={props.active ? 'true' : undefined}
-            title={item.error ?? t('batch.imageNumber', { index: item.batchIndex })}
+            title={
+                item.error ??
+                (item.status === 'disconnected'
+                    ? t('batch.disconnectedHint')
+                    : t('batch.imageNumber', { index: item.batchIndex }))
+            }
             className="relative aspect-square overflow-hidden rounded border transition-colors"
             style={{
                 borderColor: props.active ? 'var(--emphasis)' : 'var(--light-border)',
@@ -120,7 +145,15 @@ function BatchTile(props: { item: BatchItem; active: boolean; onSelect: () => vo
                 />
             ) : (
                 <span className="flex h-full items-center justify-center text-[10px] text-fg-soft">
-                    {item.status === 'failed' ? t('batch.failed') : `${percent}%`}
+                    {outcome ? t(outcome) : `${percent}%`}
+                </span>
+            )}
+
+            {/* A slot that stopped mid-run keeps whatever preview it had reached, so the outcome
+                has to be said over the top of it rather than in place of it. */}
+            {src && outcome && (
+                <span className="absolute inset-x-0 bottom-0 bg-[color-mix(in_srgb,black_60%,transparent)] py-0.5 text-center text-[10px] text-white">
+                    {t(outcome)}
                 </span>
             )}
 

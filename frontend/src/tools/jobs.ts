@@ -91,11 +91,15 @@ export const useJobStore = create<JobStore>((set, get) => ({
                 patch({ status: 'failed', error: error.message });
                 appendLog(t('jobs.errorLine', { error: error.message }));
             },
-            onClose: () => {
+            onClose: info => {
                 const job = get().jobs.find(j => j.id === id);
                 if (job?.status === 'running') {
-                    // The socket closing without a success message means it ended early.
-                    patch({ status: 'failed', error: t('jobs.connectionClosed') });
+                    // The socket closing without a success message means it ended early - either
+                    // because it never reached the server, or because it stopped part way.
+                    patch({
+                        status: 'failed',
+                        error: info.opened ? t('jobs.connectionClosed') : t('api.socketFailed')
+                    });
                 }
             }
         });
