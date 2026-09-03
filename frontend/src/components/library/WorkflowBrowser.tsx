@@ -9,6 +9,7 @@ import { useWorkspaceHandoffStore } from '@/generate/handoff';
 import { useWorkflowStars } from '@/library/stars';
 import type { ViewMode } from '@/library/types';
 import { BrowserToolbar, EmptyState, StarButton } from './BrowserChrome';
+import { WorkflowDetailSheet } from './WorkflowDetailSheet';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useContextMenu, type LongPressHandlers, type MenuAction } from '../ui/ContextMenu';
@@ -33,6 +34,9 @@ export function WorkflowBrowser() {
     const [view, setView] = useState<ViewMode>('grid');
     const [reverse, setReverse] = useState(false);
     const [starredOnly, setStarredOnly] = useState(false);
+    // By name rather than by entry, so a refreshed list feeds the sheet its current description
+    // and preview rather than the copy that happened to be on screen when it was clicked.
+    const [selected, setSelected] = useState<string | null>(null);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
     const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
     const [flash, setFlash] = useState<string | null>(null);
@@ -68,6 +72,7 @@ export function WorkflowBrowser() {
 
     const ids = useMemo(() => ordered.map(workflow => workflow.name), [ordered]);
     const selection = useSelection(ids);
+    const detail = workflows.find(workflow => workflow.name === selected) ?? null;
 
     /** Hands a workflow to the workspace it belongs in and goes there.
      *
@@ -82,6 +87,11 @@ export function WorkflowBrowser() {
     async function deleteWorkflow(name: string): Promise<void> {
         try {
             await api.post('ComfyDeleteWorkflow', { name });
+            // Only once it is really gone: a delete the server refused leaves the sheet up, with
+            // the reason for the refusal in the flash beside it.
+            if (name === selected) {
+                setSelected(null);
+            }
             await queryClient.invalidateQueries({ queryKey: comfyKeys.workflows });
         }
         catch (error: unknown) {
@@ -101,6 +111,7 @@ export function WorkflowBrowser() {
     /** Everything one workflow can do, for its right-click menu. */
     function actionsFor(workflow: SavedWorkflow): MenuAction[] {
         const actions: MenuAction[] = [
+            { label: t('modelBrowser.action.details'), onSelect: () => setSelected(workflow.name) },
             {
                 label: workflow.enable_in_simple ? t('workflows.open') : t('workflows.openInEditor'),
                 onSelect: () => open(workflow)
@@ -122,110 +133,124 @@ export function WorkflowBrowser() {
     }
 
     return (
-        <div className="relative flex h-full min-h-0 flex-col">
-            <BrowserToolbar
-                search={search}
-                onSearch={setSearch}
-                view={view}
-                onView={setView}
-                reverse={reverse}
-                onReverse={setReverse}
-                count={ordered.length}
-                total={workflows.length}
-            >
-                <button
-                    type="button"
-                    onClick={() => setStarredOnly(!starredOnly)}
-                    aria-pressed={starredOnly}
-                    title={t('browser.starredOnlyHint')}
-                    className={[
-                        'flex items-center gap-1 rounded border px-2 py-1 text-xs',
-                        starredOnly
-                            ? 'border-transparent bg-[var(--emphasis)] text-[var(--sw-accent-fg)]'
-                            : 'border-default text-fg hover:bg-[var(--sw-hover)]'
-                    ].join(' ')}
+        <div className="relative flex h-full min-h-0">
+            <div className="flex min-w-0 flex-1 flex-col">
+                <BrowserToolbar
+                    search={search}
+                    onSearch={setSearch}
+                    view={view}
+                    onView={setView}
+                    reverse={reverse}
+                    onReverse={setReverse}
+                    count={ordered.length}
+                    total={workflows.length}
                 >
-                    <Star size={13} aria-hidden fill={starredOnly ? 'currentColor' : 'none'} />
-                    {t('browser.starredOnly')}
-                </button>
-            </BrowserToolbar>
+                    <button
+                        type="button"
+                        onClick={() => setStarredOnly(!starredOnly)}
+                        aria-pressed={starredOnly}
+                        title={t('browser.starredOnlyHint')}
+                        className={[
+                            'flex items-center gap-1 rounded border px-2 py-1 text-xs',
+                            starredOnly
+                                ? 'border-transparent bg-[var(--emphasis)] text-[var(--sw-accent-fg)]'
+                                : 'border-default text-fg hover:bg-[var(--sw-hover)]'
+                        ].join(' ')}
+                    >
+                        <Star size={13} aria-hidden fill={starredOnly ? 'currentColor' : 'none'} />
+                        {t('browser.starredOnly')}
+                    </button>
+                </BrowserToolbar>
 
-            {selection.count > 0 && (
-                <SelectionBar
-                    count={selection.count}
-                    total={ordered.length}
-                    onSelectAll={selection.selectAll}
-                    onClear={selection.clear}
-                >
-                    {canDelete && (
-                        <SelectionButton
-                            label={t('common.delete')}
-                            destructive
-                            onClick={() => setPendingBulkDelete(true)}
-                        >
-                            <Trash2 size={13} aria-hidden />
-                        </SelectionButton>
-                    )}
-                </SelectionBar>
-            )}
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                {saved.isPending ? (
-                    <EmptyState title={t('workflows.loading')} />
-                ) : saved.isError ? (
-                    <EmptyState
-                        title={t('workflows.loadFailed')}
-                        hint={saved.error instanceof Error ? saved.error.message : undefined}
-                    />
-                ) : ordered.length === 0 ? (
-                    <EmptyState
-                        title={
-                            workflows.length === 0
-                                ? t('workflows.none')
-                                : search
-                                  ? t('workflows.noSearchMatches', { search: search.trim() })
-                                  : t('workflows.noneStarred')
-                        }
-                        hint={workflows.length === 0 ? t('workflows.noneHint') : undefined}
-                    />
-                ) : view === 'grid' ? (
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3">
-                        {ordered.map(workflow => (
-                            <Card
-                                key={workflow.name}
-                                workflow={workflow}
-                                starred={stars.isStarred(workflow.name)}
-                                checked={selection.isSelected(workflow.name)}
-                                onCheck={() => selection.toggle(workflow.name)}
-                                onStar={() => stars.toggle(workflow.name)}
-                                onOpen={event =>
-                                    selection.click(event, workflow.name, () => open(workflow))
-                                }
-                                onMenu={event => contextMenu.open(event, actionsFor(workflow))}
-                                longPress={contextMenu.touch(actionsFor(workflow))}
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <ul className="divide-y divide-[var(--light-border)]">
-                        {ordered.map(workflow => (
-                            <Row
-                                key={workflow.name}
-                                workflow={workflow}
-                                starred={stars.isStarred(workflow.name)}
-                                checked={selection.isSelected(workflow.name)}
-                                onCheck={() => selection.toggle(workflow.name)}
-                                onStar={() => stars.toggle(workflow.name)}
-                                onOpen={event =>
-                                    selection.click(event, workflow.name, () => open(workflow))
-                                }
-                                onMenu={event => contextMenu.open(event, actionsFor(workflow))}
-                                longPress={contextMenu.touch(actionsFor(workflow))}
-                            />
-                        ))}
-                    </ul>
+                {selection.count > 0 && (
+                    <SelectionBar
+                        count={selection.count}
+                        total={ordered.length}
+                        onSelectAll={selection.selectAll}
+                        onClear={selection.clear}
+                    >
+                        {canDelete && (
+                            <SelectionButton
+                                label={t('common.delete')}
+                                destructive
+                                onClick={() => setPendingBulkDelete(true)}
+                            >
+                                <Trash2 size={13} aria-hidden />
+                            </SelectionButton>
+                        )}
+                    </SelectionBar>
                 )}
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                    {saved.isPending ? (
+                        <EmptyState title={t('workflows.loading')} />
+                    ) : saved.isError ? (
+                        <EmptyState
+                            title={t('workflows.loadFailed')}
+                            hint={saved.error instanceof Error ? saved.error.message : undefined}
+                        />
+                    ) : ordered.length === 0 ? (
+                        <EmptyState
+                            title={
+                                workflows.length === 0
+                                    ? t('workflows.none')
+                                    : search
+                                      ? t('workflows.noSearchMatches', { search: search.trim() })
+                                      : t('workflows.noneStarred')
+                            }
+                            hint={workflows.length === 0 ? t('workflows.noneHint') : undefined}
+                        />
+                    ) : view === 'grid' ? (
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3">
+                            {ordered.map(workflow => (
+                                <Card
+                                    key={workflow.name}
+                                    workflow={workflow}
+                                    starred={stars.isStarred(workflow.name)}
+                                    checked={selection.isSelected(workflow.name)}
+                                    onCheck={() => selection.toggle(workflow.name)}
+                                    onStar={() => stars.toggle(workflow.name)}
+                                    onOpen={event =>
+                                        selection.click(event, workflow.name, () => setSelected(workflow.name))
+                                    }
+                                    onMenu={event => contextMenu.open(event, actionsFor(workflow))}
+                                    longPress={contextMenu.touch(actionsFor(workflow))}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <ul className="divide-y divide-[var(--light-border)]">
+                            {ordered.map(workflow => (
+                                <Row
+                                    key={workflow.name}
+                                    workflow={workflow}
+                                    starred={stars.isStarred(workflow.name)}
+                                    checked={selection.isSelected(workflow.name)}
+                                    onCheck={() => selection.toggle(workflow.name)}
+                                    onStar={() => stars.toggle(workflow.name)}
+                                    onOpen={event =>
+                                        selection.click(event, workflow.name, () => setSelected(workflow.name))
+                                    }
+                                    onMenu={event => contextMenu.open(event, actionsFor(workflow))}
+                                    longPress={contextMenu.touch(actionsFor(workflow))}
+                                />
+                            ))}
+                        </ul>
+                    )}
+                </div>
             </div>
+
+            {detail && (
+                <WorkflowDetailSheet
+                    workflow={detail}
+                    starred={stars.isStarred(detail.name)}
+                    canDelete={canDelete}
+                    onOpen={() => open(detail)}
+                    onDelete={() => setPendingDelete(detail.name)}
+                    onStar={() => stars.toggle(detail.name)}
+                    onClose={() => setSelected(null)}
+                />
+            )}
 
             <ConfirmDialog
                 open={pendingDelete !== null}

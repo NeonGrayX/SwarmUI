@@ -12,12 +12,13 @@ import { usePermission } from '@/api/permissions';
 import { cleanModelName } from '@/params/schema';
 import { fetchObjectInfo, graphToPrompt, type ComfyGraph, type ComfyPrompt } from './bridge';
 import { buildComfyParams, type ComfyWorkflowInput } from './params';
-import { fetchSavedWorkflow, savedWorkflowInput } from './saved';
+import { fetchSavedWorkflow, savedWorkflowInput, type SavedWorkflowData } from './saved';
 import { useComfyWorkflowStore, type ComfyWorkflowSource } from './store';
 
 export const comfyKeys = {
     objectInfo: ['comfy-object-info'] as const,
-    workflows: ['comfy-workflows'] as const
+    workflows: ['comfy-workflows'] as const,
+    workflow: (name: string) => ['comfy-workflow', name] as const
 };
 
 /** One entry of the saved workflow library (ComfyListWorkflows). */
@@ -55,6 +56,19 @@ export function useSavedWorkflows(enabled: boolean): UseQueryResult<{ workflows:
         queryKey: comfyKeys.workflows,
         queryFn: () => api.post<{ workflows: SavedWorkflow[] }>('ComfyListWorkflows', {}),
         enabled
+    });
+}
+
+/** One saved workflow, read in full.
+ *
+ * ComfyListWorkflows carries only what a tile needs, so anything about the graph itself - how many
+ * nodes it has, which controls it declares - has to be read back per workflow. Only the library's
+ * detail view asks for that, so it is fetched when one opens rather than alongside the list. */
+export function useSavedWorkflow(name: string | null): UseQueryResult<SavedWorkflowData> {
+    return useQuery({
+        queryKey: comfyKeys.workflow(name ?? ''),
+        queryFn: () => fetchSavedWorkflow(name ?? ''),
+        enabled: name !== null
     });
 }
 
