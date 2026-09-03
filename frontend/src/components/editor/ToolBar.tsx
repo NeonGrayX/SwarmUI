@@ -1,5 +1,5 @@
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { useEditorStore, useEditorVersion } from '@/editor/store';
+import { useEditorEngine, useEditorVersion } from '@/editor/store';
 import { useTranslation } from '@/i18n';
 
 /** The vertical tool strip down the left edge.
@@ -12,7 +12,7 @@ import { useTranslation } from '@/i18n';
  * 44px of width this costs. */
 export function ToolBar(props: { compact?: boolean }) {
     const { t } = useTranslation();
-    const engine = useEditorStore(s => s.engine);
+    const engine = useEditorEngine();
     useEditorVersion();
     const tools = engine.getToolInfos().filter(tool => !tool.hidden);
     const activeId = engine.optionsTool.id;

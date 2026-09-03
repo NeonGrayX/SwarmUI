@@ -1,5 +1,5 @@
 import type { ToolOption } from '@/editor/types';
-import { useEditorStore, useEditorVersion } from '@/editor/store';
+import { useEditorEngine, useEditorVersion } from '@/editor/store';
 import { ColorField } from './ColorField';
 import { useTranslation } from '@/i18n';
 
@@ -7,7 +7,7 @@ import { useTranslation } from '@/i18n';
  *  data (`EditorTool.getOptions`) and this renders them, so every tool's options are themed,
  *  translated and keyboard-reachable without arranging for it individually. */
 export function ToolOptions() {
-    const engine = useEditorStore(s => s.engine);
+    const engine = useEditorEngine();
     useEditorVersion();
     const tool = engine.optionsTool;
     const options = tool.getOptions();
@@ -34,7 +34,7 @@ export function ToolOptions() {
 
 function OptionControl(props: { option: ToolOption; onChange: (value: string | number | boolean) => void }) {
     const { t } = useTranslation();
-    const engine = useEditorStore(s => s.engine);
+    const engine = useEditorEngine();
     const { option } = props;
 
     if (option.kind === 'color') {

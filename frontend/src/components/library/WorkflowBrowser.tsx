@@ -214,7 +214,7 @@ export function WorkflowBrowser() {
                                         selection.click(event, workflow.name, () => setSelected(workflow.name))
                                     }
                                     onMenu={event => contextMenu.open(event, actionsFor(workflow))}
-                                    longPress={contextMenu.touch(actionsFor(workflow))}
+                                    longPress={contextMenu.touch(() => actionsFor(workflow))}
                                 />
                             ))}
                         </div>
@@ -232,7 +232,7 @@ export function WorkflowBrowser() {
                                         selection.click(event, workflow.name, () => setSelected(workflow.name))
                                     }
                                     onMenu={event => contextMenu.open(event, actionsFor(workflow))}
-                                    longPress={contextMenu.touch(actionsFor(workflow))}
+                                    longPress={contextMenu.touch(() => actionsFor(workflow))}
                                 />
                             ))}
                         </ul>

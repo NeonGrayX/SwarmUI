@@ -23,6 +23,7 @@ import {
     PickerThumb,
     PickerViewToggle
 } from './PickerParts';
+import { useIncremental } from '../ui/useIncremental';
 import type { ViewMode } from '@/library/types';
 import { t as translate, useTranslation } from '@/i18n';
 
@@ -243,12 +244,24 @@ export function ModelOptionList(props: {
             }
             return option.name.toLowerCase().includes(query) ? 2 : 3;
         };
-        return [...shown].sort(
-            (a, b) => rank(a) - rank(b) || Number(b.starred) - Number(a.starred) || a.name.localeCompare(b.name)
-        );
+        // Ranked once per option rather than inside the comparator, which would ask for it
+        // O(n log n) times and lowercase two names on every call.
+        return shown
+            .map(option => ({ option, rank: rank(option) }))
+            .sort(
+                (a, b) =>
+                    a.rank - b.rank ||
+                    Number(b.option.starred) - Number(a.option.starred) ||
+                    a.option.name.localeCompare(b.option.name)
+            )
+            .map(entry => entry.option);
     }, [preCompat, fits, current.compatClass, search]);
 
     const hiddenByCompat = preCompat.length - matches.length;
+
+    // A model root of several thousand files would otherwise mount that many rows the moment the
+    // picker opens, on top of cmdk's own per-item bookkeeping.
+    const shown = useIncremental(matches);
 
     const archOptions = useMemo(() => {
         const seen = new Map<string, string>();
@@ -347,7 +360,7 @@ export function ModelOptionList(props: {
                 )}
 
                 <PickerGroup view={prefs.view}>
-                    {matches.map(option => {
+                    {shown.visible.map(option => {
                         const incompatible =
                             usesCompat &&
                             current.compatClass !== null &&
@@ -371,6 +384,7 @@ export function ModelOptionList(props: {
                         );
                     })}
                 </PickerGroup>
+                {shown.endRef && <div ref={shown.endRef} className="h-4" aria-hidden />}
             </Command.List>
 
             <div className="flex items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">

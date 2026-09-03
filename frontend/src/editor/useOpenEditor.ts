@@ -9,12 +9,19 @@ import { useParamSchema } from '@/params/schema';
 import { defaultValue, useParamStore } from '@/params/store';
 import { useEditorStore } from './store';
 
+/** The editor's chrome, fetched alongside the engine rather than after it: `ImageEditor` is
+ *  lazy at its mount point in the workspace, and both chunks are wanted at the same moment. */
+function preloadEditorUI(): void {
+    void import('@/components/editor/ImageEditor');
+}
+
 export interface OpenEditor {
     /** False when this server's parameter set has no init image, so an edit could not be used. */
     available: boolean;
     editImage: (src: string, name?: string) => Promise<void>;
-    /** Opens a blank white canvas at the current width/height. */
-    newCanvas: () => void;
+    /** Opens a blank white canvas at the current width/height. Async because the editor's engine
+     *  is fetched on first use; both openers resolve once it is on screen. */
+    newCanvas: () => Promise<void>;
 }
 
 export function useOpenEditor(): OpenEditor {
@@ -38,8 +45,8 @@ export function useOpenEditor(): OpenEditor {
 
     const editImage = useCallback(
         async (src: string, name?: string) => {
-            await openWithImage(src, name);
-            const engine = useEditorStore.getState().engine;
+            preloadEditorUI();
+            const engine = await openWithImage(src, name);
             const store = useParamStore.getState();
             store.setValue('width', engine.realWidth);
             store.setValue('height', engine.realHeight);
@@ -51,7 +58,8 @@ export function useOpenEditor(): OpenEditor {
     );
 
     const newCanvas = useCallback(() => {
-        openBlank(sizeOf('width', 1024), sizeOf('height', 1024));
+        preloadEditorUI();
+        return openBlank(sizeOf('width', 1024), sizeOf('height', 1024));
     }, [openBlank, sizeOf]);
 
     return { available: Boolean(schema?.byId.get('initimage')), editImage, newCanvas };

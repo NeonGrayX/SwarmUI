@@ -25,7 +25,12 @@ import { DownloadModelDialog } from './DownloadModelDialog';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { PromptDialog } from '../ui/PromptDialog';
 import { useContextMenu, type LongPressHandlers, type MenuAction } from '../ui/ContextMenu';
+import { useIncremental } from '../ui/useIncremental';
 import { useTranslation } from '@/i18n';
+
+/** Stands in for a listing that has not arrived, with one identity rather than a fresh `[]` per
+ *  render - everything downstream of it is memoized on the array. */
+const EMPTY: (ModelCard | WildcardCard)[] = [];
 
 /** One browser for every model-family asset plus wildcards. The Library destination picks the
  *  subtype; everything else about the screen is shared. */
@@ -55,9 +60,13 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
     // Wildcards are written here rather than fetched from anywhere, so they get no downloader.
     const canDownload = usePermission('download_models') && props.subtype !== 'Wildcards';
 
-    const starred = userData.data?.starred_models?.[props.subtype] ?? [];
+    // A set rather than the raw list, and memoized: `includes` per card is quadratic over a
+    // library of a few thousand models, and the `?? []` fallback would otherwise be a fresh array
+    // on every render, re-running the sort below with it.
+    const starredNames = userData.data?.starred_models?.[props.subtype];
+    const starred = useMemo(() => new Set(starredNames ?? []), [starredNames]);
 
-    const files = models.data?.files ?? [];
+    const files = models.data?.files ?? EMPTY;
     const filtered = useMemo(() => {
         const query = search.trim().toLowerCase();
         if (!query) {
@@ -71,10 +80,13 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
     }, [files, search]);
 
     // Starred first, then the server's ordering.
-    const ordered = useMemo(() => {
-        const starSet = new Set(starred);
-        return [...filtered].sort((a, b) => Number(starSet.has(b.name)) - Number(starSet.has(a.name)));
-    }, [filtered, starred]);
+    const ordered = useMemo(
+        () => [...filtered].sort((a, b) => Number(starred.has(b.name)) - Number(starred.has(a.name))),
+        [filtered, starred]
+    );
+
+    // A model root of several thousand files is ordinary; draw it as it is scrolled through.
+    const shown = useIncremental(ordered);
 
     const ids = useMemo(() => ordered.map(file => file.name), [ordered]);
     const selection = useSelection(ids);
@@ -96,7 +108,7 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
         const actions: MenuAction[] = [
             { label: t('modelBrowser.action.details'), onSelect: () => setSelected(file) },
             {
-                label: starred.includes(file.name) ? t('common.unstar') : t('common.star'),
+                label: starred.has(file.name) ? t('common.unstar') : t('common.star'),
                 onSelect: () => toggleStar.mutate({ bucket: props.subtype, name: file.name })
             }
         ];
@@ -197,37 +209,38 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
                         />
                     ) : view === 'grid' ? (
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3">
-                            {ordered.map(file => (
+                            {shown.visible.map(file => (
                                 <Card
                                     key={file.name}
                                     file={file}
-                                    starred={starred.includes(file.name)}
+                                    starred={starred.has(file.name)}
                                     checked={selection.isSelected(file.name)}
                                     onCheck={() => selection.toggle(file.name)}
                                     onStar={() => toggleStar.mutate({ bucket: props.subtype, name: file.name })}
                                     onOpen={event => selection.click(event, file.name, () => setSelected(file))}
                                     onMenu={event => contextMenu.open(event, actionsFor(file))}
-                                    longPress={contextMenu.touch(actionsFor(file))}
+                                    longPress={contextMenu.touch(() => actionsFor(file))}
                                 />
                             ))}
                         </div>
                     ) : (
                         <ul className="divide-y divide-[var(--light-border)]">
-                            {ordered.map(file => (
+                            {shown.visible.map(file => (
                                 <Row
                                     key={file.name}
                                     file={file}
-                                    starred={starred.includes(file.name)}
+                                    starred={starred.has(file.name)}
                                     checked={selection.isSelected(file.name)}
                                     onCheck={() => selection.toggle(file.name)}
                                     onStar={() => toggleStar.mutate({ bucket: props.subtype, name: file.name })}
                                     onOpen={event => selection.click(event, file.name, () => setSelected(file))}
                                     onMenu={event => contextMenu.open(event, actionsFor(file))}
-                                    longPress={contextMenu.touch(actionsFor(file))}
+                                    longPress={contextMenu.touch(() => actionsFor(file))}
                                 />
                             ))}
                         </ul>
                     )}
+                    {shown.endRef && <div ref={shown.endRef} className="h-4" aria-hidden />}
                 </div>
             </div>
 

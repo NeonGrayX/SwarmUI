@@ -37,8 +37,11 @@ export interface LongPressHandlers {
 export interface ContextMenuHandle {
     /** `onContextMenu` handler for one item: opens the menu at the pointer with these actions. */
     open: (event: MouseEvent, items: MenuAction[]) => void;
-    /** Long-press equivalent, for touch screens. Spread onto the same element as `onContextMenu`. */
-    touch: (items: MenuAction[]) => LongPressHandlers;
+    /** Long-press equivalent, for touch screens. Spread onto the same element as `onContextMenu`.
+     *  Takes a thunk rather than the actions themselves: this is called once per entry per render
+     *  in listings thousands of entries long, and building a menu nobody has asked for is the
+     *  expensive half. */
+    touch: (items: () => MenuAction[]) => LongPressHandlers;
     /** Render once per browser, anywhere in its tree. */
     menu: ReactNode;
 }
@@ -157,10 +160,10 @@ export function useContextMenu(): ContextMenuHandle {
     /** Touch has no right-click, and iOS Safari does not synthesise `contextmenu` from a long press
      *  the way Android Chrome does, so on a phone this is the only route to rename and delete. */
     const touch = useCallback(
-        (items: MenuAction[]): LongPressHandlers => ({
+        (items: () => MenuAction[]): LongPressHandlers => ({
             onTouchStart: event => {
                 cancelPress();
-                if (items.length === 0 || event.touches.length !== 1) {
+                if (event.touches.length !== 1) {
                     return;
                 }
                 const { clientX, clientY } = event.touches[0];
@@ -169,10 +172,14 @@ export function useContextMenu(): ContextMenuHandle {
                     y: clientY,
                     timer: window.setTimeout(() => {
                         press.current = null;
+                        const actions = items();
+                        if (actions.length === 0) {
+                            return;
+                        }
                         opener.current = null;
                         dismissedOutside.current = false;
                         swallowTapAfterLongPress();
-                        setState({ x: clientX, y: clientY, items });
+                        setState({ x: clientX, y: clientY, items: actions });
                     }, LONG_PRESS_MS)
                 };
             },

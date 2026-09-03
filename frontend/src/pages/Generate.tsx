@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { ParamForm } from '@/components/form/ParamForm';
@@ -14,7 +14,6 @@ import { SimpleWorkflowBar } from '@/components/generate/SimpleWorkflowBar';
 import { useSimpleWorkflowSession, useSimpleWorkflowStore } from '@/comfy/simple';
 import { useWorkspaceHandoffStore, type WorkspaceMode } from '@/generate/handoff';
 import { usePermission } from '@/api/permissions';
-import { ImageEditor } from '@/components/editor/ImageEditor';
 import { useEditorStore } from '@/editor/store';
 import { PRESETS, useLayoutStore, type LayoutPreset } from '@/generate/layout';
 import { useGenerateStore } from '@/generate/store';
@@ -260,13 +259,28 @@ function StackedWorkspace(props: { footer: React.ReactNode }) {
     );
 }
 
+/** The editor's chrome loads with the engine behind it, on the first open - see `useOpenEditor`,
+ *  which starts this fetch alongside the engine's so the two arrive together. */
+const ImageEditor = lazy(() =>
+    import('@/components/editor/ImageEditor').then(module => ({ default: module.ImageEditor }))
+);
+
 /** What fills the middle column: the image editor or the plain viewer.
  *
  * The editor replaces the viewer rather than opening beside it - it already carries a viewer's
  * worth of pan and zoom, so a second copy of the same image would only cost width. */
 function CenterPane() {
     const editorOpen = useEditorStore(s => s.open);
-    return editorOpen ? <ImageEditor /> : <Canvas />;
+    if (!editorOpen) {
+        return <Canvas />;
+    }
+    // The viewer stays put for the frame or two the editor's chunk may still need, rather than
+    // blanking the middle of the screen.
+    return (
+        <Suspense fallback={<Canvas />}>
+            <ImageEditor />
+        </Suspense>
+    );
 }
 
 /** One stacked pane. Hidden rather than unmounted, so switching tabs never costs state. */

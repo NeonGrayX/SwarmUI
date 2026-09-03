@@ -22,6 +22,7 @@ import { OutputPlayer, OutputThumbnail, outputKind } from '../ui/OutputMedia';
 import { useVideoEditor } from '../video/useVideoEditor';
 import { MetadataView } from '../ui/MetadataView';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
+import { useIncremental } from '../ui/useIncremental';
 import { useTranslation } from '@/i18n';
 
 /** One image, pinned to the folder it was listed in.
@@ -35,6 +36,10 @@ interface PinnedImage {
     full: string;
     starred: boolean;
 }
+
+/** Stands in for a listing that has not arrived, with one identity rather than a fresh `[]` per
+ *  render - everything derived from it below is memoized on the array. */
+const EMPTY: ImageEntry[] = [];
 
 /** Joins the browsed folder with a path-relative src from ListImages. */
 function joinPath(folder: string, src: string): string {
@@ -98,11 +103,21 @@ export function HistoryBrowser() {
     // current folder has to be joined back on. At root that is a no-op.
     const urlFor = (src: string) => urlForPath(joinPath(path, src));
 
-    const files = images.data?.files ?? [];
+    const files = images.data?.files ?? EMPTY;
+    // Every entry carries its whole generation metadata as a JSON string, and all the listing
+    // wants from it is the star. Parsed once per listing here rather than once per card per
+    // render, which on a folder of a few thousand images was megabytes of JSON per keystroke.
+    const starredSrcs = useMemo(
+        () => new Set(files.filter(file => isImageStarred(file.metadata)).map(file => file.src)),
+        [files]
+    );
     const filtered = useMemo(() => {
         const query = search.trim().toLowerCase();
         return query ? files.filter(f => f.src.toLowerCase().includes(query)) : files;
     }, [files, search]);
+
+    // An output folder is routinely thousands of images; draw it as it is scrolled through.
+    const shown = useIncremental(filtered);
 
     const ids = useMemo(() => filtered.map(file => file.src), [filtered]);
     const selection = useSelection(ids);
@@ -320,11 +335,11 @@ export function HistoryBrowser() {
                         />
                     ) : view === 'grid' ? (
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
-                            {filtered.map(file => (
+                            {shown.visible.map(file => (
                                 <div
                                     key={file.src}
                                     onContextMenu={event => contextMenu.open(event, actionsFor(file))}
-                                    {...contextMenu.touch(actionsFor(file))}
+                                    {...contextMenu.touch(() => actionsFor(file))}
                                     className={[
                                         'group relative aspect-square overflow-hidden rounded border bg-surface-sunken',
                                         selection.isSelected(file.src)
@@ -357,7 +372,7 @@ export function HistoryBrowser() {
                                     </span>
                                     <span className="absolute right-1.5 top-1.5">
                                         <StarButton
-                                            starred={isImageStarred(file.metadata)}
+                                            starred={starredSrcs.has(file.src)}
                                             variant="overlay"
                                             onClick={() => star(joinPath(path, file.src))}
                                         />
@@ -367,11 +382,11 @@ export function HistoryBrowser() {
                         </div>
                     ) : (
                         <ul className="divide-y divide-[var(--light-border)]">
-                            {filtered.map(file => (
+                            {shown.visible.map(file => (
                                 <li
                                     key={file.src}
                                     onContextMenu={event => contextMenu.open(event, actionsFor(file))}
-                                    {...contextMenu.touch(actionsFor(file))}
+                                    {...contextMenu.touch(() => actionsFor(file))}
                                     className="group flex items-center gap-3"
                                 >
                                     <SelectionCheckbox
@@ -380,7 +395,7 @@ export function HistoryBrowser() {
                                         label={t('browser.selectEntry', { name: file.src })}
                                     />
                                     <StarButton
-                                        starred={isImageStarred(file.metadata)}
+                                        starred={starredSrcs.has(file.src)}
                                         variant="plain"
                                         onClick={() => star(joinPath(path, file.src))}
                                     />
@@ -403,6 +418,7 @@ export function HistoryBrowser() {
                             ))}
                         </ul>
                     )}
+                    {shown.endRef && <div ref={shown.endRef} className="h-4" aria-hidden />}
                 </div>
             </div>
 

@@ -7,7 +7,7 @@ import type { GenMessage } from '@/generate/types';
 import { imageUrl } from '@/generate/store';
 import { useGenInput } from '@/generate/input';
 import { useParamStore } from '@/params/store';
-import { useEditorStore, useEditorVersion } from '@/editor/store';
+import { useEditorEngine, useEditorStore, useEditorVersion } from '@/editor/store';
 import { useIsCompact } from '@/shell/viewport';
 import { ToolBar } from './ToolBar';
 import { ToolOptions } from './ToolOptions';
@@ -24,7 +24,7 @@ import { useTranslation } from '@/i18n';
  * services the engine cannot reach on its own - the API, the parameter store, the prompt. */
 export function ImageEditor() {
     const { t } = useTranslation();
-    const engine = useEditorStore(s => s.engine);
+    const engine = useEditorEngine();
     const close = useEditorStore(s => s.close);
     const sourceName = useEditorStore(s => s.sourceName);
     useEditorVersion();
@@ -119,7 +119,7 @@ type NoticeSetter = (notice: { key: string; tone: 'ok' | 'error' } | null) => vo
  * schema and the SAM2 tools must send *current* parameters, not the ones in force when the editor
  * opened. Assigning a plain object costs nothing; the engine only reads it when it fires. */
 function useEditorHost(setNotice: NoticeSetter): void {
-    const engine = useEditorStore(s => s.engine);
+    const engine = useEditorEngine();
     const session = useSession();
     const status = useCurrentStatus(session.isSuccess);
     const buildGenInput = useGenInput();
@@ -175,7 +175,7 @@ function useEditorHost(setNotice: NoticeSetter): void {
 /** The overflow menu: exports, clipboard, and the whole-image autosegment. */
 function OptionsMenu(props: { onNotice: NoticeSetter }) {
     const { t } = useTranslation();
-    const engine = useEditorStore(s => s.engine);
+    const engine = useEditorEngine();
     const buildGenInput = useGenInput();
 
     function download(dataUrl: string, name: string) {

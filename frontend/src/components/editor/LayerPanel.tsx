@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { ChevronDown, ChevronUp, ImagePlus, Layers as LayersIcon, SquarePlus } from 'lucide-react';
 import type { EditorLayer } from '@/editor/layer';
-import { useEditorStore, useEditorVersion } from '@/editor/store';
+import { useEditorEngine, useEditorVersion } from '@/editor/store';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
 import { useTranslation } from '@/i18n';
 
@@ -23,7 +23,7 @@ export function LayerPanel(props: { orientation: 'column' | 'strip' }) {
 /** Everything the two layouts share: the ordered list, the per-layer menu, drag reordering. */
 function useLayerList() {
     const { t } = useTranslation();
-    const engine = useEditorStore(s => s.engine);
+    const engine = useEditorEngine();
     useEditorVersion();
     const menu = useContextMenu();
     const [dragging, setDragging] = useState<EditorLayer | null>(null);
@@ -94,7 +94,7 @@ function useLayerList() {
             onDragOver: (e: React.DragEvent) => e.preventDefault(),
             onDrop: (e: React.DragEvent) => onDrop(e, layer, axis),
             onContextMenu: (e: React.MouseEvent) => menu.open(e, actionsFor(layer)),
-            ...menu.touch(actionsFor(layer))
+            ...menu.touch(() => actionsFor(layer))
         };
     }
 
@@ -104,7 +104,7 @@ function useLayerList() {
 /** The two add buttons, which sit in the header of either layout. */
 function AddButtons() {
     const { t } = useTranslation();
-    const engine = useEditorStore(s => s.engine);
+    const engine = useEditorEngine();
     return (
         <>
             <IconButton label={t('editor.layer.addImage')} onClick={() => engine.addEmptyLayer()}>
@@ -120,7 +120,7 @@ function AddButtons() {
 /** Opacity for the layer in hand. */
 function OpacitySlider(props: { layer: EditorLayer; className?: string }) {
     const { t } = useTranslation();
-    const engine = useEditorStore(s => s.engine);
+    const engine = useEditorEngine();
     return (
         <label className={`flex items-center gap-1.5 text-[10px] text-fg-soft ${props.className ?? ''}`}>
             {t('editor.layer.opacity')}

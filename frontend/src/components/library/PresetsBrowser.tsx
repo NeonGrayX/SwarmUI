@@ -199,7 +199,7 @@ export function PresetsBrowser() {
                                             : 'border-default'
                                     ].join(' ')}
                                     onContextMenu={event => contextMenu.open(event, actionsFor(preset))}
-                                    {...contextMenu.touch(actionsFor(preset))}
+                                    {...contextMenu.touch(() => actionsFor(preset))}
                                 >
                                     <span className="absolute left-1.5 top-1.5 z-10">
                                         <SelectionCheckbox
@@ -275,7 +275,7 @@ export function PresetsBrowser() {
                                     key={preset.title}
                                     className="group flex items-center gap-3 py-2"
                                     onContextMenu={event => contextMenu.open(event, actionsFor(preset))}
-                                    {...contextMenu.touch(actionsFor(preset))}
+                                    {...contextMenu.touch(() => actionsFor(preset))}
                                 >
                                     <SelectionCheckbox
                                         checked={selection.isSelected(preset.title)}

@@ -264,7 +264,7 @@ function WorkflowOptionList(props: {
                             title: leafOf(workflow.name),
                             subtitle: folderOf(workflow.name),
                             onContextMenu: (event: React.MouseEvent) => props.menu.open(event, menuActions),
-                            longPress: props.menu.touch(menuActions)
+                            longPress: props.menu.touch(() => menuActions)
                         };
                         return prefs.view === 'grid' ? (
                             <PickerCard

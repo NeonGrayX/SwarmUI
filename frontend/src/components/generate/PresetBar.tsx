@@ -397,7 +397,7 @@ function PresetOptionList(props: {
                                     count: Object.keys(preset.param_map ?? {}).length
                                 }),
                             onContextMenu: (event: React.MouseEvent) => props.menu.open(event, menuActions),
-                            longPress: props.menu.touch(menuActions)
+                            longPress: props.menu.touch(() => menuActions)
                         };
                         return prefs.view === 'grid' ? (
                             <PickerCard
