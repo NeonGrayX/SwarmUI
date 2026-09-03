@@ -1,10 +1,13 @@
-import type { MouseEvent } from 'react';
+import type { ComponentProps, MouseEvent, ReactNode } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
+import * as Popover from '@radix-ui/react-popover';
 import { Command } from 'cmdk';
-import { Check, Grid3x3, ImageOff, List, Search, Star, X } from 'lucide-react';
+import { Check, ChevronDown, Grid3x3, ImageOff, List, Search, Star, X } from 'lucide-react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { LongPressHandlers } from '@/components/ui/ContextMenu';
 import type { ViewMode } from '@/library/types';
+import { useIsMobile, useVisibleViewport } from '@/shell/viewport';
 import { t as translate, useTranslation } from '@/i18n';
 
 /** The parts every "pick one from a big library" dropdown is built from: the search box, the
@@ -53,6 +56,154 @@ export function usePickerPrefs(name: string): PickerPrefs {
         prefsStores.set(name, store);
     }
     return store();
+}
+
+/** What a picker's list needs of the surface it opens onto, whichever shape that surface takes. */
+interface PickerSurfaceProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    /** Names the list for screen readers, and titles the sheet on a phone. */
+    label: string;
+    /** The control the list belongs to, rendered as the trigger either way. */
+    trigger: ReactNode;
+    /** Lets a caller keep the list open through a click that belongs to a popup of its own. */
+    onInteractOutside?: (event: Event) => void;
+    children: ReactNode;
+}
+
+/** The surface a picker's list opens onto.
+ *
+ * On a wide screen that is a popover anchored to the trigger, capped to the room Radix measured
+ * for it, so a list that opens upwards stops at the top of the window instead of running past it.
+ *
+ * A phone gets a sheet over the whole visible area instead. An anchored popover cannot work there:
+ * opening one focuses its search box, the on-screen keyboard then takes half the screen, and the
+ * list is asked to fit into whatever is left beside a trigger that may itself be low on the page -
+ * which is nothing, so it was drawn off the top of the screen with its search box out of reach.
+ */
+export function PickerPopover(props: PickerSurfaceProps) {
+    // Two component trees rather than one with two branches, so the desktop one never subscribes
+    // to the visual viewport it has no use for.
+    return useIsMobile() ? <PickerSheet {...props} /> : <PickerAnchored {...props} />;
+}
+
+/** The wide-screen shape: a popover hanging off the trigger. */
+function PickerAnchored(props: PickerSurfaceProps) {
+    return (
+        <Popover.Root open={props.open} onOpenChange={props.onOpenChange}>
+            <Popover.Trigger asChild>{props.trigger}</Popover.Trigger>
+            <Popover.Portal>
+                <Popover.Content
+                    align="start"
+                    sideOffset={4}
+                    collisionPadding={8}
+                    aria-label={props.label}
+                    onInteractOutside={props.onInteractOutside}
+                    // Radix publishes the height it found room for; without the cap the list keeps
+                    // its natural height and simply overflows the edge of the window.
+                    style={{ maxHeight: 'var(--radix-popover-content-available-height)' }}
+                    className="z-50 flex w-[min(28rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
+                >
+                    {props.children}
+                </Popover.Content>
+            </Popover.Portal>
+        </Popover.Root>
+    );
+}
+
+/** The phone shape: a sheet filling the part of the window the keyboard is not sitting on.
+ *
+ * Only the frame re-renders when that area changes - `children` arrives as the same element it did
+ * last time, which is React's cue to leave the list below it alone. */
+function PickerSheet(props: PickerSurfaceProps) {
+    const { t } = useTranslation();
+    const visible = useVisibleViewport();
+
+    return (
+        // Non-modal, which is what the popover this replaces was: a picker's right-click menu
+        // portals out beside this content, and a modal dialog would make it untappable.
+        <Dialog.Root open={props.open} onOpenChange={props.onOpenChange} modal={false}>
+            <Dialog.Trigger asChild>{props.trigger}</Dialog.Trigger>
+            <Dialog.Portal>
+                <Dialog.Content
+                    aria-describedby={undefined}
+                    onInteractOutside={props.onInteractOutside}
+                    className="fixed inset-x-0 z-50 flex flex-col bg-surface-raised shadow-2xl"
+                    style={{
+                        top: visible.top,
+                        height: visible.height,
+                        paddingBottom: 'env(safe-area-inset-bottom)'
+                    }}
+                >
+                    <div className="flex shrink-0 items-center gap-2 border-b border-subtle px-3 py-2">
+                        <Dialog.Title className="min-w-0 flex-1 truncate text-sm font-medium text-fg-strong">
+                            {props.label}
+                        </Dialog.Title>
+                        <Dialog.Close asChild>
+                            <button
+                                type="button"
+                                aria-label={t('common.close')}
+                                className="rounded p-1 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"
+                            >
+                                <X size={16} aria-hidden />
+                            </button>
+                        </Dialog.Close>
+                    </div>
+                    {props.children}
+                </Dialog.Content>
+            </Dialog.Portal>
+        </Dialog.Root>
+    );
+}
+
+/** The control a library dropdown hangs off: a preview of the current entry where there is one,
+ *  that entry's name or the dropdown's own, and the chevron.
+ *
+ * Two shapes, told apart by whether `current` was passed at all. A picker that holds a selection
+ * shows it; one where picking is an action rather than a state - Quick load, Apply preset - goes on
+ * reading its own label, because a thing it did once is not a thing it is now.
+ *
+ * Everything else is passed straight through to the button, which is what lets the surface above
+ * attach itself with `asChild`. */
+export function PickerTrigger({
+    label,
+    current,
+    preview,
+    className,
+    ...rest
+}: ComponentProps<'button'> & {
+    /** Names the control, and is what it reads while it holds nothing. */
+    label: string;
+    /** Display text of the chosen entry, null for none chosen, undefined for an action picker. */
+    current?: string | null;
+    /** Preview image of the chosen entry. */
+    preview?: string;
+}) {
+    const selecting = current !== undefined;
+    return (
+        <button
+            type="button"
+            aria-label={label}
+            {...rest}
+            className={[
+                className ?? 'w-40',
+                'flex max-w-full items-center gap-1.5 rounded border border-default bg-surface-sunken py-0.5 pl-1 pr-1.5 text-left text-xs text-fg outline-none hover:border-[var(--emphasis)] focus:border-[var(--emphasis)] disabled:opacity-50'
+            ].join(' ')}
+        >
+            {selecting && <PickerThumb preview={preview} size="xs" />}
+            <span
+                className={[
+                    'min-w-0 flex-1 truncate',
+                    current ? 'text-fg-strong' : 'text-fg-soft',
+                    // The thumbnail is the left margin where there is one.
+                    selecting ? '' : 'pl-0.5'
+                ].join(' ')}
+            >
+                {selecting ? (current ?? translate('modelPicker.noneSelected')) : label}
+            </span>
+            <ChevronDown size={13} aria-hidden className="shrink-0 text-fg-soft" />
+        </button>
+    );
 }
 
 /** Search field with a clear button, sitting above a `Command.List`. */

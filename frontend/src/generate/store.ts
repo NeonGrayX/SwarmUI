@@ -1,5 +1,6 @@
 /** Generation run state: the batch rail, the selected image, and the live socket. */
 
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import { api, SwarmApiError } from '@/api/client';
 import type { BatchItem, GenMessage } from './types';
@@ -204,6 +205,66 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
     setAutoSwapToImages: on => set({ autoSwapToImages: on }),
     setAutoClearBatch: on => set({ autoClearBatch: on })
 }));
+
+/** What this tab's own runs are doing, as the socket reports it. */
+export interface RunProgress {
+    /** True while any slot of any run is still unfinished. */
+    active: boolean;
+    /** Slots a backend is working on right now. */
+    running: number;
+    /** Slots that have not started yet. */
+    queued: number;
+    /** 0..1 across every slot of the unfinished runs, counting a finished one as whole. Null when
+     *  nothing is in flight. */
+    percent: number | null;
+}
+
+const IDLE: RunProgress = { active: false, running: 0, queued: 0, percent: null };
+
+/** This tab's live run state, for anything that wants to report progress outside the batch rail.
+ *
+ * The rail's own slots are the most exact account of a run there is: they exist from the moment
+ * Generate is pressed, and they distinguish a slot on a backend from one still waiting - neither of
+ * which `GetCurrentStatus` can offer, since it is a poll and its `waiting_gens` counts the whole
+ * claim, the image currently generating included. */
+export function useRunProgress(): RunProgress {
+    const batch = useGenerateStore(s => s.batch);
+    return useMemo(() => {
+        // A run is in flight while any of its slots is unfinished; its finished slots still count
+        // towards the percentage, or a four-image run would drop back to 0% after every image.
+        const live = new Set<number>();
+        for (const item of batch) {
+            if (item.status === 'pending' || item.status === 'running') {
+                live.add(item.runId);
+            }
+        }
+        if (live.size === 0) {
+            return IDLE;
+        }
+        let running = 0;
+        let queued = 0;
+        let done = 0;
+        let total = 0;
+        for (const item of batch) {
+            if (!live.has(item.runId)) {
+                continue;
+            }
+            total++;
+            if (item.status === 'running') {
+                running++;
+                done += item.overallPercent ?? 0;
+            }
+            else if (item.status === 'pending') {
+                queued++;
+            }
+            else {
+                // Done, discarded or failed: over either way, and over is over.
+                done += 1;
+            }
+        }
+        return { active: true, running, queued, percent: done / total };
+    }, [batch]);
+}
 
 /** Resolves a batch item's src to something an <img> can load.
  *  Backends return either a relative view path or an inline data URL. */

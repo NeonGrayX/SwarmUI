@@ -72,12 +72,15 @@ function formatBytes(bytes: number): string {
     return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[unit]}`;
 }
 
-/** Human summary of what a user currently has in flight. Mirrors currentGenString
- *  (src/wwwroot/js/genpage/main.js:59), minus the markup it splices in. */
+/** Human summary of what a user currently has in flight. Follows currentGenString
+ *  (src/wwwroot/js/genpage/main.js:59), minus the markup it splices in and its double count. */
 function genSummary(user: ConnectedUser): string {
     const parts: string[] = [];
-    if (user.waiting_gens > 0) {
-        parts.push(translate('serverInfo.gen.queued', { count: user.waiting_gens }));
+    // `waiting_gens` is the whole claim, the images being generated included, so the live ones come
+    // off it - counting one image as both queued and running is what made the legacy line confusing.
+    const queued = Math.max(0, user.waiting_gens - user.live_gens);
+    if (queued > 0) {
+        parts.push(translate('serverInfo.gen.queued', { count: queued }));
     }
     if (user.live_gens > 0) {
         parts.push(translate('serverInfo.gen.running', { count: user.live_gens }));

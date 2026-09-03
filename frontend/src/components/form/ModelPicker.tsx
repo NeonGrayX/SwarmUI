@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import * as Popover from '@radix-ui/react-popover';
 import { Command } from 'cmdk';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -17,6 +16,7 @@ import {
     PickerCard,
     PickerChip,
     PickerGroup,
+    PickerPopover,
     PickerRow,
     PickerSearch,
     PickerStar,
@@ -104,7 +104,7 @@ export function ModelPicker(props: {
     const missing = hasValue && catalog.options.length > 0 && !option;
 
     return (
-        <Popover.Root
+        <PickerPopover
             open={open}
             onOpenChange={next => {
                 setOpen(next);
@@ -112,8 +112,8 @@ export function ModelPicker(props: {
                     setEverOpened(true);
                 }
             }}
-        >
-            <Popover.Trigger asChild>
+            label={t('modelPicker.chooseLabel', { noun })}
+            trigger={
                 <button
                     type="button"
                     id={props.id}
@@ -145,34 +145,26 @@ export function ModelPicker(props: {
                     <ShortCode option={option} />
                     <ChevronDown size={13} aria-hidden className="shrink-0 text-fg-soft" />
                 </button>
-            </Popover.Trigger>
-            <Popover.Portal>
-                <Popover.Content
-                    align="start"
-                    sideOffset={4}
-                    collisionPadding={8}
-                    className="z-50 w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
-                >
-                    <ModelOptionList
-                        subtype={props.subtype}
-                        noun={noun}
-                        selected={hasValue ? [props.value] : []}
-                        onPick={picked => {
-                            props.onChange(picked.name);
-                            setOpen(false);
-                        }}
-                        onClear={
-                            hasValue
-                                ? () => {
-                                      props.onChange(empty);
-                                      setOpen(false);
-                                  }
-                                : undefined
-                        }
-                    />
-                </Popover.Content>
-            </Popover.Portal>
-        </Popover.Root>
+            }
+        >
+            <ModelOptionList
+                subtype={props.subtype}
+                noun={noun}
+                selected={hasValue ? [props.value] : []}
+                onPick={picked => {
+                    props.onChange(picked.name);
+                    setOpen(false);
+                }}
+                onClear={
+                    hasValue
+                        ? () => {
+                              props.onChange(empty);
+                              setOpen(false);
+                          }
+                        : undefined
+                }
+            />
+        </PickerPopover>
     );
 }
 
@@ -285,8 +277,13 @@ export function ModelOptionList(props: {
     }, [options]);
 
     return (
-        <Command shouldFilter={false} loop label={t('modelPicker.chooseLabel', { noun: props.noun })}>
-            <div className="border-b border-subtle p-2">
+        <Command
+            shouldFilter={false}
+            loop
+            label={t('modelPicker.chooseLabel', { noun: props.noun })}
+            className="flex min-h-0 flex-auto flex-col"
+        >
+            <div className="shrink-0 border-b border-subtle p-2">
                 <PickerSearch
                     value={search}
                     onChange={setSearch}
@@ -350,7 +347,7 @@ export function ModelOptionList(props: {
                 </div>
             </div>
 
-            <Command.List className="max-h-80 overflow-y-auto p-2">
+            <Command.List className="min-h-0 flex-auto overflow-y-auto p-2 md:max-h-80">
                 {matches.length === 0 && (
                     <p className="px-2 py-6 text-center text-sm text-fg-soft">
                         {options.length === 0
@@ -387,7 +384,7 @@ export function ModelOptionList(props: {
                 {shown.endRef && <div ref={shown.endRef} className="h-4" aria-hidden />}
             </Command.List>
 
-            <div className="flex items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
                 <span>{t('modelPicker.countOf', { shown: matches.length, total: options.length })}</span>
                 {hiddenByCompat > 0 && (
                     <button

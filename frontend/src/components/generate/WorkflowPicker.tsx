@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react';
-import * as Popover from '@radix-ui/react-popover';
 import { Command } from 'cmdk';
-import { ChevronDown, Star } from 'lucide-react';
+import { Star } from 'lucide-react';
 import {
     PickerCard,
     PickerChip,
     PickerGroup,
+    PickerPopover,
     PickerRow,
     PickerSearch,
     PickerStar,
-    PickerThumb,
+    PickerTrigger,
     PickerViewToggle,
     usePickerPrefs
 } from '@/components/form/PickerParts';
@@ -66,74 +66,54 @@ export function WorkflowPicker(props: {
     const [open, setOpen] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
     const contextMenu = useContextMenu();
-    const selecting = props.current !== undefined;
     const option = props.workflows.find(w => w.name === props.current);
+    // Undefined where picking is an action rather than a state, which is what leaves the trigger
+    // reading its own label. The folder prefix is dropped: the trigger has no room for it.
+    const currentLeaf =
+        props.current === undefined ? undefined : props.current ? leafOf(props.current) : null;
 
     return (
         <>
-            <Popover.Root open={open} onOpenChange={setOpen}>
-                <Popover.Trigger asChild>
-                    <button
-                        type="button"
-                        disabled={props.disabled}
-                        aria-label={props.label}
+            <PickerPopover
+                open={open}
+                onOpenChange={setOpen}
+                label={props.label}
+                // The right-click menu is a popup of its own, so using it reads as a click away
+                // from this list; without this the list would close under the menu it opened.
+                onInteractOutside={event => {
+                    if (insideContextMenu(event.target)) {
+                        event.preventDefault();
+                    }
+                }}
+                trigger={
+                    <PickerTrigger
+                        label={props.label}
+                        current={currentLeaf}
+                        preview={option?.image}
                         title={props.current ?? undefined}
-                        className={[
-                            props.className ?? 'w-40',
-                            'flex max-w-full items-center gap-1.5 rounded border border-default bg-surface-sunken py-0.5 pl-1 pr-1.5 text-left text-xs text-fg outline-none hover:border-[var(--emphasis)] focus:border-[var(--emphasis)] disabled:opacity-50'
-                        ].join(' ')}
-                    >
-                        {selecting && <PickerThumb preview={option?.image} size="xs" />}
-                        <span
-                            className={[
-                                'min-w-0 flex-1 truncate',
-                                selecting && props.current ? 'text-fg-strong' : 'text-fg-soft',
-                                selecting ? '' : 'pl-0.5'
-                            ].join(' ')}
-                        >
-                            {selecting
-                                ? props.current
-                                    ? leafOf(props.current)
-                                    : t('modelPicker.noneSelected')
-                                : props.label}
-                        </span>
-                        <ChevronDown size={13} aria-hidden className="shrink-0 text-fg-soft" />
-                    </button>
-                </Popover.Trigger>
-                <Popover.Portal>
-                    <Popover.Content
-                        align="start"
-                        sideOffset={4}
-                        collisionPadding={8}
-                        // The right-click menu is a popup of its own, so using it reads as a click away
-                        // from this list; without this the list would close under the menu it opened.
-                        onInteractOutside={event => {
-                            if (insideContextMenu(event.target)) {
-                                event.preventDefault();
-                            }
-                        }}
-                        className="z-50 w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
-                    >
-                        <WorkflowOptionList
-                            {...props}
-                            menu={contextMenu}
-                            onPick={name => {
-                                props.onPick(name);
-                                setOpen(false);
-                            }}
-                            onDelete={
-                                props.onDelete &&
-                                (name => {
-                                    // The confirmation is a modal dialog, and a list left open behind
-                                    // it is a list the user cannot get back to until they answer.
-                                    setOpen(false);
-                                    setPendingDelete(name);
-                                })
-                            }
-                        />
-                    </Popover.Content>
-                </Popover.Portal>
-            </Popover.Root>
+                        disabled={props.disabled}
+                        className={props.className}
+                    />
+                }
+            >
+                <WorkflowOptionList
+                    {...props}
+                    menu={contextMenu}
+                    onPick={name => {
+                        props.onPick(name);
+                        setOpen(false);
+                    }}
+                    onDelete={
+                        props.onDelete &&
+                        (name => {
+                            // The confirmation is a modal dialog, and a list left open behind
+                            // it is a list the user cannot get back to until they answer.
+                            setOpen(false);
+                            setPendingDelete(name);
+                        })
+                    }
+                />
+            </PickerPopover>
 
             {contextMenu.menu}
 
@@ -193,8 +173,8 @@ function WorkflowOptionList(props: {
     }, [props.workflows, search, prefs.starredOnly, stars]);
 
     return (
-        <Command shouldFilter={false} loop label={props.label}>
-            <div className="border-b border-subtle p-2">
+        <Command shouldFilter={false} loop label={props.label} className="flex min-h-0 flex-auto flex-col">
+            <div className="shrink-0 border-b border-subtle p-2">
                 <PickerSearch
                     value={search}
                     onChange={setSearch}
@@ -214,7 +194,7 @@ function WorkflowOptionList(props: {
                 </div>
             </div>
 
-            <Command.List className="max-h-80 overflow-y-auto p-2">
+            <Command.List className="min-h-0 flex-auto overflow-y-auto p-2 md:max-h-80">
                 {props.loading ? (
                     <p className="px-2 py-6 text-center text-sm text-fg-soft">{t('common.loading')}</p>
                 ) : props.error ? (
@@ -291,7 +271,7 @@ function WorkflowOptionList(props: {
                 </PickerGroup>
             </Command.List>
 
-            <div className="flex items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
+            <div className="flex shrink-0 items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
                 <span>
                     {t('modelPicker.countOf', { shown: matches.length, total: props.workflows.length })}
                 </span>

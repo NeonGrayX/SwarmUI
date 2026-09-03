@@ -1,17 +1,18 @@
 import { useMemo, useRef, useState } from 'react';
-import * as Popover from '@radix-ui/react-popover';
 import { Command } from 'cmdk';
 import { useQueryClient } from '@tanstack/react-query';
-import { Bookmark, ChevronDown, Download, Star, Upload } from 'lucide-react';
+import { Bookmark, Download, Star, Upload } from 'lucide-react';
 import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import {
     PickerCard,
     PickerChip,
     PickerGroup,
+    PickerPopover,
     PickerRow,
     PickerSearch,
     PickerStar,
+    PickerTrigger,
     PickerViewToggle,
     usePickerPrefs
 } from '@/components/form/PickerParts';
@@ -219,52 +220,38 @@ function PresetDropdown(props: {
 
     return (
         <>
-            <Popover.Root open={open} onOpenChange={setOpen}>
-                <Popover.Trigger asChild>
-                    <button
-                        type="button"
-                        aria-label={t('presets.bar.quickApply')}
-                        className="flex w-40 max-w-full items-center gap-1.5 rounded border border-default bg-surface-sunken px-1.5 py-0.5 text-left text-xs text-fg outline-none hover:border-[var(--emphasis)] focus:border-[var(--emphasis)]"
-                    >
-                        <span className="min-w-0 flex-1 truncate text-fg-soft">{t('presets.bar.quickApply')}</span>
-                        <ChevronDown size={13} aria-hidden className="shrink-0 text-fg-soft" />
-                    </button>
-                </Popover.Trigger>
-                <Popover.Portal>
-                    <Popover.Content
-                        align="start"
-                        sideOffset={4}
-                        collisionPadding={8}
-                        // The right-click menu is a popup of its own, so using it reads as a click away
-                        // from this list; without this the list would close under the menu it opened.
-                        onInteractOutside={event => {
-                            if (insideContextMenu(event.target)) {
-                                event.preventDefault();
-                            }
-                        }}
-                        className="z-50 w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
-                    >
-                        <PresetOptionList
-                            presets={props.presets}
-                            loading={props.loading}
-                            menu={contextMenu}
-                            onPick={title => {
-                                props.onPick(title);
-                                setOpen(false);
-                            }}
-                            onDelete={
-                                props.onDelete &&
-                                (title => {
-                                    // The confirmation is a modal dialog, and a list left open behind
-                                    // it is a list the user cannot get back to until they answer.
-                                    setOpen(false);
-                                    setPendingDelete(title);
-                                })
-                            }
-                        />
-                    </Popover.Content>
-                </Popover.Portal>
-            </Popover.Root>
+            <PickerPopover
+                open={open}
+                onOpenChange={setOpen}
+                label={t('presets.bar.quickApply')}
+                // The right-click menu is a popup of its own, so using it reads as a click away
+                // from this list; without this the list would close under the menu it opened.
+                onInteractOutside={event => {
+                    if (insideContextMenu(event.target)) {
+                        event.preventDefault();
+                    }
+                }}
+                trigger={<PickerTrigger label={t('presets.bar.quickApply')} />}
+            >
+                <PresetOptionList
+                    presets={props.presets}
+                    loading={props.loading}
+                    menu={contextMenu}
+                    onPick={title => {
+                        props.onPick(title);
+                        setOpen(false);
+                    }}
+                    onDelete={
+                        props.onDelete &&
+                        (title => {
+                            // The confirmation is a modal dialog, and a list left open behind
+                            // it is a list the user cannot get back to until they answer.
+                            setOpen(false);
+                            setPendingDelete(title);
+                        })
+                    }
+                />
+            </PickerPopover>
 
             {contextMenu.menu}
 
@@ -326,8 +313,13 @@ function PresetOptionList(props: {
     }, [props.presets, search, prefs.starredOnly, stars]);
 
     return (
-        <Command shouldFilter={false} loop label={t('presets.bar.quickApply')}>
-            <div className="border-b border-subtle p-2">
+        <Command
+            shouldFilter={false}
+            loop
+            label={t('presets.bar.quickApply')}
+            className="flex min-h-0 flex-auto flex-col"
+        >
+            <div className="shrink-0 border-b border-subtle p-2">
                 <PickerSearch
                     value={search}
                     onChange={setSearch}
@@ -347,7 +339,7 @@ function PresetOptionList(props: {
                 </div>
             </div>
 
-            <Command.List className="max-h-80 overflow-y-auto p-2">
+            <Command.List className="min-h-0 flex-auto overflow-y-auto p-2 md:max-h-80">
                 {props.loading ? (
                     <p className="px-2 py-6 text-center text-sm text-fg-soft">{t('common.loading')}</p>
                 ) : (
@@ -424,7 +416,7 @@ function PresetOptionList(props: {
                 </PickerGroup>
             </Command.List>
 
-            <div className="flex items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
+            <div className="flex shrink-0 items-center gap-2 border-t border-subtle px-3 py-1.5 text-xs text-fg-soft">
                 <span>
                     {t('modelPicker.countOf', { shown: matches.length, total: props.presets.length })}
                 </span>

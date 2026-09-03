@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import * as Popover from '@radix-ui/react-popover';
 import { AlertTriangle, Plus, X } from 'lucide-react';
 import { isArchCompatible, subtypeNoun, useCurrentModel, useModelCatalog } from '@/library/catalog';
 import { useParamSchema } from '@/params/schema';
 import { useLoraSelection } from '@/params/loras';
 import { ModelOptionList, ModelThumb } from './ModelPicker';
+import { PickerPopover } from './PickerParts';
 import { useTranslation } from '@/i18n';
 
 /** The LoRA field: what is applied, at what weight, plus a picker to change it.
@@ -97,7 +97,7 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
             )}
 
             <div className="flex items-center gap-1">
-                <Popover.Root
+                <PickerPopover
                     open={open}
                     onOpenChange={next => {
                         setOpen(next);
@@ -105,8 +105,8 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
                             setEverOpened(true);
                         }
                     }}
-                >
-                    <Popover.Trigger asChild>
+                    label={t('modelPicker.chooseLabel', { noun: subtypeNoun('LoRA') })}
+                    trigger={
                         <button
                             type="button"
                             id={props.inputId}
@@ -116,25 +116,17 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
                             <Plus size={13} aria-hidden />
                             {t('lora.add')}
                         </button>
-                    </Popover.Trigger>
-                    <Popover.Portal>
-                        <Popover.Content
-                            align="start"
-                            sideOffset={4}
-                            collisionPadding={8}
-                            className="z-50 w-[min(28rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-default bg-surface-raised shadow-2xl"
-                        >
-                            {/* Multi-select: picking toggles and the list stays open, since adding
-                                two or three LoRAs at once is the normal case. */}
-                            <ModelOptionList
-                                subtype="LoRA"
-                                noun={subtypeNoun('LoRA')}
-                                selected={selection.names}
-                                onPick={option => selection.toggle(option.name, option.defaultWeight)}
-                            />
-                        </Popover.Content>
-                    </Popover.Portal>
-                </Popover.Root>
+                    }
+                >
+                    {/* Multi-select: picking toggles and the list stays open, since adding
+                        two or three LoRAs at once is the normal case. */}
+                    <ModelOptionList
+                        subtype="LoRA"
+                        noun={subtypeNoun('LoRA')}
+                        selected={selection.names}
+                        onPick={option => selection.toggle(option.name, option.defaultWeight)}
+                    />
+                </PickerPopover>
 
                 {selection.selected.length > 1 && (
                     <button

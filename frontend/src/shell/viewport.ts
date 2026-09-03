@@ -62,3 +62,58 @@ export function useIsCompact(): boolean {
 export function useIsMobile(): boolean {
     return useMediaQuery(MOBILE_QUERY);
 }
+
+/** The slice of the layout viewport that is actually on screen, in CSS pixels.
+ *
+ * An on-screen keyboard shrinks the *visual* viewport and leaves the layout viewport — the thing
+ * `position: fixed` is measured against — at its full height. So an overlay pinned to `inset-0`
+ * runs on behind the keyboard, and half of it is simply not there to be read or tapped. These are
+ * the numbers needed to pin an overlay to what the user can see instead. */
+export interface VisibleViewport {
+    /** Distance from the top of the layout viewport to the top of the visible band. */
+    top: number;
+    /** Height of the visible band. */
+    height: number;
+}
+
+/** Cached so `useSyncExternalStore` sees a stable reference between resizes, rather than a fresh
+ *  object on every read - which it would treat as a change and re-render on forever. */
+let visibleViewport: VisibleViewport = { top: 0, height: 0 };
+
+function readVisibleViewport(): VisibleViewport {
+    if (typeof window === 'undefined') {
+        return visibleViewport;
+    }
+    const view = window.visualViewport;
+    const top = view?.offsetTop ?? 0;
+    const height = view?.height ?? window.innerHeight;
+    if (top !== visibleViewport.top || height !== visibleViewport.height) {
+        visibleViewport = { top, height };
+    }
+    return visibleViewport;
+}
+
+function subscribeVisibleViewport(onChange: () => void): () => void {
+    if (typeof window === 'undefined') {
+        return () => {};
+    }
+    // The band moves on scroll as well as on resize: the browser scrolls the visual viewport to
+    // keep a focused field above the keyboard, which changes `offsetTop` without changing height.
+    const view = window.visualViewport;
+    if (!view) {
+        window.addEventListener('resize', onChange);
+        return () => window.removeEventListener('resize', onChange);
+    }
+    view.addEventListener('resize', onChange);
+    view.addEventListener('scroll', onChange);
+    return () => {
+        view.removeEventListener('resize', onChange);
+        view.removeEventListener('scroll', onChange);
+    };
+}
+
+/** Live visible band. Re-renders the caller when the keyboard opens, closes, or scrolls the page
+ *  under itself. */
+export function useVisibleViewport(): VisibleViewport {
+    return useSyncExternalStore(subscribeVisibleViewport, readVisibleViewport, readVisibleViewport);
+}
