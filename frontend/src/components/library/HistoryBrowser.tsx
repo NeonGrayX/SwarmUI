@@ -73,10 +73,10 @@ export function HistoryBrowser() {
     const [path, setPath] = useState('');
     const [search, setSearch] = useState('');
     const [view, setView] = useState<ViewMode>('grid');
-    // Newest first: sorting by date and reversing is what makes the last thing generated the first
-    // thing on screen, which is what the history screen is usually opened for.
+    // Date sort, unreversed: the server's date order is the default the history screen opens with,
+    // and reversing it is left to the user's toggle.
     const [sort, setSort] = useState<ImageSortMode>('Date');
-    const [reverse, setReverse] = useState(true);
+    const [reverse, setReverse] = useState(false);
     // Subfolders are per-model or per-day, so a couple of levels of them is the usual shape of an
     // output folder; deeper is available but is the user's call, since the server walks every level.
     const [depth, setDepth] = useState(3);
