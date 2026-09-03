@@ -130,6 +130,7 @@ Note that this does not trigger a model refresh itself, you must do that after a
 | type | String | The model's sub-type, eg `Stable-Diffusion`, `LoRA`, etc. | **(REQUIRED)** |
 | name | String | The filename to use for the model. | **(REQUIRED)** |
 | metadata | String | Optional raw text of JSON metadata to inject to the model. | (null) |
+| backendId | String | Optional ID of a remote Swarm backend to download the model onto, instead of onto this server. | (null) |
 
 #### Return Format
 

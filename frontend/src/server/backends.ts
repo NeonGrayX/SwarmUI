@@ -156,9 +156,10 @@ export function settingsPayload(
 
 /** Whether a backend loads its models out of *this* server's model folders.
  *
- * The model downloader writes to the server's own download folder (ModelsAPI.cs:598) and has no
- * way to write anywhere else, so a backend that reads a different disk will never see what was
- * downloaded. Worth knowing before a multi-gigabyte fetch.
+ * A download aimed at this server writes to its own download folder (ModelsAPI.cs:598), so a
+ * backend that reads a different disk will never see what was downloaded. Worth knowing before a
+ * multi-gigabyte fetch. The way out is to aim the download at the backend instead, which only a
+ * remote Swarm can accept — see [canReceiveDownloads].
  *
  * A remote Swarm backend never qualifies. Neither does a control instance that only manages other
  * backends rather than loading anything itself — both `swarmswarmbackend` and `autoscalingbackend`
@@ -186,6 +187,26 @@ export function usesLocalModelFolders(backend: Backend): boolean {
     }
     // URL keeps IPv6 literals bracketed.
     return host === 'localhost' || host.startsWith('127.') || host === '[::1]';
+}
+
+/** Whether a model download can be pushed onto this backend instead of onto this server's disk.
+ *
+ * Forwarding works by calling the target's *own* DoModelDownloadWS and relaying its progress back
+ * (src/WebAPI/RemoteModelDownload.cs), so it needs a backend that is itself a Swarm. A remote raw
+ * ComfyUI exposes no download route to call, and nothing else does either.
+ *
+ * The status check matches the server's: a backend that is not connected has no session to send
+ * the request over, so offering it as a target would only produce an error on start. */
+export function canReceiveDownloads(backend: Backend): boolean {
+    return backend.type === 'swarmswarmbackend' && (backend.status === 'running' || backend.status === 'idle');
+}
+
+/** Short name for a backend somewhere with no room for the full card.
+ *
+ * Falls back to the address rather than the type name, since a setup with several remote Swarms
+ * has several backends of one type and the address is the thing that tells them apart. */
+export function backendLabel(backend: Backend): string {
+    return backend.title || String(backend.settings?.Address ?? '').trim() || backend.type;
 }
 
 /** Whether a backend can serve the embedded Comfy editor at '/ComfyBackendDirect'.

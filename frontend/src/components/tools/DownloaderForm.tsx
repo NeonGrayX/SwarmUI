@@ -26,7 +26,7 @@ import {
     type ModelSource,
     type Preview
 } from '@/tools/modelSource';
-import { usesLocalModelFolders, type Backend } from '@/server/backends';
+import { backendLabel, canReceiveDownloads, usesLocalModelFolders, type Backend } from '@/server/backends';
 import { useJobStore } from '@/tools/jobs';
 import { hasTranslation, useTranslation, type Translator } from '@/i18n';
 
@@ -71,8 +71,27 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
     // The Civitai lookup runs through ForwardMetadataRequest, which is gated on this permission.
     const canLookup = usePermission('edit_model_metadata');
     const run = useJobStore(s => s.run);
+    // The check is a courtesy, not a gate: without the permission there is no backend list to read,
+    // and the form falls back to downloading here with no target picker and no reach warning.
+    const canSeeBackends = usePermission('view_backends_list');
+    // Same key and payload as ComfyWorkflow's query, so this shares that cache rather than adding
+    // a request of its own.
+    const backends = useQuery({
+        queryKey: ['backends'],
+        queryFn: () => api.post<Record<string, Backend>>('ListBackends', {}),
+        enabled: canSeeBackends,
+        refetchInterval: 10_000
+    });
+    const live = useMemo(
+        () => Object.values(backends.data ?? {}).filter(b => b.status === 'running' || b.status === 'idle'),
+        [backends.data]
+    );
+    /** Backends the download can be handed to instead of running here. */
+    const targets = useMemo(() => live.filter(canReceiveDownloads), [live]);
 
     const [url, setUrl] = useState('');
+    /** Backend id to download onto, or '' for this server. */
+    const [target, setTarget] = useState('');
     const [type, setType] = useState(initialType ?? 'Stable-Diffusion');
     const [folder, setFolder] = useState('');
     const [name, setName] = useState('');
@@ -159,6 +178,15 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
         }
     }, [folders, folder, folderEdited, initialFolder]);
 
+    const targetBackend = targets.find(b => String(b.id) === target) ?? null;
+    useEffect(() => {
+        // A backend that went down or was deleted mid-form is no longer somewhere this can send a
+        // download, so the target falls back to this server rather than failing on start.
+        if (target && !targets.some(b => String(b.id) === target)) {
+            setTarget('');
+        }
+    }, [targets, target]);
+
     const extraTypes = useMemo(
         () => Object.keys(schema?.models ?? {}).filter(key => !LIBRARY_SUBTYPES.includes(key)).sort(),
         [schema]
@@ -178,9 +206,17 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
             ? JSON.stringify(thumbnail ? { ...source.metadata, 'modelspec.thumbnail': thumbnail } : source.metadata, null, 2)
             : undefined;
         run({
-            title: t('downloader.jobTitle', { type: subtypeLabel(type, t), name: fullName }),
+            title: targetBackend
+                ? t('downloader.jobTitleRemote', {
+                      type: subtypeLabel(type, t),
+                      name: fullName,
+                      backend: backendLabel(targetBackend)
+                  })
+                : t('downloader.jobTitle', { type: subtypeLabel(type, t), name: fullName }),
             route: 'DoModelDownloadWS',
-            payload: { url: source.downloadUrl, type, name: fullName, metadata },
+            // Omitted rather than sent empty for the local case, so the request is byte-identical
+            // to what it was before targets existed.
+            payload: { url: source.downloadUrl, type, name: fullName, metadata, backendId: target || undefined },
             onDone: () => {
                 // The model exists now; the Library and every model picker are a refresh behind.
                 queryClient.invalidateQueries({ queryKey: ['models'] });
@@ -237,6 +273,29 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
                         }))
                     }
                 />
+            )}
+
+            {targets.length > 0 && (
+                <Field
+                    id="dl-target"
+                    label={t('downloader.target')}
+                    description={t('downloader.targetHelp')}
+                    density="compact"
+                >
+                    <select
+                        id="dl-target"
+                        value={target}
+                        onChange={e => setTarget(e.target.value)}
+                        className={INPUT_CLASS}
+                    >
+                        <option value="">{t('downloader.targetLocal')}</option>
+                        {targets.map(backend => (
+                            <option key={backend.id} value={String(backend.id)}>
+                                {backendLabel(backend)}
+                            </option>
+                        ))}
+                    </select>
+                </Field>
             )}
 
             <Field
@@ -316,14 +375,22 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
 
             {cleanName.length > 0 && (
                 <p className="pt-1 text-xs text-fg-soft">
-                    {t('downloader.savesTo', {
-                        type: subtypeLabel(type, t),
-                        path: `${fullName}.${extension}`
-                    })}
+                    {targetBackend
+                        ? t('downloader.savesToRemote', {
+                              type: subtypeLabel(type, t),
+                              path: `${fullName}.${extension}`,
+                              backend: backendLabel(targetBackend)
+                          })
+                        : t('downloader.savesTo', {
+                              type: subtypeLabel(type, t),
+                              path: `${fullName}.${extension}`
+                          })}
                 </p>
             )}
 
-            <ReachNotice />
+            {/* A download aimed at a backend lands on that backend's own disk, so the question of
+                what can reach this server's folders does not arise. */}
+            {canSeeBackends && backends.data && !targetBackend && <ReachNotice live={live} />}
         </>
     );
 
@@ -342,7 +409,8 @@ export function DownloaderWarning() {
     );
 }
 
-/** Whether anything running could actually load what the download leaves behind.
+/** Whether anything running could actually load what a download aimed at *this server* leaves
+ *  behind.
  *
  * The server downloads to its own model folders, so on a setup whose backends all live on other
  * machines the file lands somewhere nothing will ever read it. That is a bad thing to discover
@@ -350,35 +418,26 @@ export function DownloaderWarning() {
  * still legitimate (a backend may be started later, or the folder may be a network share this
  * cannot see from here).
  *
- * Silent without the backends-list permission: the check is a courtesy, not a gate. */
-function ReachNotice() {
+ * Remote Swarm backends can be downloaded to directly, so where one is running the warning points
+ * at the target picker rather than just stating the problem. */
+function ReachNotice(props: { live: Backend[] }) {
     const { t } = useTranslation();
-    const canSeeBackends = usePermission('view_backends_list');
-    // Same key and payload as ComfyWorkflow's query, so this shares that cache rather than adding
-    // a request of its own.
-    const backends = useQuery({
-        queryKey: ['backends'],
-        queryFn: () => api.post<Record<string, Backend>>('ListBackends', {}),
-        enabled: canSeeBackends,
-        refetchInterval: 10_000
-    });
-
-    if (!canSeeBackends || !backends.data) {
+    const { live } = props;
+    if (live.some(usesLocalModelFolders)) {
         return null;
     }
-    const running = Object.values(backends.data).filter(
-        backend => backend.status === 'running' || backend.status === 'idle'
-    );
-    if (running.some(usesLocalModelFolders)) {
-        return null;
-    }
+    const message = live.some(canReceiveDownloads)
+        ? t('downloader.pickBackend')
+        : live.length > 0
+          ? t('downloader.noLocalBackend')
+          : t('downloader.noBackends');
     return (
         <p
             className="flex items-start gap-1.5 pt-2 text-xs"
             style={{ color: 'var(--status-bar-warn-color-start-end)' }}
         >
             <AlertTriangle size={13} aria-hidden className="mt-px shrink-0" />
-            <span>{running.length > 0 ? t('downloader.noLocalBackend') : t('downloader.noBackends')}</span>
+            <span>{message}</span>
         </p>
     );
 }

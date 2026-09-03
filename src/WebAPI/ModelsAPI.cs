@@ -576,7 +576,8 @@ public static class ModelsAPI
         [API.APIParameter("The URL to download a model from.")] string url,
         [API.APIParameter("The model's sub-type, eg `Stable-Diffusion`, `LoRA`, etc.")] string type,
         [API.APIParameter("The filename to use for the model.")] string name,
-        [API.APIParameter("Optional raw text of JSON metadata to inject to the model.")] string metadata = null)
+        [API.APIParameter("Optional raw text of JSON metadata to inject to the model.")] string metadata = null,
+        [API.APIParameter("Optional ID of a remote Swarm backend to download the model onto, instead of onto this server.")] string backendId = null)
     {
         if (!url.StartsWith("http://") && !url.StartsWith("https://"))
         {
@@ -592,6 +593,11 @@ public static class ModelsAPI
         if (!Program.T2IModelSets.TryGetValue(type, out T2IModelHandler handler))
         {
             await ws.SendJson(new JObject() { ["error"] = "Invalid type." }, API.WebsocketTimeout);
+            return null;
+        }
+        if (!string.IsNullOrWhiteSpace(backendId))
+        {
+            await RemoteModelDownload.Forward(ws, backendId, url, type, name, metadata);
             return null;
         }
         string extension = "safetensors";
