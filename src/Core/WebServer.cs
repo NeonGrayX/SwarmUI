@@ -638,7 +638,10 @@ public class WebServer
         {
             context.Response.Headers.CacheControl = $"private, max-age={Program.ServerSettings.Network.OutputCacheSeconds}";
         }
-        await Results.Bytes(data, contentType, enableRangeProcessing: true).ExecuteAsync(context);
+        // An ETag lets a browser ask "still the same?" once the cache duration above lapses, and be told
+        // so in a few bytes, rather than re-downloading the file. Matters most for image history over a
+        // slow connection, where a screen of thumbnails otherwise re-transfers in full every 30 seconds.
+        await Results.Bytes(data, contentType, enableRangeProcessing: true, entityTag: new($"\"{Utilities.HashSHA256(data)}\"")).ExecuteAsync(context);
     }
 
     /// <summary>Web route for viewing special images (eg model icons).</summary>
@@ -660,6 +663,16 @@ public class WebServer
         async Task yieldResult(string imageData)
         {
             ImageFile img = ImageFile.FromDataString(imageData);
+            // Model icons are cached for only a couple of seconds, so a browser re-asks for them
+            // constantly; an ETag makes the answer 304-and-nothing instead of the image again.
+            string tag = $"\"{Utilities.HashSHA256(img.RawData)}\"";
+            context.Response.Headers.ETag = tag;
+            if ($"{context.Request.Headers.IfNoneMatch}" == tag)
+            {
+                context.Response.StatusCode = 304;
+                await context.Response.CompleteAsync();
+                return;
+            }
             context.Response.ContentType = img.Type.MimeType;
             context.Response.StatusCode = 200;
             context.Response.ContentLength = img.RawData.Length;
