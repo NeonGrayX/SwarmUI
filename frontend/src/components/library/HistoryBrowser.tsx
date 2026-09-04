@@ -18,7 +18,7 @@ import { DetailSheet } from '../ui/DetailSheet';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ImageLightbox } from '../ui/ImageLightbox';
-import { OutputPlayer, OutputThumbnail, outputKind } from '../ui/OutputMedia';
+import { OutputPlayer, OutputThumbnail, outputKind, useProgressiveOutput } from '../ui/OutputMedia';
 import { useVideoEditor } from '../video/useVideoEditor';
 import { MetadataView } from '../ui/MetadataView';
 import { useContextMenu, type MenuAction } from '../ui/ContextMenu';
@@ -523,6 +523,7 @@ function ImageSheet(props: {
     onClose: () => void;
 }) {
     const { t } = useTranslation();
+    const shownUrl = useProgressiveOutput(props.url);
     return (
         <DetailSheet label={t('history.imageDetails')} onClose={props.onClose}>
             <div className="flex shrink-0 items-center gap-2 border-b border-subtle p-3">
@@ -563,8 +564,10 @@ function ImageSheet(props: {
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 {/* The panel is only ever a few hundred pixels wide, so the image here is a
                     thumbnail of the detail being read; clicking it opens the real view of it.
-                    A video or an audio file plays here instead: it carries its own controls, and
-                    a click that both plays and zooms would do neither reliably. */}
+                    It shows the grid's preview first - already cached, so the panel is never
+                    empty - and upgrades to the file itself, which then opens instantly in the
+                    viewer. A video or an audio file plays here instead: it carries its own
+                    controls, and a click that both plays and zooms would do neither reliably. */}
                 {outputKind(props.url) === 'image' ? (
                     <button
                         type="button"
@@ -573,7 +576,7 @@ function ImageSheet(props: {
                         className="mb-3 block w-full cursor-zoom-in"
                     >
                         <img
-                            src={props.url}
+                            src={shownUrl}
                             alt=""
                             className="max-h-72 w-full rounded border border-subtle object-contain lg:max-h-none"
                         />
