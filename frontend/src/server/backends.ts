@@ -93,6 +93,32 @@ export function backendLogName(types: { identifier: string; name: string }[], id
     return types.find(t => t.identifier === `backend-${id}`)?.name ?? null;
 }
 
+/** Backend type id for a Swarm instance used as a backend (SwarmSwarmBackend.cs:259 spells it the
+ *  same way). Its logs live on the machine it runs on, and are read through the RemoteLogs proxy
+ *  rather than from any tracker here. */
+export const REMOTE_SWARM_TYPE = 'swarmswarmbackend';
+
+/** Where a backend's log button should point, or null when it has no readable logs.
+ *
+ * Two different things can be behind that button. A self-starting backend's process output is
+ * captured here and named by a tracker, so the viewer just selects that type. A remote Swarm has
+ * no tracker on this server at all — its whole log set is fetched over the wire, so the viewer is
+ * pointed at the backend instead and picks its own types. A disabled remote is skipped: there is
+ * no connection to ask through, and the proxy would only refuse. */
+export function backendLogTarget(
+    types: { identifier: string; name: string }[],
+    backend: Backend
+): { types: string } | { backend: number } | null {
+    const name = backendLogName(types, backend.id);
+    if (name) {
+        return { types: name };
+    }
+    if (backend.type === REMOTE_SWARM_TYPE && backend.status !== 'disabled') {
+        return { backend: backend.id };
+    }
+    return null;
+}
+
 /** True when a 'text' setting holds several lines rather than one value.
  *
  * ListBackendTypes has no marker for this: every string field is reported as 'text', so the

@@ -87,7 +87,17 @@ const UNBUILT: Record<string, string> = {
  *  Keyed by destination id so routeFor stays generic. */
 const SEARCH_VALIDATORS: Record<string, (search: Record<string, unknown>) => Record<string, unknown>> = {
     // A backend card links here with the log tracker name to preselect, eg ?types=ComfyUI-0.
-    logs: search => (typeof search.types === 'string' ? { types: search.types } : {}),
+    // A remote Swarm backend has no tracker here, so it links by backend id instead, eg ?backend=3,
+    // which switches the viewer over to reading that server's logs through the RemoteLogs proxy.
+    // Backend ids are numeric, and kept numeric: the default parser reads `?backend=0` as the
+    // number 0, and handing a string back would have the stringifier quote it into `?backend=%220%22`.
+    logs: search => {
+        const backend = backendId(search.backend);
+        return {
+            ...(typeof search.types === 'string' ? { types: search.types } : {}),
+            ...(backend === null ? {} : { backend })
+        };
+    },
     // The command palette links to a single setting or parameter by id, eg ?focus=Paths.ModelRoot.
     workspace: focusSearch,
     configuration: focusSearch,
@@ -96,6 +106,16 @@ const SEARCH_VALIDATORS: Record<string, (search: Record<string, unknown>) => Rec
 
 function focusSearch(search: Record<string, unknown>): { focus?: string } {
     return typeof search.focus === 'string' ? { focus: search.focus } : {};
+}
+
+/** A backend id from the URL, or null for anything that isn't one. Written by hand it arrives as a
+ *  string, so it is coerced rather than type-checked; an empty value is not a zero. */
+function backendId(raw: unknown): number | null {
+    if (raw === undefined || raw === null || raw === '') {
+        return null;
+    }
+    const id = Number(raw);
+    return Number.isInteger(id) ? id : null;
 }
 
 const rootRoute = createRootRoute({ component: AppShell });

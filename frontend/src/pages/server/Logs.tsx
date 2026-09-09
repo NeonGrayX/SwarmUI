@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useSearch } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Check, Copy, Pause, Play, Upload, X } from 'lucide-react';
 import { api } from '@/api/client';
+import { usePermission } from '@/api/permissions';
+import { REMOTE_SWARM_TYPE, type Backend } from '@/server/backends';
 import { useTranslation } from '@/i18n';
 
 interface LogType {
@@ -27,13 +29,31 @@ interface LogsResponse {
     last_sequence_id: number;
 }
 
+/** A message once it is in the buffer, tagged with the tracker it came from. */
+interface StreamLine extends LogMessage {
+    type: string;
+}
+
+/** How much scrollback to keep. The server only buffers 1024 messages per tracker
+ *  (Logs.LogTracker.MaxTracked), so this holds rather more than one poll can ever return. */
+const MAX_BUFFERED_LINES = 5000;
+
 /** Live server log viewer. Types are toggleable chips rather than a single choice, so several
- *  streams can be watched at once, and each line is coloured by its type. */
+ *  streams can be watched at once, and each line is coloured by its type.
+ *
+ *  Logs can come from this server or, through the RemoteLogs proxy, from a Swarm running as a
+ *  backend elsewhere — that machine's own logs are otherwise unreachable from here. */
 export function LogsPage() {
     const { t, tDynamic } = useTranslation();
     // ?types=<name> deep-links a single tracker, which is how a backend card opens its own process
     // log. The default set is the built-in severity levels (Logs.cs:216 keys those by level name).
-    const search = useSearch({ strict: false }) as { types?: string };
+    // ?backend=<id> points the whole viewer at a remote Swarm instead of this server.
+    const search = useSearch({ strict: false }) as { types?: string; backend?: number };
+    const navigate = useNavigate();
+    // Which server is being read, as a backend id, or null for this one. Held in the URL rather
+    // than in state so the source is deep-linkable and survives the back button. Kept as a string
+    // from here on: it is only ever compared against other ids and sent to the API.
+    const source = search.backend === undefined ? null : String(search.backend);
     const [selected, setSelected] = useState<string[]>(
         search.types ? search.types.split(',') : ['Info', 'Warning', 'Error']
     );
@@ -42,17 +62,49 @@ export function LogsPage() {
     const [filter, setFilter] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stickToBottom = useRef(true);
+    /** Highest sequence id seen per tracker, sent back as `last_sequence_ids` so each poll returns
+     *  only what is new. Without it every poll re-sends the server's whole 1024-message buffer for
+     *  every selected type, which is merely wasteful locally and a real cost over a remote link. */
+    const cursors = useRef<Record<string, number>>({});
+    const [stream, setStream] = useState<StreamLine[]>([]);
+
+    // Offering a source picker at all needs the backend list; reading the logs themselves does not.
+    const canListBackends = usePermission('view_backends_list');
+    const backends = useQuery({
+        // Deliberately not the Backends page's own ['backends'] key: that one is fetched with
+        // full_data and the two would overwrite each other's cache entry. Invalidating there still
+        // reaches this one, since keys match by prefix.
+        queryKey: ['backends', 'log-sources'],
+        queryFn: () => api.post<Record<string, Backend>>('ListBackends', {}),
+        enabled: canListBackends,
+        refetchInterval: 30000
+    });
+    // A disabled remote is left out: there is no connection behind it to ask through, and the
+    // proxy would only refuse (RemoteLogs.Forward).
+    const remotes = useMemo(
+        () =>
+            Object.values(backends.data ?? {}).filter(
+                backend => backend.type === REMOTE_SWARM_TYPE && backend.status !== 'disabled'
+            ),
+        [backends.data]
+    );
 
     const logs = useQuery({
-        queryKey: ['logs', selected],
+        queryKey: ['logs', source, selected],
         // `last_sequence_ids` must be present: the handler does `(raw["last_sequence_ids"] as
         // JObject).TryGetValue(...)` and would null-deref without it (AdminAPI.cs).
         // An empty map means "send me everything you still have buffered".
         queryFn: () =>
-            api.post<LogsResponse>('ListRecentLogMessages', {
-                types: selected,
-                last_sequence_ids: {}
-            }),
+            source === null
+                ? api.post<LogsResponse>('ListRecentLogMessages', {
+                      types: selected,
+                      last_sequence_ids: cursors.current
+                  })
+                : api.post<LogsResponse>('ListRemoteLogMessages', {
+                      backend_id: source,
+                      types: selected,
+                      last_sequence_ids: cursors.current
+                  }),
         refetchInterval: paused ? false : 3000
     });
 
@@ -64,17 +116,50 @@ export function LogsPage() {
         }
     }, [search.types]);
 
+    // Sequence ids are per-server (Logs.LogTracker.LastSequenceID is one static counter per
+    // process), so a cursor or a buffered line from one server means nothing on another.
+    useEffect(() => {
+        cursors.current = {};
+        setStream([]);
+    }, [source]);
+
+    // Append what the poll returned. Anything at or below the tracker's cursor has been taken
+    // already, which also makes a repeated render or a replayed cache entry harmless.
+    useEffect(() => {
+        if (!logs.data) {
+            return;
+        }
+        const fresh: StreamLine[] = [];
+        for (const [type, messages] of Object.entries(logs.data.data ?? {})) {
+            for (const message of messages ?? []) {
+                if (message.sequence_id <= (cursors.current[type] ?? -1)) {
+                    continue;
+                }
+                cursors.current[type] = message.sequence_id;
+                fresh.push({ ...message, type });
+            }
+        }
+        if (fresh.length === 0) {
+            return;
+        }
+        setStream(prev => {
+            const next = [...prev, ...fresh].sort((a, b) => a.sequence_id - b.sequence_id);
+            return next.length > MAX_BUFFERED_LINES ? next.slice(-MAX_BUFFERED_LINES) : next;
+        });
+    }, [logs.data]);
+
     const types = logs.data?.types_available ?? [];
 
+    // Deselecting a type hides its lines without dropping them: the buffer keeps them, and its
+    // cursor keeps its place, so re-selecting shows the history back again instead of re-pulling it.
     const lines = useMemo(() => {
-        const data = logs.data?.data ?? {};
-        const merged = Object.entries(data).flatMap(([type, messages]) =>
-            (messages ?? []).map(message => ({ ...message, type }))
-        );
-        merged.sort((a, b) => a.sequence_id - b.sequence_id);
         const query = filter.trim().toLowerCase();
-        return query ? merged.filter(line => line.message.toLowerCase().includes(query)) : merged;
-    }, [logs.data, filter]);
+        return stream.filter(
+            line =>
+                selected.includes(line.type) &&
+                (query === '' || line.message.toLowerCase().includes(query))
+        );
+    }, [stream, selected, filter]);
 
     // Follow the tail unless the user has scrolled up to read something.
     useEffect(() => {
@@ -85,10 +170,39 @@ export function LogsPage() {
     }, [lines]);
 
     const colorFor = (name: string) => types.find(t => t.name === name)?.color ?? 'var(--sw-fg-soft)';
+    const sourceLabel = (backend: Backend) =>
+        `${backend.title || t('logs.remoteFallbackName')} (#${backend.id})`;
 
     return (
         <div className="flex h-full min-h-0 flex-col">
             <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle px-3 py-2">
+                {/* Only worth showing when there is somewhere else to look. A deep link to a
+                    backend that is gone from the list still gets an entry, or the picker would
+                    read as "this server" while remote logs are on screen. */}
+                {(remotes.length > 0 || source !== null) && (
+                    <select
+                        value={source ?? ''}
+                        aria-label={t('logs.source')}
+                        onChange={e =>
+                            navigate({
+                                to: '/server/logs',
+                                search: e.target.value ? { backend: Number(e.target.value) } : {}
+                            })
+                        }
+                        className="rounded border border-default bg-surface-sunken px-2 py-1 text-xs text-fg outline-none focus:border-[var(--emphasis)]"
+                    >
+                        <option value="">{t('logs.sourceLocal')}</option>
+                        {remotes.map(backend => (
+                            <option key={backend.id} value={String(backend.id)}>
+                                {sourceLabel(backend)}
+                            </option>
+                        ))}
+                        {source !== null && !remotes.some(b => String(b.id) === source) && (
+                            <option value={source}>{`#${source}`}</option>
+                        )}
+                    </select>
+                )}
+
                 <div className="flex flex-wrap gap-1">
                     {types.map(type => {
                         const active = selected.includes(type.name);
@@ -129,14 +243,18 @@ export function LogsPage() {
                 <span className="text-xs text-fg-soft tabular-nums">
                     {t('logs.lineCount', { count: lines.length })}
                 </span>
-                <button
-                    type="button"
-                    onClick={() => setPastebinOpen(true)}
-                    className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
-                >
-                    <Upload size={12} aria-hidden />
-                    {t('logs.pastebin')}
-                </button>
+                {/* LogSubmitToPastebin only reads this server's own trackers, and there is no
+                    remote equivalent to forward it to. */}
+                {source === null && (
+                    <button
+                        type="button"
+                        onClick={() => setPastebinOpen(true)}
+                        className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
+                    >
+                        <Upload size={12} aria-hidden />
+                        {t('logs.pastebin')}
+                    </button>
+                )}
                 <button
                     type="button"
                     onClick={() => setPaused(p => !p)}
@@ -148,6 +266,17 @@ export function LogsPage() {
                 </button>
             </div>
 
+            {logs.error && (
+                <p
+                    className="shrink-0 border-b border-subtle px-3 py-2 text-xs"
+                    style={{ color: 'var(--danger-button-background)' }}
+                >
+                    {t('logs.loadFailed', {
+                        error: logs.error instanceof Error ? logs.error.message : String(logs.error)
+                    })}
+                </p>
+            )}
+
             <div
                 ref={scrollRef}
                 onScroll={e => {
@@ -158,7 +287,7 @@ export function LogsPage() {
             >
                 {selected.length === 0 ? (
                     <p className="p-4 text-center text-fg-soft">{t('logs.selectType')}</p>
-                ) : logs.isPending ? (
+                ) : logs.isPending && stream.length === 0 ? (
                     <p className="p-4 text-center text-fg-soft">{t('logs.loading')}</p>
                 ) : lines.length === 0 ? (
                     <p className="p-4 text-center text-fg-soft">

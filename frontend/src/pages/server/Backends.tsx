@@ -6,7 +6,7 @@ import { api } from '@/api/client';
 import { usePermission } from '@/api/permissions';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { BackendCard, type BackendSaveInput } from '@/components/server/BackendCard';
-import { backendLogName, isLive, type Backend, type BackendType } from '@/server/backends';
+import { backendLogTarget, isLive, type Backend, type BackendType } from '@/server/backends';
 import { useTranslation } from '@/i18n';
 
 export function BackendsPage() {
@@ -234,9 +234,9 @@ export function BackendsPage() {
                                 backend={backend}
                                 type={typeById.get(backend.type)}
                                 perms={perms}
-                                logName={
+                                logTarget={
                                     canViewLogs
-                                        ? backendLogName(logTypes.data?.types_available ?? [], backend.id)
+                                        ? backendLogTarget(logTypes.data?.types_available ?? [], backend)
                                         : null
                                 }
                                 saving={edit.isPending && edit.variables?.backend_id === backend.id}

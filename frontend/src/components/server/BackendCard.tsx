@@ -42,8 +42,9 @@ export function BackendCard(props: {
     backend: Backend;
     type?: BackendType;
     perms: BackendCardPermissions;
-    /** Log tracker name for this backend's process output, when it has one. */
-    logName: string | null;
+    /** Search params for the log viewer link, when this backend has logs to show; see
+     *  backendLogTarget. Null renders the button disabled. */
+    logTarget: { types: string } | { backend: number } | null;
     saving: boolean;
     saveError: string | null;
     onSave: (input: BackendSaveInput) => void;
@@ -156,10 +157,10 @@ export function BackendCard(props: {
                         <RefreshCw size={14} aria-hidden />
                     </IconButton>
                 )}
-                {props.logName ? (
+                {props.logTarget ? (
                     <Link
                         to="/server/logs"
-                        search={{ types: props.logName }}
+                        search={props.logTarget}
                         title={t('backendCard.viewLogs')}
                         aria-label={t('backendCard.viewLogs')}
                         className="shrink-0 rounded border border-default p-1.5 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"

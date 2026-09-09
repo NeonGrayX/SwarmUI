@@ -12,7 +12,7 @@ namespace SwarmUI.WebAPI;
 /// <para>Only <see cref="SwarmSwarmBackend"/> can be targeted: a raw ComfyUI backend has no download API to call.</para></summary>
 public static class RemoteModelDownload
 {
-    /// <summary>Finds the remote Swarm backend a download should be forwarded to, or null if the ID doesn't name one.</summary>
+    /// <summary>Finds the remote Swarm backend a call should be forwarded to, or null if the ID doesn't name one.</summary>
     public static SwarmSwarmBackend TryGetTarget(string backendId)
     {
         if (!int.TryParse(backendId, out int id) || !Program.Backends.AllBackends.TryGetValue(id, out BackendHandler.BackendData data))
