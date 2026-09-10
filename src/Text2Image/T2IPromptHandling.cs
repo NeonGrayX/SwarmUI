@@ -106,6 +106,20 @@ public class T2IPromptHandling
         return [.. output.Select(v => v.Trim())];
     }
 
+    /// <summary>Joins values so <see cref="SplitSmart"/> will split them back apart correctly.</summary>
+    public static string JoinSmart(string[] vals)
+    {
+        if (vals.Any(v => v.Contains('|')))
+        {
+            return vals.JoinString("||");
+        }
+        if (vals.Any(v => v.Contains(',')))
+        {
+            return vals.JoinString("|");
+        }
+        return vals.JoinString(",");
+    }
+
     /// <summary>Mapping of prompt tag prefixes, to allow for registration of custom prompt tags.</summary>
     public static Dictionary<string, Func<string, PromptTagContext, string>> PromptTagProcessors = [];
 
@@ -252,7 +266,7 @@ public class T2IPromptHandling
             {
                 rawVals[i] = context.Parse(rawVals[i]);
             }
-            return $"[{rawVals.Select(EscapeForTextHandler).JoinString("|")}]";
+            return $"<alternate:{JoinSmart(rawVals)}>";
         };
         PromptTagProcessors["alt"] = PromptTagProcessors["alternate"];
         PromptTagLengthEstimators["alternate"] = PromptTagLengthEstimators["random"];
@@ -275,9 +289,23 @@ public class T2IPromptHandling
             {
                 rawVals[i] = context.Parse(rawVals[i]);
             }
-            return $"[{rawVals.Select(EscapeForTextHandler).JoinString(":")}:{stepIndex}]";
+            return $"<fromto[{stepIndex:0.######}]:{JoinSmart(rawVals)}>";
         };
         PromptTagLengthEstimators["fromto"] = PromptTagLengthEstimators["random"];
+        PromptTagProcessors["weight"] = (data, context) =>
+        {
+            double? weightVal = InterpretNumber(context.PreData, context);
+            if (!weightVal.HasValue)
+            {
+                context.TrackWarning($"Weight input 'weight[{context.PreData}]:{data}' has invalid predata weight value (not a number) and will be ignored.");
+                return null;
+            }
+            return $"<weight[{weightVal:0.######}]:{context.Parse(data)}>";
+        };
+        PromptTagLengthEstimators["weight"] = (data, context) =>
+        {
+            return ProcessPromptLikeForLength(data);
+        };
         PromptTagProcessors["wildcard"] = (data, context) =>
         {
             data = context.Parse(data);
@@ -501,7 +529,7 @@ public class T2IPromptHandling
                 List<string> usedEmbeds = context.Input.ExtraMeta.GetOrCreate("used_embeddings", () => new List<string>()) as List<string>;
                 usedEmbeds.Add(T2IParamTypes.CleanModelName(matched));
             }
-            return "\0swarmembed:" + matched + "\0end";
+            return "\0swarmembed:" + T2IParamTypes.CleanModelName(matched) + "\0end";
         };
         PromptTagProcessors["embedding"] = PromptTagProcessors["embed"];
         PromptTagPostProcessors["lora"] = (data, context) =>
@@ -844,7 +872,12 @@ public class T2IPromptHandling
             }
             val = val.Replace("\0triggerextra", triggerPhrase);
         }
-        return addBefore + val + addAfter;
+        val = addBefore + val + addAfter;
+        if (isMain && (context.Input?.SourceSession?.User?.Settings?.ParamParsing?.ParseAlternativePromptSyntaxes ?? true) && (context.Input?.Get(T2IParamTypes.Model)?.ModelClass?.CompatClass?.SupportLegacyPromptParser ?? false))
+        {
+            val = LegacyPromptParser.Convert(val);
+        }
+        return val;
     }
 
     public static string ProcessPromptLikeForLength(string val)

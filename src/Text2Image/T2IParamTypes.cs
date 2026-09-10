@@ -345,7 +345,7 @@ public class T2IParamTypes
     public static T2IRegisteredParam<List<Image>> PromptImages;
     public static T2IRegisteredParam<List<AudioFile>> PromptAudios;
     public static T2IRegisteredParam<List<VideoFile>> PromptVideos;
-    public static T2IRegisteredParam<bool> OutputIntermediateImages, DoNotSave, DoNotSaveIntermediates, ControlNetPreviewOnly, RevisionZeroPrompt, RemoveBackground, NoSeedIncrement, NoPreviews, VideoBoomerang, ModelSpecificEnhancements, UseInpaintingEncode, MaskCompositeUnthresholded, SaveSegmentMask, InitImageRecompositeMask, UseReferenceOnly, RefinerDoTiling, AutomaticVAE, ZeroNegative, FluxDisableGuidance, SmartImagePromptResizing, NoLoadModels, NoInternalSpecialHandling, ForwardRawBackendData, ForwardSwarmData, NegativeModelIncludeLoras, ContinueAfterErrors,
+    public static T2IRegisteredParam<bool> OutputIntermediateImages, DoNotSave, DoNotSaveIntermediates, ControlNetPreviewOnly, RevisionZeroPrompt, RemoveBackground, NoSeedIncrement, NoPreviews, VideoBoomerang, ModelSpecificEnhancements, UseInpaintingEncode, MaskCompositeUnthresholded, SaveSegmentMask, InitImageRecompositeMask, UseReferenceOnly, RefinerDoTiling, AutomaticVAE, ZeroNegative, FluxDisableGuidance, SmartImagePromptResizing, NoLoadModels, NoInternalSpecialHandling, ForwardRawBackendData, ForwardSwarmData, NegativeModelIncludeLoras, ContinueAfterErrors, JustLoadModel,
         PlaceholderParamGroupStarred, PlaceholderParamGroupUser1, PlaceholderParamGroupUser2, PlaceholderParamGroupUser3;
 
     public static T2IParamGroup GroupImagePrompting, GroupCore, GroupVariation, GroupResolution, GroupSampling, GroupInitImage, GroupRefiners, GroupRefinerOverrides,
@@ -406,7 +406,7 @@ public class T2IParamTypes
             "false", IgnoreIf: "false", Group: GroupImagePrompting, FeatureFlag: "sdxl"
             ));
         UseReferenceOnly = Register<bool>(new("Use Reference Only", "Use the 'Reference-Only' technique to guide the generation towards the input image.\nThis currently has side effects that notably prevent Batch from being used properly.",
-            "false", IgnoreIf: "false", Group: GroupImagePrompting, IsAdvanced: true
+            "false", IgnoreIf: "false", Group: GroupImagePrompting, IsAdvanced: true, FeatureFlag: "supports_reference_only"
             ));
         SmartImagePromptResizing = Register<bool>(new("Smart Image Prompt Resizing", "When enabled, input images for the image prompt will be intelligently resized to a scale appropriate to the model.\nIf disabled, images will be either unscaled, or scaled to the current generation parameter size.\nIt is almost always best to leave this on.",
             "true", IgnoreIf: "true", Group: GroupImagePrompting, IsAdvanced: true
@@ -417,7 +417,7 @@ public class T2IParamTypes
             "1", IgnoreIf: "1", Min: 1, Max: 10000, Step: 1, Examples: ["1", "4"], OrderPriority: -50, Group: GroupCore, AlwaysRetain: true
             ));
         Seed = Register<long>(new("Seed", "Image seed.\n-1 = random.\nDifferent seeds produce different results for the same prompt.",
-            "-1", Min: -1, Max: long.MaxValue, Step: 1, Examples: ["1", "2", "...", "10"], OrderPriority: -30, ViewType: ParamViewType.SEED, Group: GroupCore, ChangeWeight: -5
+            "-1", Min: -1, Max: long.MaxValue, Step: 1, Examples: ["1", "2", "...", "10"], OrderPriority: -30, ViewType: ParamViewType.SEED, Group: GroupCore, ChangeWeight: -5, CanSectionalize: true
             ));
         Steps = Register<int>(new("Steps", "Diffusion works by running a model repeatedly to slowly build and then refine an image.\nThis parameter is how many times to run the model.\nMore steps = better quality, but more time.\n20 is a good baseline for speed, 40 is good for maximizing quality.\nSome models, such as Turbo models, are intended for low step counts like 4 or 8.\nYou can go much higher, but it quickly becomes pointless above 70 or so.\nNote that steps is a core parameter used for defining diffusion schedules and other advanced internals, and merely running the model over top of an existing image is not the same as increasing the steps.\nNote that the number of steps actually ran can be influenced by other parameters such as Init Image Creativity when applied.",
             "20", Min: 0, Max: 500, ViewMax: 50, Step: 1, Examples: ["10", "15", "20", "30", "40"], OrderPriority: -20, Group: GroupCore, ViewType: ParamViewType.SLIDER, CanSectionalize: true
@@ -429,7 +429,7 @@ public class T2IParamTypes
         // ================================================ Text2Video ================================================
         GroupText2Video = new("Text To Video", Open: false, OrderPriority: -30, Toggles: true, Description: $"Support for Text2Video models.");
         Text2VideoFrames = Register<int>(new("Text2Video Frames", "How many frames to generate within the video.\nGenmo Mochi 1 can support any frame count up to 200, multiples of 6 plus 1 (7, 13, 19, 25, ...) are required and will automatically round if you enter an invalid value. Defaults to 25.\nLTXV supports frame counts anywhere up to 257. Multiples of 8 plus 1 (9, 17, 25, 33, 41, ...) are required and will automatically round if you enter an invalid value. Defaults to 97.\nHunyuan Video and Wan-2.1 support dynamic frame counts. Multiples of 4 plus 1 (5, 9, 13, 17, ...) are required and will automatically round if you enter an invalid value. Hunyuan defaults to 73, Wan defaults to 81.",
-            "25", Min: 1, Max: 1000, OrderPriority: 1, Group: GroupText2Video, FeatureFlag: "text2video", Toggleable: true, ViewType: ParamViewType.VIDEO_FRAMES
+            "24", Min: 1, Max: 1000, OrderPriority: 1, Group: GroupText2Video, FeatureFlag: "text2video", Toggleable: true, ViewType: ParamViewType.VIDEO_FRAMES
             ));
         List<string> videoFormats = ["webp", "gif", "gif-hd", "webm", "h264-mp4", "h265-mp4", "prores"];
         // ================================================ Text2Audio ================================================
@@ -618,7 +618,7 @@ public class T2IParamTypes
             "0.5", Min: 0, Max: 1, Step: 0.05, OrderPriority: 1.7, ViewType: ParamViewType.SLIDER, Group: GroupVideo, Permission: Permissions.ParamVideo, FeatureFlag: "video", IsAdvanced: true, DoNotPreview: true, DependNonDefault: VideoSwapModel.Type.ID
             ));
         VideoFrames = Register<int>(new("Video Frames", "How many frames to generate within the video.\nSVD-XT normally uses 25 frames, and SVD (non-XT) 0.9 used 14 frames.\nLTXV supports frame counts anywhere up to 257. Multiples of 8 plus 1 (9, 17, 25, 33, 41, ...) are required and will automatically round if you enter an invalid value. Defaults to 97.\nCosmos was only trained for 121.\nWan 2.1 expects 81, but will mostly work with other values.",
-            "25", Min: 1, Max: 1000, OrderPriority: 2, Group: GroupVideo, Permission: Permissions.ParamVideo, FeatureFlag: "video", DoNotPreview: true, Toggleable: true, ChangeWeight: 1, ViewType: ParamViewType.VIDEO_FRAMES
+            "24", Min: 1, Max: 1000, OrderPriority: 2, Group: GroupVideo, Permission: Permissions.ParamVideo, FeatureFlag: "video", DoNotPreview: true, Toggleable: true, ChangeWeight: 1, ViewType: ParamViewType.VIDEO_FRAMES
             ));
         VideoSteps = Register<int>(new("Video Steps", "How many steps to use for the video model.\nHigher step counts yield better quality, but much longer generation time.\n20 is sufficient as a basis, but some video models need higher steps to achieve coherence.",
             "20", Min: 1, Max: 200, ViewMax: 50, ViewType: ParamViewType.SLIDER, OrderPriority: 3, Group: GroupVideo, Permission: Permissions.ParamVideo, FeatureFlag: "video", DoNotPreview: true
@@ -789,6 +789,9 @@ public class T2IParamTypes
             ));
         NoLoadModels = Register<bool>(new("No Load Models", "If checked, tells the server that if this request would cause a backend to load a model, to just skip doing that.\nThe backend will be marked as if the model is loaded, instantly without processing.",
             "false", IgnoreIf: "false", IsAdvanced: true, Group: GroupSwarmInternal, AlwaysRetain: true, OrderPriority: -13, IntentionalUnused: true
+            ));
+        JustLoadModel = Register<bool>(new("Just Load Model", "If checked, tells the server to just load a model and not bother with outputs.",
+            "false", IgnoreIf: "false", IsAdvanced: true, Group: GroupSwarmInternal, AlwaysRetain: true, OrderPriority: -15, IntentionalUnused: true, VisibleNormally: false, HideFromMetadata: true
             ));
         NoInternalSpecialHandling = Register<bool>(new("No Internal Special Handling", "If checked, tells the server that it should not do any internal special handling in this request.\nA key example is in ComfyUI usage, inputs and outputs stored to comfy dirs will not be removed.",
             "false", IgnoreIf: "false", IsAdvanced: true, Group: GroupSwarmInternal, AlwaysRetain: true, OrderPriority: -13, VisibleNormally: false

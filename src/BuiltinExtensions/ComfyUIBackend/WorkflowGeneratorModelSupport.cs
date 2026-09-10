@@ -109,6 +109,9 @@ public partial class WorkflowGenerator
     /// <summary>Returns true if the current model is HiDream-O1 Image.</summary>
     public bool IsHiDreamO1() => IsModelCompatClass(T2IModelClassSorter.CompatHiDreamO1);
 
+    /// <summary>Returns true if the current model is SenseNova U1.5.</summary>
+    public bool IsSenseNovaU15() => IsModelCompatClass(T2IModelClassSorter.CompatSenseNovaU15);
+
     /// <summary>Returns true if the current model is Lens.</summary>
     public bool IsLens() => IsModelCompatClass(T2IModelClassSorter.CompatLens);
 
@@ -493,7 +496,7 @@ public partial class WorkflowGenerator
                 ["width"] = width
             }, id));
         }
-        else if (IsHiDreamO1()) // TODO: use VAE Family
+        else if (IsHiDreamO1() || IsSenseNovaU15()) // TODO: use VAE Family
         {
             return resultImage(CreateNode("EmptyHiDreamO1LatentImage", new JObject()
             {
@@ -1565,7 +1568,7 @@ public partial class WorkflowGenerator
         }
         if (UserInput.TryGet(T2IParamTypes.SigmaShift, out double shiftVal, sectionId: sectionId))
         {
-            if (IsFlux() || IsAnyFlux2())
+            if (IsFlux() || IsAnyFlux2() || IsKrea2())
             {
                 string samplingNode = CreateNode("ModelSamplingFlux", new JObject()
                 {
@@ -1573,11 +1576,11 @@ public partial class WorkflowGenerator
                     ["width"] = UserInput.GetImageWidth(),
                     ["height"] = UserInput.GetImageHeight(),
                     ["max_shift"] = shiftVal,
-                    ["base_shift"] = 0.5 // TODO: Does this need an input?
+                    ["base_shift"] = IsKrea2() ? shiftVal : 0.5 // TODO: Does this need an input?
                 });
                 LoadingModel = [samplingNode, 0];
             }
-            else if (IsZImage() || IsAceStep15() || IsAnima() || IsKrea2() || IsBoogu())
+            else if (IsZImage() || IsAceStep15() || IsAnima() || IsBoogu())
             {
                 string samplingNode = CreateNode("ModelSamplingAuraFlow", new JObject()
                 {
@@ -1589,6 +1592,15 @@ public partial class WorkflowGenerator
             else if (IsHunyuanVideo() || IsHunyuanVideo15() || IsHunyuanImage() || IsWanVideo() || IsWanVideo22() || IsHiDream())
             {
                 string samplingNode = CreateNode("ModelSamplingSD3", new JObject()
+                {
+                    ["model"] = LoadingModel,
+                    ["shift"] = shiftVal
+                });
+                LoadingModel = [samplingNode, 0];
+            }
+            else if (IsSenseNovaU15())
+            {
+                string samplingNode = CreateNode("SenseNovaSamplingOptions", new JObject()
                 {
                     ["model"] = LoadingModel,
                     ["shift"] = shiftVal
