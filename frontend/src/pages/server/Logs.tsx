@@ -172,6 +172,16 @@ export function LogsPage() {
     const colorFor = (name: string) => types.find(t => t.name === name)?.color ?? 'var(--sw-fg-soft)';
     const sourceLabel = (backend: Backend) =>
         `${backend.title || t('logs.remoteFallbackName')} (#${backend.id})`;
+    // Named for the pastebin dialog, which says whose logs are about to be made public. A deep
+    // link to a backend missing from the list still gets its id rather than no name at all.
+    const remoteName = useMemo(() => {
+        if (source === null) {
+            return null;
+        }
+        const backend = remotes.find(b => String(b.id) === source);
+        return backend ? sourceLabel(backend) : `#${source}`;
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- sourceLabel is re-made each render
+    }, [source, remotes, t]);
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -243,18 +253,16 @@ export function LogsPage() {
                 <span className="text-xs text-fg-soft tabular-nums">
                     {t('logs.lineCount', { count: lines.length })}
                 </span>
-                {/* LogSubmitToPastebin only reads this server's own trackers, and there is no
-                    remote equivalent to forward it to. */}
-                {source === null && (
-                    <button
-                        type="button"
-                        onClick={() => setPastebinOpen(true)}
-                        className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
-                    >
-                        <Upload size={12} aria-hidden />
-                        {t('logs.pastebin')}
-                    </button>
-                )}
+                {/* LogSubmitToPastebin only ever reads the trackers of the server it runs on, so
+                    for a remote source the submit is forwarded and the paste made over there. */}
+                <button
+                    type="button"
+                    onClick={() => setPastebinOpen(true)}
+                    className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
+                >
+                    <Upload size={12} aria-hidden />
+                    {t('logs.pastebin')}
+                </button>
                 <button
                     type="button"
                     onClick={() => setPaused(p => !p)}
@@ -308,7 +316,9 @@ export function LogsPage() {
 
             {/* Mounted only while open so a second visit starts from the warnings, not the
                 previous run's result. */}
-            {pastebinOpen && <PastebinDialog onOpenChange={setPastebinOpen} />}
+            {pastebinOpen && (
+                <PastebinDialog source={source} sourceName={remoteName} onOpenChange={setPastebinOpen} />
+            )}
         </div>
     );
 }
@@ -321,14 +331,26 @@ const PASTE_SERVICE = 'https://paste.denizenscript.com/New/Swarm';
 
 /** One-click upload of the server log to the public Swarm pastebin, for sharing when asking for
  *  support. The paste is public and not easily deletable, so the warning is shown before the
- *  submit rather than after. */
-function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
+ *  submit rather than after.
+ *
+ *  `source` is the backend id whose logs are on screen, or null for this server. A remote's logs
+ *  are pasted by the remote itself (RemoteLogs.RemoteLogSubmitToPastebin forwards the call), so
+ *  the resulting URL is the same kind of link either way. */
+function PastebinDialog(props: {
+    source: string | null;
+    sourceName: string | null;
+    onOpenChange: (open: boolean) => void;
+}) {
     const { t } = useTranslation();
     const [level, setLevel] = useState('debug');
     const [copied, setCopied] = useState(false);
+    const source = props.source;
 
     const submit = useMutation({
-        mutationFn: (type: string) => api.post<{ url: string }>('LogSubmitToPastebin', { type })
+        mutationFn: (type: string) =>
+            source === null
+                ? api.post<{ url: string }>('LogSubmitToPastebin', { type })
+                : api.post<{ url: string }>('RemoteLogSubmitToPastebin', { backend_id: source, type })
     });
 
     const url = submit.data?.url;
@@ -379,6 +401,11 @@ function PastebinDialog(props: { onOpenChange: (open: boolean) => void }) {
                                 </a>
                                 {t('logs.pastebinIntro3')}
                             </p>
+                            {props.sourceName !== null && (
+                                <p className="text-fg">
+                                    {t('logs.pastebinRemoteNote', { source: props.sourceName })}
+                                </p>
+                            )}
                             <p className="text-fg">{t('logs.pastebinWarning')}</p>
                             <p>
                                 {t('logs.pastebinManual1')}{' '}

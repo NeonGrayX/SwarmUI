@@ -143,10 +143,15 @@ export function parseLegacyServerInfo(html: string): LegacyServerInfo {
     };
 }
 
-export async function fetchLegacyServerInfo(): Promise<LegacyServerInfo> {
+/** The legacy page's markup. Shared with legacyExtensions, which reads a different corner of it. */
+export async function fetchLegacyPage(): Promise<string> {
     const response = await fetch(LEGACY_PAGE, { credentials: 'same-origin' });
     if (!response.ok) {
         throw new Error(`The legacy interface returned HTTP ${response.status}.`);
     }
-    return parseLegacyServerInfo(await response.text());
+    return response.text();
+}
+
+export async function fetchLegacyServerInfo(): Promise<LegacyServerInfo> {
+    return parseLegacyServerInfo(await fetchLegacyPage());
 }

@@ -62,6 +62,7 @@ const IMPLEMENTED: Record<string, Screen> = {
     backends: screen(() => import('./pages/server/Backends'), m => m.BackendsPage),
     configuration: screen(() => import('./pages/server/ServerConfiguration'), m => m.ServerConfigurationPage),
     users: screen(() => import('./pages/server/Users'), m => m.UsersPage),
+    extensions: screen(() => import('./pages/server/Extensions'), m => m.ExtensionsPage),
     logs: screen(() => import('./pages/server/Logs'), m => m.LogsPage),
     // Settings
     account: screen(() => import('./pages/settings/Account'), m => m.AccountPage),
@@ -74,13 +75,6 @@ const IMPLEMENTED: Record<string, Screen> = {
     pickle2safetensors: screen(() => import('./pages/tools/PickleToSafetensors'), m => m.PickleToSafetensorsPage),
     'lora-extractor': screen(() => import('./pages/tools/LoraExtractor'), m => m.LoraExtractorPage),
     metadata: screen(() => import('./pages/tools/MetadataUtilities'), m => m.MetadataUtilitiesPage)
-};
-
-/** Destinations with no screen of their own, keyed to the translation identifier for their
- *  one-line description. Extensions is the only one; its work still lives in the legacy
- *  Extensions tab, so the placeholder points there. */
-const UNBUILT: Record<string, string> = {
-    extensions: 'placeholder.summary.extensions'
 };
 
 /** Search-parameter contracts, for the few screens that are deep-linked into.
@@ -145,7 +139,7 @@ function routeFor(destination: Destination): AnyRoute {
                         <implemented.Component />
                     </Suspense>
                 ) : (
-                    <Placeholder destination={destination} summaryKey={UNBUILT[destination.id]} />
+                    <Placeholder destination={destination} />
                 )}
             </RequirePermission>
         )

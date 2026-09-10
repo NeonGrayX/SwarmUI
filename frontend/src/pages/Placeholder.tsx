@@ -2,8 +2,9 @@ import { Construction } from 'lucide-react';
 import type { Destination } from '@/nav/destinations';
 import { useTranslation } from '@/i18n';
 
-/** Stand-in for a routed destination with no screen of its own — Extensions is the only one.
- *  `summaryKey` names the translated one-line description in router.tsx. */
+/** Stand-in for a routed destination with no screen of its own. Every destination has one at the
+ *  moment; this is what a newly added nav entry renders until its screen lands.
+ *  `summaryKey` names an optional translated one-line description. */
 export function Placeholder(props: { destination: Destination; summaryKey?: string }) {
     const { t } = useTranslation();
     const Icon = props.destination.icon;
