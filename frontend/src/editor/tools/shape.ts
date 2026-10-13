@@ -14,6 +14,9 @@ import type { ToolOption, ToolOptionValue } from '../types';
 
 type ShapeKind = 'rectangle' | 'circle';
 
+const MIN_STROKE = 1;
+const MAX_STROKE = 20;
+
 export class ShapeTool extends ColorTool {
     shape: ShapeKind = 'rectangle';
     fill = false;
@@ -50,8 +53,8 @@ export class ShapeTool extends ColorTool {
                 key: 'strokeWidth',
                 labelKey: 'editor.option.width',
                 value: this.strokeWidth,
-                min: 1,
-                max: 20,
+                min: MIN_STROKE,
+                max: MAX_STROKE,
                 step: 1,
                 // A filled shape has no outline to set a width for.
                 disabled: this.fill
@@ -67,7 +70,11 @@ export class ShapeTool extends ColorTool {
             this.fill = Boolean(value);
         }
         else if (key === 'strokeWidth') {
-            this.strokeWidth = Number(value);
+            const width = Number(value);
+            if (!Number.isFinite(width)) {
+                return;
+            }
+            this.strokeWidth = Math.max(MIN_STROKE, Math.min(MAX_STROKE, Math.round(width)));
         }
         else {
             super.setOption(key, value);
@@ -203,7 +210,7 @@ export class ShapeTool extends ColorTool {
     // Only the global handler is implemented: it fires for every move, inside the canvas or out,
     // so handling the local one too would just redraw the shape twice per event.
     onGlobalPointerMove(): boolean {
-        if (!this.drawing) {
+        if (!this.drawing || !this.engine.pointerDown) {
             return false;
         }
         this.updateCurrent();

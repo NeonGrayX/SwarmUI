@@ -3,9 +3,15 @@ import { create } from 'zustand';
 import { ChevronRight, Sparkles, X } from 'lucide-react';
 import { BASE_SUBTYPE, useCurrentModel, useModelCatalog } from '@/library/catalog';
 import type { NormalizedSchema } from '@/params/schema';
-import { useParamStore, valueOf } from '@/params/store';
+import { valueOf } from '@/params/store';
 import { toStoredString } from '@/params/presets';
-import { applySuggestions, useSuggestedSettings, type Suggestion, type SuggestionSource } from '@/params/suggest';
+import {
+    applySuggestions,
+    useSuggestedSettings,
+    useSuggestionState,
+    type Suggestion,
+    type SuggestionSource
+} from '@/params/suggest';
 import { useTranslation, type Translator } from '@/i18n';
 
 /** Models whose suggestions were dismissed this session. Not persisted: a dismissal is "not now",
@@ -49,8 +55,7 @@ export function SuggestedSettings(props: { schema: NormalizedSchema }) {
     const current = useCurrentModel();
     const catalog = useModelCatalog(BASE_SUBTYPE);
     const option = current.name ? catalog.byName.get(current.name) : undefined;
-    const values = useParamStore(s => s.values);
-    const toggles = useParamStore(s => s.toggles);
+    const { values, toggles } = useSuggestionState();
     const dismissed = useDismissed(s => s.models.has(current.name));
     const dismiss = useDismissed(s => s.dismiss);
 

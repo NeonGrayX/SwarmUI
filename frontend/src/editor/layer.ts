@@ -306,6 +306,7 @@ export class EditorLayer {
             new HistoryEntry(this.engine, 'layer_canvas_edit', {
                 layer: this,
                 oldCanvas: this.snapshot(),
+                oldHasAnyContent: this.hasAnyContent,
                 oldOffsetX: this.offsetX,
                 oldOffsetY: this.offsetY,
                 oldRotation: this.rotation,

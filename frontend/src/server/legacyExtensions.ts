@@ -12,6 +12,7 @@
  * that cannot be read at all simply does not appear.
  */
 
+import { t } from '@/i18n';
 import { fetchLegacyPage } from './legacyInfo';
 
 /** How a tag should read. The legacy page's own classes carry this distinction — `paid-tag`,
@@ -98,7 +99,10 @@ function link(cell: Element | undefined): string | undefined {
  * when one method serves two buttons, as `setExtensionEnabled` does with its true/false. */
 function actionArg(cell: Element | undefined, method: string, args = ''): string | undefined {
     for (const button of Array.from(cell?.querySelectorAll('button') ?? [])) {
-        const pattern = new RegExp(`${method}\\('([^']*)'${args ? `,\\s*${args}` : ''}`);
+        // Greedy up to the `, this)` that closes the call, rather than stopping at the next quote:
+        // Razor writes the name unescaped into the JS string, so a name with an apostrophe in it
+        // ("Bob's Nodes") would otherwise be cut short at that apostrophe.
+        const pattern = new RegExp(`${method}\\('(.*)'${args ? `,\\s*${args}` : ''},\\s*this\\)`);
         const match = pattern.exec(button.getAttribute('onclick') ?? '');
         if (match) {
             return match[1];
@@ -171,6 +175,11 @@ function parseInstalled(row: Record<string, Element | undefined>): InstalledExte
 export function parseLegacyExtensions(html: string): LegacyExtensions {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const tables = Array.from(doc.querySelectorAll('#Server-Extensions table'));
+    // No tables at all means the markup moved (or the page was not the genpage, eg a login
+    // redirect), not that there are no extensions - the installed table always renders.
+    if (tables.length === 0) {
+        throw new Error(t('extensions.scrapeFailed'));
+    }
     // Only the installed table has a Version column; the other one is the available list.
     const installedTable = tables.find(table =>
         Array.from(table.querySelectorAll('th')).some(th => text(th).toLowerCase() === 'version')

@@ -43,11 +43,38 @@ export interface StreamClose {
 const SESSION_COOKIE = 'session_id';
 /** Retry ceiling, so a broken session can't loop forever. */
 const MAX_RETRY_DEPTH = 3;
+/** Set in sessionStorage once the server has been seen installed, so the probe runs once per tab. */
+const INSTALLED_KEY = 'swarm-ui-installed';
+/** Text only the installer page renders; the installed server's /Install is a bare redirect script
+ *  (src/Pages/Install.cshtml). Probing for the installer rather than for the redirect means a markup
+ *  change can only cost the redirect, never send an installed server to the installer. */
+const INSTALLER_MARKER = '<h1>SwarmUI Installer</h1>';
+
+/** The user an admin asked to act as via `?impersonate=`, read once at load. The router may drop
+ *  unknown search params on navigation, and a later session refresh must still ask for the same
+ *  user (legacy reads it once too, site.js `impersonateTargetUserId`). */
+function readImpersonateTarget(): string | null {
+    return new URLSearchParams(window.location.search).get('impersonate')?.trim() || null;
+}
+
+/** The login page, set to come back to the current /ui location once signed in. */
+function loginPath(): string {
+    return `/Login?return=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+}
+
+/** Leaves the app for a server-rendered page (login, installer). Never resolves, so whatever was
+ *  waiting on the session keeps showing its loading state until the browser navigates away. */
+function leaveFor(path: string): Promise<never> {
+    window.location.href = path;
+    return new Promise<never>(() => {});
+}
 
 /** Holds the active session and serializes concurrent attempts to establish one. */
 class SessionStore {
     private current: SessionData | null = null;
     private pending: Promise<SessionData> | null = null;
+    /** Cleared when the server refuses the impersonation, so the fallback session sticks. */
+    impersonateTarget: string | null = readImpersonateTarget();
 
     get data(): SessionData | null {
         return this.current;
@@ -70,10 +97,9 @@ class SessionStore {
     }
 
     private async request(client: SwarmApiClient): Promise<SessionData> {
-        const impersonate = new URLSearchParams(window.location.search).get('impersonate')?.trim();
         const body: Record<string, unknown> = {};
-        if (impersonate) {
-            body.impersonateUser = impersonate;
+        if (this.impersonateTarget) {
+            body.impersonateUser = this.impersonateTarget;
         }
         let data: SessionData;
         try {
@@ -82,7 +108,14 @@ class SessionStore {
         catch (e) {
             // An invalid impersonation target must not lock the user out; drop it and retry once.
             if (e instanceof SwarmApiError && e.errorId === 'bad_impersonate') {
+                this.impersonateTarget = null;
                 data = await client.rawPost<SessionData>('GetNewSession', {});
+            }
+            // GetNewSession's only error without an id is "no valid login" (BasicAPIFeatures.cs,
+            // GetNewSession), which is what the legacy page redirects to /Login for
+            // (Text2Image.cshtml). `return` brings the user back here afterwards (loginpage.js).
+            else if (e instanceof SwarmApiError && !e.errorId) {
+                return leaveFor(loginPath());
             }
             else {
                 throw e;
@@ -98,10 +131,33 @@ class SessionStore {
     }
 }
 
+/** True when the server has not been through its installer yet, which is where the legacy page
+ *  sends every visit (Text2Image.cshtml). No API exposes `IsInstalled` (it is a hidden setting),
+ *  so this reads the installer page itself; any failure counts as installed. */
+async function needsInstall(): Promise<boolean> {
+    if (sessionStorage.getItem(INSTALLED_KEY)) {
+        return false;
+    }
+    try {
+        const response = await fetch('/Install', { credentials: 'same-origin' });
+        const html = response.ok ? await response.text() : '';
+        if (html.includes(INSTALLER_MARKER)) {
+            return true;
+        }
+        sessionStorage.setItem(INSTALLED_KEY, 'true');
+    }
+    catch {
+        // Unknown is not "not installed"; the session request will report a dead server anyway.
+    }
+    return false;
+}
+
 export class SwarmApiClient {
     private readonly session = new SessionStore();
     /** Notified when the server reports a different build than the one we loaded against. */
     onServerVersionChanged?: (previous: string, current: string) => void;
+    /** Notified whenever a new session is established, so cached session data can follow it. */
+    onSessionChanged?: (data: SessionData) => void;
     private knownVersion: string | null = null;
 
     get sessionData(): SessionData | null {
@@ -112,14 +168,37 @@ export class SwarmApiClient {
         return this.session.data?.permissions ?? [];
     }
 
+    /** The user being impersonated, once the server has accepted it; null otherwise. */
+    get impersonating(): string | null {
+        const target = this.session.impersonateTarget;
+        return target && this.session.data?.user_id === target ? target : null;
+    }
+
     hasPermission(perm: string): boolean {
         return this.permissions.includes(perm);
     }
 
     /** Establishes (or refreshes) the session. Call once at startup. */
     async connect(): Promise<SessionData> {
-        const data = await this.session.acquire(this);
+        const [data, install] = await Promise.all([this.session.acquire(this), needsInstall()]);
+        if (install) {
+            return leaveFor('/Install');
+        }
         this.checkVersion(data.version);
+        return data;
+    }
+
+    /** Replaces a session the server refused. Only the first caller to notice a given id lapsing
+     *  makes a new one: anyone else who sent the same stale id finds it already replaced (or being
+     *  replaced, which `acquire` collapses onto) and just retries with the new one. */
+    private async refreshSession(staleId: string | null): Promise<SessionData> {
+        if (this.session.data && this.session.data.session_id !== staleId) {
+            return this.session.data;
+        }
+        this.session.clear();
+        const data = await this.session.acquire(this, true);
+        this.checkVersion(data.version);
+        this.onSessionChanged?.(data);
         return data;
     }
 
@@ -131,6 +210,24 @@ export class SwarmApiClient {
             this.onServerVersionChanged?.(this.knownVersion, version);
             this.knownVersion = version;
         }
+    }
+
+    /** Ends the login behind this browser (every session it opened, BasicAPIFeatures.Logout) and
+     *  goes to the login page, as the legacy account tab does (usertab.js doUserLogout). */
+    async logout(): Promise<void> {
+        await this.post('Logout');
+        this.session.clear();
+        writeCookie(SESSION_COOKIE, '', -1);
+        await leaveFor(loginPath());
+    }
+
+    /** Drops `?impersonate=` and reloads as the admin's own account (site.js stopImpersonatingUser).
+     *  The impersonated session's cookie goes too, or the reload would pick it straight back up. */
+    stopImpersonating(): void {
+        writeCookie(SESSION_COOKIE, '', -1);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('impersonate');
+        window.location.href = url.toString();
     }
 
     /** POST without session handling or retry. Used to bootstrap the session itself. */
@@ -149,10 +246,11 @@ export class SwarmApiClient {
             payload = (await response.json()) as T & ApiError;
         }
         catch {
-            throw new SwarmApiError(route, t('api.unreadableResponse', { status: response.status }));
+            // Tagged, so a proxy's error page is never mistaken for an error the server sent.
+            throw new SwarmApiError(route, t('api.unreadableResponse', { status: response.status }), 'unreadable_response');
         }
         if (payload === null) {
-            throw new SwarmApiError(route, t('api.emptyResponse'));
+            throw new SwarmApiError(route, t('api.emptyResponse'), 'empty_response');
         }
         if (payload.error || payload.error_id) {
             const message = payload.error ?? t('api.requestFailed', { id: payload.error_id ?? '' });
@@ -169,8 +267,7 @@ export class SwarmApiClient {
         }
         catch (e) {
             if (e instanceof SwarmApiError && e.errorId === 'invalid_session_id' && depth < MAX_RETRY_DEPTH) {
-                this.session.clear();
-                await this.session.acquire(this, true);
+                await this.refreshSession(sessionId);
                 return this.post<T>(route, body, depth + 1);
             }
             throw e;
@@ -205,12 +302,23 @@ export class SwarmApiClient {
             const socket = new WebSocket(this.wsUrl(route));
             current = socket;
 
+            /** The session this socket was opened with, so a refusal replaces that one only. */
+            let sentId: string | null = null;
             socket.onopen = () => {
                 opened = true;
-                socket.send(JSON.stringify({ ...body, session_id: this.session.id }));
+                sentId = this.session.id;
+                socket.send(JSON.stringify({ ...body, session_id: sentId }));
             };
             socket.onmessage = event => {
-                const data = JSON.parse(event.data) as T & ApiError;
+                let data: T & ApiError;
+                try {
+                    data = JSON.parse(event.data) as T & ApiError;
+                }
+                catch {
+                    // One unreadable frame is not worth tearing the stream down over.
+                    console.warn(`[api] Unreadable message on ${route} stream`);
+                    return;
+                }
                 // A lapsed session (a server restart is the usual cause) is refused before the
                 // route runs at all (API.cs:114), so nothing was started and reconnecting with a
                 // fresh session is invisible to the caller - and far better than reporting a
@@ -218,9 +326,7 @@ export class SwarmApiClient {
                 if (data.error_id === 'invalid_session_id' && !local && depth < MAX_RETRY_DEPTH) {
                     settled = true;
                     socket.close();
-                    this.session.clear();
-                    this.session
-                        .acquire(this, true)
+                    this.refreshSession(sentId)
                         .then(() => {
                             // Disposed while we were fetching a session: the caller is owed the
                             // close it would have got had the socket still been open.

@@ -3,7 +3,7 @@ import type { ParamSchema } from '@/api/types';
 import type { GroupNode } from '@/params/schema';
 import type { VisibilityResult } from '@/params/visibility';
 import { companionParams } from '@/params/loras';
-import { useParamStore, valueOf } from '@/params/store';
+import { defaultValue, useParamStore } from '@/params/store';
 import { Field } from './Field';
 import { ParamControl } from './controls';
 import { useTranslation } from '@/i18n';
@@ -14,6 +14,8 @@ interface Props {
     /** Forces groups open while a search is active, so hits are never buried. */
     forceOpen: boolean;
     depth?: number;
+    /** A group above this one is switched off, which switches this one off too. */
+    ancestorOff?: boolean;
 }
 
 /** A collapsible parameter group. The header carries a count of altered descendants, so a
@@ -22,18 +24,18 @@ export function ParamGroup(props: Props) {
     const { t, tDynamic } = useTranslation();
     const { node, visibility } = props;
     const depth = props.depth ?? 0;
-    const openGroups = useParamStore(s => s.openGroups);
+    const storedOpen = useParamStore(s => s.openGroups[props.node.group.id]);
     const setGroupOpen = useParamStore(s => s.setGroupOpen);
-    const groupToggles = useParamStore(s => s.groupToggles);
+    const groupOn = useParamStore(s => s.groupToggles[props.node.group.id] === true);
     const setGroupToggle = useParamStore(s => s.setGroupToggle);
 
     if (!visibility.visibleGroups.has(node.group.id)) {
         return null;
     }
 
-    const isOpen = props.forceOpen || (openGroups[node.group.id] ?? node.group.open);
+    const isOpen = props.forceOpen || (storedOpen ?? node.group.open);
     const alteredCount = visibility.alteredCountByGroup.get(node.group.id) ?? 0;
-    const groupOn = groupToggles[node.group.id] === true;
+    const switchedOff = props.ancestorOff === true || (node.group.toggles && !groupOn);
     const visibleParams = node.params.filter(p => visibility.visible.has(p.id));
 
     return (
@@ -83,7 +85,7 @@ export function ParamGroup(props: Props) {
                             key={param.id}
                             param={param}
                             visibility={visibility}
-                            groupDisabled={node.group.toggles && !groupOn}
+                            groupDisabled={switchedOff}
                         />
                     ))}
                     {node.children.map(child => (
@@ -93,6 +95,7 @@ export function ParamGroup(props: Props) {
                             visibility={visibility}
                             forceOpen={props.forceOpen}
                             depth={depth + 1}
+                            ancestorOff={switchedOff}
                         />
                     ))}
                 </div>
@@ -108,14 +111,17 @@ export function ParamField(props: {
 }) {
     const { t, tDynamic } = useTranslation();
     const { param, visibility } = props;
-    const values = useParamStore(s => s.values);
-    const toggles = useParamStore(s => s.toggles);
+    // Per-param selectors, so a keystroke in one field re-renders that field alone.
+    const stored = useParamStore(s => s.values[param.id]);
+    const hasStored = useParamStore(s => param.id in s.values);
+    const toggledOn = useParamStore(s => s.toggles[param.id] === true);
     const setValue = useParamStore(s => s.setValue);
     const setToggle = useParamStore(s => s.setToggle);
     const reset = useParamStore(s => s.reset);
+    const value = hasStored ? stored : defaultValue(param);
 
     const unsupported = visibility.unsupported.has(param.id);
-    const toggledOff = param.toggleable && toggles[param.id] !== true;
+    const toggledOff = param.toggleable && !toggledOn;
     // Off for a reason the row's own toggle cannot undo, so that toggle dims with the rest of it.
     const blocked = unsupported || props.groupDisabled === true;
     const disabled = blocked || toggledOff;
@@ -145,18 +151,18 @@ export function ParamField(props: {
             }
             toggle={
                 param.toggleable
-                    ? { on: toggles[param.id] === true, onChange: on => setToggle(param.id, on) }
+                    ? { on: toggledOn, onChange: on => setToggle(param.id, on) }
                     : undefined
             }
         >
             <ParamControl
                 param={param}
-                value={valueOf(param, values)}
+                value={value}
                 disabled={disabled}
                 onChange={next => {
                     setValue(param.id, next);
                     // Touching a toggleable param implies switching it on.
-                    if (param.toggleable && toggles[param.id] !== true) {
+                    if (param.toggleable && !useParamStore.getState().toggles[param.id]) {
                         setToggle(param.id, true);
                     }
                 }}

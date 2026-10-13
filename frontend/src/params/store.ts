@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import type { ParamSchema } from '@/api/types';
 import type { MediaMeta } from './media';
+import { CARRIER_PARAMS, loadRemembered, rememberParams } from './memory';
 
 export type ParamValue = string | number | boolean | string[] | null;
 
@@ -29,19 +30,27 @@ interface ParamStore {
     setGroupOpen: (id: string, open: boolean) => void;
     /** Clears a param back to schema default and switches its toggle off. */
     reset: (id: string) => void;
-    /** Clears everything. */
-    resetAll: () => void;
+    /** Clears everything, except what a reset never touches: the Comfy workflow carriers, which
+     *  are not settings but the workflow itself, and the model, which the existing interface's
+     *  reset also leaves alone (resetParamsToDefault, params.js:1329). `keep` names more ids whose
+     *  value and toggle survive. */
+    resetAll: (keep?: string[]) => void;
     /** Swaps one set of param ids for another in a single step: drops `stale`, then merges
      *  `next`. Used when a Comfy workflow takes over the panel, since its parameter ids are
      *  derived from its own nodes and none of the previous ones survive. */
     applyBundle: (stale: string[], next: Record<string, ParamValue>) => void;
 }
 
+/** Ids `resetAll` always leaves in place. */
+const RESET_KEEPS = [...CARRIER_PARAMS, 'model'];
+
+const remembered = loadRemembered();
+
 export const useParamStore = create<ParamStore>(set => ({
-    values: {},
-    toggles: {},
-    groupToggles: {},
-    openGroups: {},
+    values: remembered?.values ?? {},
+    toggles: remembered?.toggles ?? {},
+    groupToggles: remembered?.groupToggles ?? {},
+    openGroups: remembered?.openGroups ?? {},
     media: {},
 
     setValue: (id, value) => set(s => ({ values: { ...s.values, [id]: value } })),
@@ -61,7 +70,24 @@ export const useParamStore = create<ParamStore>(set => ({
             return { values, toggles, media };
         }),
 
-    resetAll: () => set({ values: {}, toggles: {}, groupToggles: {}, media: {} }),
+    resetAll: (keep = []) =>
+        set(s => {
+            const values: Record<string, ParamValue> = {};
+            const toggles: Record<string, boolean> = {};
+            const media: Record<string, MediaMeta[]> = {};
+            for (const id of [...RESET_KEEPS, ...keep]) {
+                if (id in s.values) {
+                    values[id] = s.values[id];
+                }
+                if (id in s.toggles) {
+                    toggles[id] = s.toggles[id];
+                }
+                if (id in s.media) {
+                    media[id] = s.media[id];
+                }
+            }
+            return { values, toggles, groupToggles: {}, media };
+        }),
 
     applyBundle: (stale, next) =>
         set(s => {
@@ -76,6 +102,17 @@ export const useParamStore = create<ParamStore>(set => ({
             return { values: { ...values, ...next }, toggles, media };
         })
 }));
+
+useParamStore.subscribe((state, previous) => {
+    if (
+        state.values !== previous.values
+        || state.toggles !== previous.toggles
+        || state.groupToggles !== previous.groupToggles
+        || state.openGroups !== previous.openGroups
+    ) {
+        rememberParams(state);
+    }
+});
 
 /** A raw string in the shape the control expects.
  *

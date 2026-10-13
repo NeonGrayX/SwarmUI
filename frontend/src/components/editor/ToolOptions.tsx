@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ToolOption } from '@/editor/types';
 import { useEditorEngine, useEditorVersion } from '@/editor/store';
 import { ColorField } from './ColorField';
@@ -66,15 +67,13 @@ function OptionControl(props: { option: ToolOption; onChange: (value: string | n
                     onChange={e => props.onChange(Number(e.target.value))}
                     className="w-28 accent-[var(--emphasis)]"
                 />
-                <input
-                    type="number"
+                <NumberBox
                     min={option.min}
                     max={option.max}
                     step={option.step}
                     value={option.value}
                     disabled={option.disabled}
-                    onChange={e => props.onChange(Number(e.target.value))}
-                    className="w-14 rounded border border-default bg-surface-sunken px-1 py-0.5 text-right text-xs tabular-nums text-fg outline-none focus:border-[var(--emphasis)]"
+                    onChange={props.onChange}
                 />
                 {option.unit && <span aria-hidden>{option.unit}</span>}
             </label>
@@ -128,4 +127,38 @@ function OptionControl(props: { option: ToolOption; onChange: (value: string | n
     }
 
     return <span className="text-xs italic text-fg-soft">{t(option.labelKey)}</span>;
+}
+
+/** The typed half of a slider option. What is typed is held as a draft while the box has focus, so
+ *  it can be cleared and retyped; only a number reaches the tool, clamped to the slider's range,
+ *  and leaving the box shows the value the tool actually took. */
+function NumberBox(props: {
+    min: number;
+    max: number;
+    step: number;
+    value: number;
+    disabled?: boolean;
+    onChange: (value: number) => void;
+}) {
+    const [draft, setDraft] = useState<string | null>(null);
+
+    return (
+        <input
+            type="number"
+            min={props.min}
+            max={props.max}
+            step={props.step}
+            value={draft ?? props.value}
+            disabled={props.disabled}
+            onChange={e => {
+                setDraft(e.target.value);
+                const typed = e.target.value.trim() === '' ? Number.NaN : Number(e.target.value);
+                if (Number.isFinite(typed)) {
+                    props.onChange(Math.min(props.max, Math.max(props.min, typed)));
+                }
+            }}
+            onBlur={() => setDraft(null)}
+            className="w-14 rounded border border-default bg-surface-sunken px-1 py-0.5 text-right text-xs tabular-nums text-fg outline-none focus:border-[var(--emphasis)]"
+        />
+    );
 }

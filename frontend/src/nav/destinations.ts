@@ -199,7 +199,8 @@ export const DESTINATIONS: Destination[] = [
         labelKey: 'nav.destination.metadata',
         icon: FileText,
         path: '/tools/metadata',
-        permission: 'reset_metadata',
+        // Either half of the page is reason enough to open it: the resets, or the Civitai scan.
+        permission: ['reset_metadata', 'edit_model_metadata'],
         keywords: ['metadata', 'reset', 'civitai scan', 'rebuild']
     },
 
@@ -301,9 +302,13 @@ export function destinationsIn(section: SectionId): Destination[] {
     return DESTINATIONS.filter(d => d.section === section);
 }
 
-/** The landing destination for a rail section. */
-export function defaultDestination(section: SectionId): Destination | undefined {
-    return DESTINATIONS.find(d => d.section === section);
+/** The landing destination for a rail section.
+ *
+ * Pass the destinations the user may open (usePermitted(DESTINATIONS)) to land on the first one
+ * they can actually use, rather than on a permission-denied page when the section's first entry
+ * is gated. Undefined when the section has nothing they may open. */
+export function defaultDestination(section: SectionId, permitted: Destination[] = DESTINATIONS): Destination | undefined {
+    return permitted.find(d => d.section === section);
 }
 
 export function findSection(id: SectionId): Section | undefined {

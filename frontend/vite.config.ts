@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath, URL } from 'node:url';
 
 /** Backend routes that must be proxied to the running Swarm server during dev. */
-const BACKEND_ROUTES = ['/API', '/View', '/Output', '/Audio', '/ViewSpecial', '/ExtensionFile'];
+const BACKEND_ROUTES = ['/API', '/View', '/Output', '/Audio', '/ViewSpecial', '/ExtensionFile', '/Text2Image'];
 
 const SWARM_SERVER = process.env.SWARM_SERVER ?? 'http://localhost:7801';
 
@@ -43,7 +43,9 @@ export default defineConfig({
     build: {
         outDir: '../src/wwwroot/newui',
         emptyOutDir: true,
-        sourcemap: true,
+        // Not shipped: the build lands in the server's public wwwroot. The dev server still serves
+        // maps for everything it transforms, so debugging under `npm run dev` is unaffected.
+        sourcemap: false,
         rollupOptions: {
             output: { manualChunks }
         }

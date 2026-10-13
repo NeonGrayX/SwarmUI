@@ -17,6 +17,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useShallow } from 'zustand/react/shallow';
 import type { ParamSchema } from '@/api/types';
 import { civitaiGet, parseCivitaiUrl } from '@/tools/modelSource';
 import type { NormalizedSchema } from './schema';
@@ -466,6 +467,24 @@ export interface SuggestedSettings {
     hasCivitai: boolean;
 }
 
+/** Just the values and toggles of the params a suggestion can touch. Picked with a shallow compare,
+ *  so the rest of the panel changing - a prompt being typed - does not re-render a subscriber. */
+export function useSuggestionState(): { values: Record<string, ParamValue>; toggles: Record<string, boolean> } {
+    const values = useParamStore(useShallow(s => pick(s.values, PARAM_ORDER)));
+    const toggles = useParamStore(useShallow(s => pick(s.toggles, PARAM_ORDER)));
+    return { values, toggles };
+}
+
+function pick<T>(record: Record<string, T>, ids: string[]): Record<string, T> {
+    const out: Record<string, T> = {};
+    for (const id of ids) {
+        if (id in record) {
+            out[id] = record[id];
+        }
+    }
+    return out;
+}
+
 /** The suggestions for a model that differ from the current panel. */
 export function useSuggestedSettings(
     schema: NormalizedSchema | null,
@@ -478,8 +497,7 @@ export function useSuggestedSettings(
         usageHint: string | null;
     }
 ): SuggestedSettings {
-    const values = useParamStore(s => s.values);
-    const toggles = useParamStore(s => s.toggles);
+    const { values, toggles } = useSuggestionState();
     const versionId = civitaiVersionOf(model.description);
     const civitai = useCivitaiExamples(versionId);
 

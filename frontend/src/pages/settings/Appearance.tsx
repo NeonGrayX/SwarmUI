@@ -62,10 +62,16 @@ export function AppearancePage() {
                     <Field id="layout-preset" label={t('appearance.layout.panePreset')} density="compact">
                         <select
                             id="layout-preset"
-                            value={preset}
+                            value={preset ?? ''}
                             onChange={e => applyPreset(e.target.value as LayoutPreset)}
                             className="rounded border border-default bg-surface-sunken px-2 py-1 text-sm text-fg outline-none focus:border-[var(--emphasis)]"
                         >
+                            {/* Panes resized by hand match no preset. */}
+                            {preset === null && (
+                                <option value="" disabled>
+                                    {t('appearance.layout.custom')}
+                                </option>
+                            )}
                             {(Object.keys(PRESETS) as LayoutPreset[]).map(id => (
                                 <option key={id} value={id}>
                                     {t(PRESETS[id].labelKey)}

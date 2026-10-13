@@ -919,6 +919,11 @@ public static class T2IAPI
         {
             return false;
         }
+        // The raw text check above already finds anything inside a single name or value. Parsing only adds matches that span the "name: value" join or contain characters JSON may escape (quotes, backslashes, non-ASCII), so skip it for the common case, as parsing every non-matching file is the main cost of filtering.
+        if (!filter.Contains(':') && !filter.Contains('"') && !filter.Contains('\\') && !filter.StartsWith(' ') && filter.All(c => c < 128))
+        {
+            return false;
+        }
         try
         {
             JObject parsed = meta.ParseToJson();

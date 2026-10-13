@@ -1,4 +1,4 @@
-import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type Ref, type TextareaHTMLAttributes } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type Ref, type TextareaHTMLAttributes } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Popover from '@radix-ui/react-popover';
 import { api } from '@/api/client';
@@ -113,6 +113,15 @@ function usePromptSources(onWildcardLoaded: () => void): { sources: CompletionSo
     };
 }
 
+/** Event a prompt textarea answers by listing suggestions for its caret, for code that writes into
+ *  the box and wants the list up as though it had been typed (eg the prompt tools' "Other..."). */
+const SUGGEST_EVENT = 'sw:prompt-suggest';
+
+/** Opens a prompt textarea's suggestions for where its caret is now. */
+export function openPromptSuggestions(box: HTMLTextAreaElement): void {
+    box.dispatchEvent(new Event(SUGGEST_EVENT));
+}
+
 export interface PromptTextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange'> {
     ref?: Ref<HTMLTextAreaElement>;
     value: string;
@@ -172,6 +181,18 @@ export function PromptTextarea({ ref, value, onValueChange, onKeyDown, ...rest }
         }
     });
     sourcesRef.current = sources;
+    const suggestRef = useRef(suggest);
+    suggestRef.current = suggest;
+
+    useEffect(() => {
+        const box = inner.current;
+        if (!box) {
+            return;
+        }
+        const onSuggest = () => suggestRef.current(box.value, box.selectionStart);
+        box.addEventListener(SUGGEST_EVENT, onSuggest);
+        return () => box.removeEventListener(SUGGEST_EVENT, onSuggest);
+    }, []);
 
     useLayoutEffect(() => {
         const selection = pendingSelection.current;
@@ -224,7 +245,9 @@ export function PromptTextarea({ ref, value, onValueChange, onKeyDown, ...rest }
     };
 
     const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.nativeEvent.isComposing) {
+        // Safari reports the Enter that confirms an IME composition with isComposing already false,
+        // but keyCode 229, and that Enter must not reach the generate shortcut.
+        if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
             return;
         }
         const box = e.currentTarget;

@@ -71,7 +71,11 @@ export class BrushTool extends ColorTool {
             this.setRadius(Number(value));
         }
         else if (key === 'opacity') {
-            this.opacity = Number(value) / 100;
+            const percent = Number(value);
+            if (!Number.isFinite(percent)) {
+                return;
+            }
+            this.opacity = Math.max(1, Math.min(100, percent)) / 100;
             this.engine.notify();
             this.engine.redraw();
         }
@@ -81,6 +85,9 @@ export class BrushTool extends ColorTool {
     }
 
     private setRadius(radius: number): void {
+        if (!Number.isFinite(radius)) {
+            return;
+        }
         this.radius = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, Math.round(radius)));
         this.engine.notify();
         this.engine.redraw();
@@ -136,7 +143,7 @@ export class BrushTool extends ColorTool {
     }
 
     onPointerMove(e: PointerEvent): void {
-        if (this.brushing) {
+        if (this.brushing && this.engine.pointerDown) {
             this.brush(pressureOf(e));
         }
     }

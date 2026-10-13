@@ -1,9 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { router } from './router';
+import { api } from './api/client';
+import { queryKeys } from './api/hooks';
+import { useApiNotices } from './api/notices';
+import { queryClient } from './api/queryClient';
 import { applyThemeCss, applyThemePolarity, storedIsDark, storedThemeId } from './theme/useTheme';
 import { bootstrapI18n } from './i18n';
 import './styles/index.css';
@@ -20,14 +24,10 @@ if (remembered) {
     applyThemePolarity(storedIsDark());
 }
 
-const queryClient = new QueryClient({
-    defaultOptions: {
-        queries: {
-            refetchOnWindowFocus: false,
-            retry: 1
-        }
-    }
-});
+// A session replaced mid-use (a server restart, usually) is what every screen's `useSession` should
+// see from then on, and a different server build is worth telling the user about.
+api.onSessionChanged = data => queryClient.setQueryData(queryKeys.session, data);
+api.onServerVersionChanged = () => useApiNotices.getState().setServerUpdated();
 
 const container = document.getElementById('root');
 if (!container) {

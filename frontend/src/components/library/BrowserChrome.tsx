@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { ChevronRight, Folder, Grid3x3, List, Search, Star, X } from 'lucide-react';
-import type { ImageSortMode, SortMode, ViewMode } from '@/library/types';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { ChevronRight, Folder, RefreshCw, Search, Star, X } from 'lucide-react';
+import { BROWSER_FORMATS, type BrowserFormat, type ImageSortMode, type SortMode } from '@/library/types';
 import { SideNav } from '../ui/SideNav';
 import { useNumberDrag } from '../ui/useNumberDrag';
 import { t as translate, useTranslation } from '@/i18n';
@@ -23,10 +23,20 @@ function joinFolder(base: string, relative: string): string {
  * every response seen so far: group the returned relative paths by parent and replace exactly
  * those entries, leaving branches and deeper levels the server did not mention as previously
  * discovered. Mirrors refillTree in the legacy browser (src/wwwroot/js/genpage/helpers/browsers.js). */
-function mergeFolders(known: FolderTree, path: string, folders: string[]): FolderTree {
+function mergeFolders(known: FolderTree, path: string, folders: string[], depth: number | undefined): FolderTree {
     const fetched = new Map<string, string[]>([[path, []]]);
     for (const folder of folders) {
         const parts = folder.split('/').filter(Boolean);
+        // A folder above the deepest level was walked too, so it has exactly the children listed
+        // here - possibly none. Seeding it empty is what lets a subfolder deleted since the last
+        // listing drop out of the tree, rather than living on as previously discovered. The
+        // deepest level was not walked, so its children stay unknown.
+        if (depth !== undefined && parts.length < depth) {
+            const walked = joinFolder(path, parts.join('/'));
+            if (!fetched.has(walked)) {
+                fetched.set(walked, []);
+            }
+        }
         const name = parts.pop();
         if (name === undefined) {
             continue;
@@ -69,6 +79,8 @@ function ancestorsOf(path: string): string[] {
 export function FolderPane(props: {
     folders: string[] | undefined;
     path: string;
+    /** How many levels the listing walked, which says which folders' children it fully knows. */
+    depth?: number;
     onNavigate: (path: string) => void;
 }) {
     const { t } = useTranslation();
@@ -76,12 +88,12 @@ export function FolderPane(props: {
     const [tree, setTree] = useState<FolderTree>(() => new Map());
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>());
 
-    const { folders, path } = props;
+    const { folders, path, depth } = props;
     useEffect(() => {
         if (folders) {
-            setTree(known => mergeFolders(known, path, folders));
+            setTree(known => mergeFolders(known, path, folders, depth));
         }
-    }, [folders, path]);
+    }, [folders, path, depth]);
 
     // A folder can only be shown as current if everything above it is open.
     useEffect(() => {
@@ -289,8 +301,11 @@ const MAX_DEPTH = 10;
 export function BrowserToolbar<S extends string>(props: {
     search: string;
     onSearch: (value: string) => void;
-    view: ViewMode;
-    onView: (view: ViewMode) => void;
+    view: BrowserFormat;
+    onView: (view: BrowserFormat) => void;
+    /** Reloads the listing from the server. Omitted where there is nothing to reload. */
+    onRefresh?: () => void;
+    refreshing?: boolean;
     sort?: S;
     onSort?: (sort: S) => void;
     /** Passed alongside `sort`: the modes the listing endpoint accepts. */
@@ -373,24 +388,173 @@ export function BrowserToolbar<S extends string>(props: {
                     : t('browser.countOf', { count: props.count, total: props.total })}
             </span>
 
-            <div className="flex rounded border border-default overflow-hidden">
-                <ViewButton
-                    active={props.view === 'grid'}
-                    label={t('view.grid')}
-                    onClick={() => props.onView('grid')}
+            <select
+                value={props.view}
+                onChange={e => props.onView(e.target.value as BrowserFormat)}
+                aria-label={t('browser.format.label')}
+                title={t('browser.format.label')}
+                className="rounded border border-default bg-surface-sunken px-1.5 py-1 text-xs text-fg outline-none focus:border-[var(--emphasis)]"
+            >
+                {BROWSER_FORMATS.map(format => (
+                    <option key={format} value={format}>
+                        {t(`browser.format.${format}`)}
+                    </option>
+                ))}
+            </select>
+
+            {props.onRefresh && (
+                <button
+                    type="button"
+                    onClick={props.onRefresh}
+                    disabled={props.refreshing}
+                    aria-label={t('browser.refresh')}
+                    title={t('browser.refresh')}
+                    className="rounded border border-default p-1 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)] disabled:opacity-60"
                 >
-                    <Grid3x3 size={14} aria-hidden />
-                </ViewButton>
-                <ViewButton
-                    active={props.view === 'list'}
-                    label={t('view.list')}
-                    onClick={() => props.onView('list')}
-                >
-                    <List size={14} aria-hidden />
-                </ViewButton>
-            </div>
+                    <RefreshCw size={14} aria-hidden className={props.refreshing ? 'animate-spin' : undefined} />
+                </button>
+            )}
         </div>
     );
+}
+
+/** Grid classes per display format. Literal strings, so Tailwind sees every one of them. */
+const FORMAT_GRID: Record<Exclude<BrowserFormat, 'list'>, string> = {
+    cards: 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3',
+    smallCards: 'grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-2',
+    bigCards: 'grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3',
+    thumbnails: 'grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2',
+    smallThumbnails: 'grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-1.5'
+};
+
+/** The grid container classes for a non-list format. */
+export function formatGridClass(format: Exclude<BrowserFormat, 'list'>): string {
+    return FORMAT_GRID[format];
+}
+
+/** True for the formats that draw only the preview, with the name left to the tooltip. */
+export function isThumbnailFormat(format: BrowserFormat): boolean {
+    return format === 'thumbnails' || format === 'smallThumbnails';
+}
+
+function readFormat(storageKey: string): BrowserFormat {
+    try {
+        const stored = localStorage.getItem(storageKey);
+        if (stored && (BROWSER_FORMATS as readonly string[]).includes(stored)) {
+            return stored as BrowserFormat;
+        }
+    }
+    catch {
+        // Storage refused (private mode, quota); the default does.
+    }
+    return 'cards';
+}
+
+/** A browser's display format, remembered per browser across visits as legacy's was
+ *  (`browser_<id>_format` in browsers.js). */
+export function useBrowserFormat(id: string): [BrowserFormat, (format: BrowserFormat) => void] {
+    const storageKey = `swarm-ui-browser-format-${id}`;
+    const [format, setFormat] = useState<BrowserFormat>(() => readFormat(storageKey));
+    // Another browser of the same component (eg LoRAs after Models) keeps its own choice.
+    const [seenKey, setSeenKey] = useState(storageKey);
+    if (seenKey !== storageKey) {
+        setSeenKey(storageKey);
+        setFormat(readFormat(storageKey));
+    }
+    const update = useCallback(
+        (next: BrowserFormat) => {
+            setFormat(next);
+            try {
+                localStorage.setItem(storageKey, next);
+            }
+            catch {
+                // Not remembered, but still applied.
+            }
+        },
+        [storageKey]
+    );
+    return [format, update];
+}
+
+export interface Flash {
+    /** Shows a message for a few seconds. Errors are drawn in the error color. */
+    show: (message: string, options?: { error?: boolean; action?: { label: string; onClick: () => void } }) => void;
+    /** Shows the message of a caught error, or `fallback` when it carries none. */
+    error: (error: unknown, fallback: string) => void;
+    /** Render once, inside a `relative` container of the browser. */
+    node: ReactNode;
+}
+
+/** The short-lived status line the browsers report outcomes in: failures that would otherwise go
+ *  unseen, and actions whose effect lands on another screen. */
+export function useFlash(): Flash {
+    const [message, setMessage] = useState<{
+        text: string;
+        error: boolean;
+        action?: { label: string; onClick: () => void };
+        id: number;
+    } | null>(null);
+
+    useEffect(() => {
+        if (message) {
+            const timer = setTimeout(() => setMessage(null), message.error ? 8000 : 5000);
+            return () => clearTimeout(timer);
+        }
+        return undefined;
+    }, [message]);
+
+    const show = useCallback<Flash['show']>((text, options) => {
+        setMessage(current => ({
+            text,
+            error: options?.error === true,
+            action: options?.action,
+            id: (current?.id ?? 0) + 1
+        }));
+    }, []);
+
+    const error = useCallback<Flash['error']>(
+        (caught, fallback) => {
+            const text = caught instanceof Error && caught.message ? caught.message : fallback;
+            show(text, { error: true });
+        },
+        [show]
+    );
+
+    const node = message && (
+        <div
+            role="status"
+            className="absolute bottom-3 right-3 z-40 flex max-w-96 items-start gap-2 rounded border border-default bg-surface px-2 py-1 text-xs shadow-lg"
+        >
+            <p
+                className="min-w-0 flex-1 whitespace-pre-wrap break-words"
+                style={{ color: message.error ? 'var(--backend-errored)' : 'var(--sw-fg-soft)' }}
+            >
+                {message.text}
+            </p>
+            {message.action && (
+                <button
+                    type="button"
+                    onClick={() => {
+                        message.action?.onClick();
+                        setMessage(null);
+                    }}
+                    className="shrink-0 rounded px-1 text-fg underline hover:bg-[var(--sw-hover)]"
+                >
+                    {message.action.label}
+                </button>
+            )}
+            <button
+                type="button"
+                onClick={() => setMessage(null)}
+                aria-label={translate('common.dismiss')}
+                className="shrink-0 rounded p-0.5 text-fg-soft hover:text-fg"
+            >
+                <X size={12} aria-hidden />
+            </button>
+        </div>
+    );
+
+    return { show, error, node };
 }
 
 /** How many folder levels the listing walks. Typed into or, as in the legacy UI, dragged. */
@@ -426,29 +590,6 @@ function DepthInput(props: { depth: number; onDepth: (depth: number) => void }) 
     );
 }
 
-function ViewButton(props: {
-    active: boolean;
-    label: string;
-    onClick: () => void;
-    children: React.ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={props.onClick}
-            aria-label={props.label}
-            aria-pressed={props.active}
-            title={props.label}
-            className={[
-                'px-1.5 py-1 transition-colors',
-                props.active ? 'text-fg-strong bg-[var(--sw-active)]' : 'text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]'
-            ].join(' ')}
-        >
-            {props.children}
-        </button>
-    );
-}
-
 /** Star toggle for one browsed entry, shared by every browser that has starring.
  *
  * `overlay` rides on top of a preview image and stays out of the way until the entry is hovered;
@@ -474,7 +615,7 @@ export function StarButton(props: {
                 props.starred
                     ? ''
                     : overlay
-                        ? 'text-white/80 hover:text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+                        ? 'text-white/80 hover:text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100'
                         : 'text-fg-soft hover:text-fg'
             ].join(' ')}
             style={props.starred ? { color: 'var(--star)' } : undefined}

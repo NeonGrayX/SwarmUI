@@ -7,8 +7,7 @@ import { usePermission } from '@/api/permissions';
 import { comfyKeys, useSavedWorkflows, type SavedWorkflow } from '@/comfy/actions';
 import { useWorkspaceHandoffStore } from '@/generate/handoff';
 import { useWorkflowStars } from '@/library/stars';
-import type { ViewMode } from '@/library/types';
-import { BrowserToolbar, EmptyState, StarButton } from './BrowserChrome';
+import { BrowserToolbar, EmptyState, StarButton, formatGridClass, useBrowserFormat } from './BrowserChrome';
 import { WorkflowDetailSheet } from './WorkflowDetailSheet';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -31,7 +30,7 @@ export function WorkflowBrowser() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
-    const [view, setView] = useState<ViewMode>('grid');
+    const [view, setView] = useBrowserFormat('workflows');
     const [reverse, setReverse] = useState(false);
     const [starredOnly, setStarredOnly] = useState(false);
     // By name rather than by entry, so a refreshed list feeds the sheet its current description
@@ -144,6 +143,8 @@ export function WorkflowBrowser() {
                     onReverse={setReverse}
                     count={ordered.length}
                     total={workflows.length}
+                    onRefresh={() => void queryClient.invalidateQueries({ queryKey: comfyKeys.workflows })}
+                    refreshing={saved.isFetching}
                 >
                     <button
                         type="button"
@@ -200,8 +201,8 @@ export function WorkflowBrowser() {
                             }
                             hint={workflows.length === 0 ? t('workflows.noneHint') : undefined}
                         />
-                    ) : view === 'grid' ? (
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3">
+                    ) : view !== 'list' ? (
+                        <div className={formatGridClass(view)}>
                             {ordered.map(workflow => (
                                 <Card
                                     key={workflow.name}

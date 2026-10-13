@@ -9,6 +9,7 @@ import { useMyUserData } from '@/library/hooks';
 import { Field } from '@/components/form/Field';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { findLanguage, t as translate, useTranslation } from '@/i18n';
+import { fetchLegacyApiKeys } from '@/settings/legacyApiKeys';
 
 interface AuthToken {
     id: string;
@@ -30,12 +31,16 @@ interface UpstreamKey {
     title: string;
     /** Where the user goes to mint one. */
     createLink: string;
-    infoKey: string;
+    /** Translated description, for the key types this UI knows about. */
+    infoKey?: string;
+    /** The server's own description, for a key type registered by an extension. */
+    infoText?: string;
 }
 
-/** Keys the server accepts for the logged-in user. Mirrors
- *  BasicAPIFeatures.AcceptedAPIKeyTypes — SetAPIKey rejects anything outside that fixed set, so
- *  there is nothing gained by asking the server for the list. */
+/** Translated entries for the key types this UI knows. The list actually shown is the server's
+ *  registry (UserUpstreamApiKeys.KeysByType, which extensions add to - Stability only appears when
+ *  its extension registers it), read from the legacy page; this is the fallback when that read
+ *  fails, and the source of translated text for the types it covers. */
 const UPSTREAM_KEYS: UpstreamKey[] = [
     {
         keyType: 'stability_api',
@@ -332,6 +337,26 @@ function ApiKeysPanel() {
     const canRead = usePermission('read_user_settings');
     const canEdit = usePermission('edit_user_settings');
 
+    // Not an API route; see legacyApiKeys. Only changes across a restart.
+    const registered = useQuery({
+        queryKey: ['legacy-api-keys'],
+        queryFn: fetchLegacyApiKeys,
+        staleTime: Infinity,
+        retry: false,
+        enabled: canRead || canEdit
+    });
+    const keys: UpstreamKey[] = registered.data
+        ? registered.data.map(
+              entry =>
+                  UPSTREAM_KEYS.find(known => known.keyType === entry.keyType) ?? {
+                      keyType: entry.keyType,
+                      title: entry.title,
+                      createLink: entry.createLink,
+                      infoText: entry.info
+                  }
+          )
+        : UPSTREAM_KEYS;
+
     if (!canRead && !canEdit) {
         return null;
     }
@@ -341,7 +366,7 @@ function ApiKeysPanel() {
             <p className="mb-2 text-xs text-fg-soft">{t('apiKeys.note')}</p>
             {!canEdit && <p className="mb-2 text-xs text-fg-soft">{t('apiKeys.readOnly')}</p>}
             <ul className="divide-y divide-[var(--light-border)]">
-                {UPSTREAM_KEYS.map(info => (
+                {keys.map(info => (
                     <ApiKeyRow key={info.keyType} info={info} canRead={canRead} canEdit={canEdit} />
                 ))}
             </ul>
@@ -399,7 +424,7 @@ function ApiKeyRow(props: { info: UpstreamKey; canRead: boolean; canEdit: boolea
                     <ExternalLink size={11} aria-hidden />
                 </a>
             </div>
-            <p className="mt-0.5 text-xs text-fg-soft">{t(info.infoKey)}</p>
+            <p className="mt-0.5 text-xs text-fg-soft">{info.infoKey ? t(info.infoKey) : info.infoText}</p>
             <div className="mt-1.5 flex items-center gap-2">
                 <input
                     type="password"

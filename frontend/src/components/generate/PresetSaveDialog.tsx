@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { libraryKeys } from '@/library/hooks';
 import { useParamSchema } from '@/params/schema';
-import { paramMapFrom, savableParams, type SavableParam } from '@/params/presets';
+import { cleanPresetTitle, isFolderTitle, paramMapFrom, savableParams, type SavableParam } from '@/params/presets';
 import { useGenerateStore } from '@/generate/store';
 import { useTranslation } from '@/i18n';
 
@@ -60,7 +60,8 @@ export function PresetSaveDialog(props: {
             : items;
     }, [items, search]);
 
-    const trimmed = name.trim();
+    const trimmed = cleanPresetTitle(name);
+    const folderTitle = isFolderTitle(trimmed);
     /** The stored preset this would replace, with its own capitalisation: the server looks a
      *  preset up by exact name, so editing "myPreset" over a stored "MyPreset" under the typed
      *  spelling would miss it and write a second entry beside it. */
@@ -134,7 +135,12 @@ export function PresetSaveDialog(props: {
                             <option key={existing} value={existing} />
                         ))}
                     </datalist>
-                    {overwriting && (
+                    {folderTitle && (
+                        <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
+                            {t('presets.save.folderName')}
+                        </p>
+                    )}
+                    {overwriting && !folderTitle && (
                         <p className="mt-1 text-xs" style={{ color: 'var(--backend-errored)' }}>
                             {t('presets.save.overwrite', { name: overwriting })}
                         </p>
@@ -222,7 +228,7 @@ export function PresetSaveDialog(props: {
                         <button
                             type="button"
                             onClick={save}
-                            disabled={!trimmed || chosen.size === 0 || busy}
+                            disabled={!trimmed || folderTitle || chosen.size === 0 || busy}
                             title={chosen.size === 0 ? t('presets.save.needParam') : undefined}
                             className="rounded px-3 py-1.5 text-sm disabled:opacity-50"
                             style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}

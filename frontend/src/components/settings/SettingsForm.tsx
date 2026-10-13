@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, EyeOff, Search, X } from 'lucide-react';
+import { Eye, EyeOff, Search, Trash2, X } from 'lucide-react';
 import { Field } from '../form/Field';
 import { SideNav } from '../ui/SideNav';
+import { NumberDraftInput } from './NumberDraftInput';
 import {
     isChangedFromDefault,
+    isSettingWrongLooking,
     organizeSettings,
     SECRET_PLACEHOLDER,
     type FlatSetting,
@@ -81,6 +83,10 @@ export function SettingsForm(props: {
         return setting.key in edits ? edits[setting.key] : setting.node.value;
     }
 
+    // The model-folder sanity check compares against the model root as currently edited.
+    const modelRootSetting = all.find(s => s.key.toLowerCase() === 'paths.modelroot');
+    const modelRoot = modelRootSetting ? String(valueOf(modelRootSetting) ?? '') : '';
+
     function matches(setting: FlatSetting): boolean {
         if (!query) {
             return true;
@@ -152,11 +158,21 @@ export function SettingsForm(props: {
                     disabled={props.readOnly}
                     onReset={
                         node.default_value !== undefined && !node.is_secret
-                            ? () => setEdits(e => ({ ...e, [key]: node.default_value }))
+                            ? () =>
+                                  setEdits(e => ({
+                                      ...e,
+                                      // Lists arrive ' || '-joined but are saved as arrays.
+                                      [key]: node.type === 'list' ? splitList(String(node.default_value ?? '')) : node.default_value
+                                  }))
                             : undefined
                     }
                 >
                     {renderControl(setting, value)}
+                    {isSettingWrongLooking(key, value, modelRoot) && (
+                        <p className="mt-1 text-xs" style={{ color: 'var(--status-bar-warn-color-start-end)' }}>
+                            {t('settings.looksWrong')}
+                        </p>
+                    )}
                 </Field>
             </div>
         );
@@ -169,17 +185,45 @@ export function SettingsForm(props: {
 
         if (node.is_secret) {
             const isSet = node.value === SECRET_PLACEHOLDER;
+            // An edit of '' only ever comes from the explicit clear button: emptying the box after
+            // typing means "leave it as it was", not "wipe the stored secret".
+            const clearing = key in edits && edits[key] === '';
             return (
                 <div className="flex items-center gap-1">
                     <input
                         id={`setting-${key}`}
                         type={revealed[key] ? 'text' : 'password'}
                         value={key in edits ? String(value ?? '') : ''}
-                        placeholder={isSet ? t('settings.secretSet') : t('settings.secretUnset')}
+                        placeholder={
+                            clearing
+                                ? t('settings.secretWillClear')
+                                : isSet
+                                  ? t('settings.secretSet')
+                                  : t('settings.secretUnset')
+                        }
                         disabled={disabled}
-                        onChange={e => set(e.target.value)}
+                        onChange={e => {
+                            const next = e.target.value;
+                            if (next === '') {
+                                setEdits(({ [key]: _dropped, ...rest }) => rest);
+                            }
+                            else {
+                                set(next);
+                            }
+                        }}
                         className={`${INPUT} min-w-0 flex-1`}
                     />
+                    {isSet && !clearing && !disabled && (
+                        <button
+                            type="button"
+                            onClick={() => set('')}
+                            aria-label={t('settings.clearSecret')}
+                            title={t('settings.clearSecret')}
+                            className="shrink-0 rounded border border-default p-1.5 text-fg-soft hover:text-fg"
+                        >
+                            <Trash2 size={13} aria-hidden />
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={() => setRevealed(r => ({ ...r, [key]: !r[key] }))}
@@ -230,13 +274,13 @@ export function SettingsForm(props: {
             case 'integer':
             case 'decimal':
                 return (
-                    <input
+                    <NumberDraftInput
                         id={`setting-${key}`}
-                        type="number"
                         step={node.type === 'integer' ? 1 : 'any'}
-                        value={String(value ?? 0)}
+                        value={Number(value ?? 0)}
+                        integer={node.type === 'integer'}
                         disabled={disabled}
-                        onChange={e => set(node.type === 'integer' ? parseInt(e.target.value, 10) || 0 : Number(e.target.value))}
+                        onCommit={set}
                         className={`${INPUT} w-32`}
                     />
                 );

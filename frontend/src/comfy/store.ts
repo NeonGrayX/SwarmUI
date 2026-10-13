@@ -8,6 +8,7 @@
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { CARRIER_PARAMS } from '@/params/memory';
 import { useParamStore, type ParamValue } from '@/params/store';
 import type { ComfyGraph } from './bridge';
 import type { ComfyWorkflowInput } from './params';
@@ -43,7 +44,7 @@ interface ComfyWorkflowStore {
  *  plus the two carriers the server reads the graph itself out of. */
 function seedValues(input: ComfyWorkflowInput): Record<string, ParamValue> {
     const values: Record<string, ParamValue> = { ...input.paramVal };
-    for (const id of ['comfyworkflowraw', 'comfyworkflowparammetadata']) {
+    for (const id of CARRIER_PARAMS) {
         const param = input.params[id];
         if (param) {
             values[id] = `${param.default}`;
@@ -100,12 +101,20 @@ export const useComfyWorkflowStore = create<ComfyWorkflowStore>()(
         {
             name: 'swarm-ui-comfy-workflow',
             storage: createJSONStorage(() => tolerantStorage),
-            // The param store is deliberately not persisted, so a reload leaves the panel empty.
-            // Seeding it again here is what keeps `comfyworkflowraw` attached to the next
-            // generation - without it the panel would show the workflow but not run it.
+            // The param store remembers the panel but never the carriers, which are the size of
+            // the graph. Seeding them again here is what keeps `comfyworkflowraw` attached to the
+            // next generation - without it the panel would show the workflow but not run it. The
+            // workflow's own values only fill gaps, so edits the panel remembered survive.
             onRehydrateStorage: () => state => {
                 if (state?.active) {
-                    useParamStore.getState().applyBundle([], seedValues(state.active));
+                    const current = useParamStore.getState().values;
+                    const seed = seedValues(state.active);
+                    for (const id of Object.keys(seed)) {
+                        if (id in current && !CARRIER_PARAMS.includes(id)) {
+                            delete seed[id];
+                        }
+                    }
+                    useParamStore.getState().applyBundle([], seed);
                 }
             },
             // The actions are rebuilt on every load; only the workflow itself is worth storing.

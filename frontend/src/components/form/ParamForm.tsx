@@ -5,8 +5,10 @@ import { useComfyWorkflowStore } from '@/comfy/store';
 import { EDITOR_OWNED_PARAMS, useEditorStore } from '@/editor/store';
 import { useSupportedFeatures } from '@/params/features';
 import { useParamSchema } from '@/params/schema';
-import { computeVisibility, type FilterMode } from '@/params/visibility';
+import { useAspectRatioSync } from '@/params/aspect';
+import { computeVisibility, visibilitySignature, type FilterMode } from '@/params/visibility';
 import { useParamStore } from '@/params/store';
+import { useParamMemory } from '@/params/useParamMemory';
 import { ParamField, ParamGroup } from './ParamGroup';
 import { SuggestedSettings } from './SuggestedSettings';
 import { useTranslation } from '@/i18n';
@@ -26,23 +28,29 @@ export function ParamForm() {
     const [search, setSearch] = useState('');
     const [mode, setMode] = useState<FilterMode>('basic');
 
-    const values = useParamStore(s => s.values);
-    const toggles = useParamStore(s => s.toggles);
     const groupToggles = useParamStore(s => s.groupToggles);
     const resetAll = useParamStore(s => s.resetAll);
     // A Comfy workflow brings its own parameters, which the suggestions know nothing about.
     const comfyActive = useComfyWorkflowStore(s => s.active);
 
     const schema = useParamSchema();
+    useParamMemory();
+    useAspectRatioSync(schema);
     // The image editor supplies these itself while it is open, so the panel must not also offer
     // them - two controls for one value, one of which silently loses.
     const editorOpen = useEditorStore(s => s.open);
     const suppressed = editorOpen ? EDITOR_OWNED_PARAMS : undefined;
 
+    // Subscribed through its signature rather than to the values themselves: every keystroke in a
+    // prompt changes `values`, but almost never what the visibility result depends on.
+    const signature = useParamStore(s =>
+        schema ? visibilitySignature(schema, s.values, s.toggles, s.groupToggles) : ''
+    );
     const visibility = useMemo(() => {
         if (!schema) {
             return null;
         }
+        const { values, toggles } = useParamStore.getState();
         return computeVisibility({
             schema,
             values,
@@ -53,7 +61,9 @@ export function ParamForm() {
             mode,
             suppressed
         });
-    }, [schema, values, toggles, groupToggles, supportedFeatures, search, mode, suppressed]);
+        // `signature` stands in for `values` and `toggles`, which are read at compute time.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [schema, signature, groupToggles, supportedFeatures, search, mode, suppressed]);
 
     if (params.isPending) {
         return <p className="p-4 text-sm text-fg-soft">{t('params.loading')}</p>;
@@ -138,7 +148,7 @@ export function ParamForm() {
                     {modifiedCount > 0 && (
                         <button
                             type="button"
-                            onClick={resetAll}
+                            onClick={() => resetAll()}
                             className="rounded px-1.5 py-0.5 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
                         >
                             {t('params.resetAll')}

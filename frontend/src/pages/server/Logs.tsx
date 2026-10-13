@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Check, Copy, Pause, Play, Upload, X } from 'lucide-react';
 import { api } from '@/api/client';
+import { queryKeys } from '@/api/hooks';
 import { usePermission } from '@/api/permissions';
 import { REMOTE_SWARM_TYPE, type Backend } from '@/server/backends';
 import { useTranslation } from '@/i18n';
@@ -38,6 +39,67 @@ interface StreamLine extends LogMessage {
  *  (Logs.LogTracker.MaxTracked), so this holds rather more than one poll can ever return. */
 const MAX_BUFFERED_LINES = 5000;
 
+/** How long typing in the filter box settles before the buffer is re-filtered. */
+const FILTER_DEBOUNCE_MS = 200;
+
+/** One server's scrollback, plus where each of its trackers was read up to. */
+interface SourceBuffer {
+    /** Highest sequence id seen per tracker, sent back as `last_sequence_ids` so each poll returns
+     *  only what is new. Without it every poll re-sends the server's whole 1024-message buffer for
+     *  every selected type, which is merely wasteful locally and a real cost over a remote link. */
+    cursors: Record<string, number>;
+    /** Sorted by sequence id. Mutated in place; a version counter tells React it changed. */
+    lines: StreamLine[];
+}
+
+/** Folds a poll's result into a buffer. Anything at or below the tracker's cursor has been taken
+ *  already, which also makes an overlapping or replayed poll harmless. Usually everything new sorts
+ *  after the tail and is simply appended; a newly selected type's history is merged in instead.
+ *  Returns whether anything was added. */
+function mergeIntoBuffer(buffer: SourceBuffer, data: LogsResponse): boolean {
+    const fresh: StreamLine[] = [];
+    for (const [type, messages] of Object.entries(data.data ?? {})) {
+        for (const message of messages ?? []) {
+            const cursor = buffer.cursors[type] ?? -1;
+            if (message.sequence_id <= cursor) {
+                continue;
+            }
+            fresh.push({ ...message, type });
+        }
+        for (const message of messages ?? []) {
+            buffer.cursors[type] = Math.max(buffer.cursors[type] ?? -1, message.sequence_id);
+        }
+    }
+    if (fresh.length === 0) {
+        return false;
+    }
+    fresh.sort((a, b) => a.sequence_id - b.sequence_id);
+    const lines = buffer.lines;
+    if (lines.length === 0 || fresh[0].sequence_id >= lines[lines.length - 1].sequence_id) {
+        for (const line of fresh) {
+            lines.push(line);
+        }
+    }
+    else {
+        const merged: StreamLine[] = [];
+        let i = 0;
+        let j = 0;
+        while (i < lines.length || j < fresh.length) {
+            if (j >= fresh.length || (i < lines.length && lines[i].sequence_id <= fresh[j].sequence_id)) {
+                merged.push(lines[i++]);
+            }
+            else {
+                merged.push(fresh[j++]);
+            }
+        }
+        buffer.lines = merged;
+    }
+    if (buffer.lines.length > MAX_BUFFERED_LINES) {
+        buffer.lines.splice(0, buffer.lines.length - MAX_BUFFERED_LINES);
+    }
+    return true;
+}
+
 /** Live server log viewer. Types are toggleable chips rather than a single choice, so several
  *  streams can be watched at once, and each line is coloured by its type.
  *
@@ -60,22 +122,36 @@ export function LogsPage() {
     const [paused, setPaused] = useState(false);
     const [pastebinOpen, setPastebinOpen] = useState(false);
     const [filter, setFilter] = useState('');
+    const [appliedFilter, setAppliedFilter] = useState('');
+    useEffect(() => {
+        const timer = setTimeout(() => setAppliedFilter(filter), FILTER_DEBOUNCE_MS);
+        return () => clearTimeout(timer);
+    }, [filter]);
     const scrollRef = useRef<HTMLDivElement>(null);
     const stickToBottom = useRef(true);
-    /** Highest sequence id seen per tracker, sent back as `last_sequence_ids` so each poll returns
-     *  only what is new. Without it every poll re-sends the server's whole 1024-message buffer for
-     *  every selected type, which is merely wasteful locally and a real cost over a remote link. */
-    const cursors = useRef<Record<string, number>>({});
-    const [stream, setStream] = useState<StreamLine[]>([]);
+    /** Scrollback and cursors per source ('' for this server). Sequence ids are per-server
+     *  (Logs.LogTracker.LastSequenceID is one static counter per process), so each source keeps its
+     *  own: switching away and back resumes where it was, and a poll still in flight for the source
+     *  just left lands in that source's buffer rather than the one now on screen. */
+    const buffers = useRef(new Map<string, SourceBuffer>());
+    const [version, setVersion] = useState(0);
+    const sourceKey = source ?? '';
+    function bufferFor(key: string): SourceBuffer {
+        let buffer = buffers.current.get(key);
+        if (!buffer) {
+            buffer = { cursors: {}, lines: [] };
+            buffers.current.set(key, buffer);
+        }
+        return buffer;
+    }
 
     // Offering a source picker at all needs the backend list; reading the logs themselves does not.
     const canListBackends = usePermission('view_backends_list');
     const backends = useQuery({
-        // Deliberately not the Backends page's own ['backends'] key: that one is fetched with
-        // full_data and the two would overwrite each other's cache entry. Invalidating there still
-        // reaches this one, since keys match by prefix.
-        queryKey: ['backends', 'log-sources'],
-        queryFn: () => api.post<Record<string, Backend>>('ListBackends', {}),
+        // The key carries the request body, so this never shares an entry with the Backends page's
+        // full_data list. Invalidating there still reaches this one, since keys match by prefix.
+        queryKey: queryKeys.backends(false),
+        queryFn: () => api.post<Record<string, Backend>>('ListBackends', { full_data: false }),
         enabled: canListBackends,
         refetchInterval: 30000
     });
@@ -94,17 +170,25 @@ export function LogsPage() {
         // `last_sequence_ids` must be present: the handler does `(raw["last_sequence_ids"] as
         // JObject).TryGetValue(...)` and would null-deref without it (AdminAPI.cs).
         // An empty map means "send me everything you still have buffered".
-        queryFn: () =>
-            source === null
-                ? api.post<LogsResponse>('ListRecentLogMessages', {
-                      types: selected,
-                      last_sequence_ids: cursors.current
-                  })
-                : api.post<LogsResponse>('ListRemoteLogMessages', {
-                      backend_id: source,
-                      types: selected,
-                      last_sequence_ids: cursors.current
-                  }),
+        queryFn: async () => {
+            const buffer = bufferFor(sourceKey);
+            const lastIds = { ...buffer.cursors };
+            const data =
+                source === null
+                    ? await api.post<LogsResponse>('ListRecentLogMessages', {
+                          types: selected,
+                          last_sequence_ids: lastIds
+                      })
+                    : await api.post<LogsResponse>('ListRemoteLogMessages', {
+                          backend_id: source,
+                          types: selected,
+                          last_sequence_ids: lastIds
+                      });
+            if (mergeIntoBuffer(buffer, data)) {
+                setVersion(v => v + 1);
+            }
+            return data;
+        },
         refetchInterval: paused ? false : 3000
     });
 
@@ -116,58 +200,20 @@ export function LogsPage() {
         }
     }, [search.types]);
 
-    // Sequence ids are per-server (Logs.LogTracker.LastSequenceID is one static counter per
-    // process), so a cursor or a buffered line from one server means nothing on another.
-    useEffect(() => {
-        cursors.current = {};
-        setStream([]);
-    }, [source]);
-
-    // Append what the poll returned. Anything at or below the tracker's cursor has been taken
-    // already, which also makes a repeated render or a replayed cache entry harmless.
-    useEffect(() => {
-        if (!logs.data) {
-            return;
-        }
-        const fresh: StreamLine[] = [];
-        for (const [type, messages] of Object.entries(logs.data.data ?? {})) {
-            for (const message of messages ?? []) {
-                if (message.sequence_id <= (cursors.current[type] ?? -1)) {
-                    continue;
-                }
-                cursors.current[type] = message.sequence_id;
-                fresh.push({ ...message, type });
-            }
-        }
-        if (fresh.length === 0) {
-            return;
-        }
-        setStream(prev => {
-            const next = [...prev, ...fresh].sort((a, b) => a.sequence_id - b.sequence_id);
-            return next.length > MAX_BUFFERED_LINES ? next.slice(-MAX_BUFFERED_LINES) : next;
-        });
-    }, [logs.data]);
-
     const types = logs.data?.types_available ?? [];
+    const streamLength = buffers.current.get(sourceKey)?.lines.length ?? 0;
 
     // Deselecting a type hides its lines without dropping them: the buffer keeps them, and its
     // cursor keeps its place, so re-selecting shows the history back again instead of re-pulling it.
+    // Recomputed only when a poll actually brought something new, not on every poll.
     const lines = useMemo(() => {
-        const query = filter.trim().toLowerCase();
-        return stream.filter(
-            line =>
-                selected.includes(line.type) &&
-                (query === '' || line.message.toLowerCase().includes(query))
+        const query = appliedFilter.trim().toLowerCase();
+        const wanted = new Set(selected);
+        return (buffers.current.get(sourceKey)?.lines ?? []).filter(
+            line => wanted.has(line.type) && (query === '' || line.message.toLowerCase().includes(query))
         );
-    }, [stream, selected, filter]);
-
-    // Follow the tail unless the user has scrolled up to read something.
-    useEffect(() => {
-        const el = scrollRef.current;
-        if (el && stickToBottom.current) {
-            el.scrollTop = el.scrollHeight;
-        }
-    }, [lines]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- version is the buffer's change signal
+    }, [version, sourceKey, selected, appliedFilter]);
 
     const colorFor = (name: string) => types.find(t => t.name === name)?.color ?? 'var(--sw-fg-soft)';
     const sourceLabel = (backend: Backend) =>
@@ -295,22 +341,28 @@ export function LogsPage() {
             >
                 {selected.length === 0 ? (
                     <p className="p-4 text-center text-fg-soft">{t('logs.selectType')}</p>
-                ) : logs.isPending && stream.length === 0 ? (
+                ) : logs.isPending && streamLength === 0 ? (
                     <p className="p-4 text-center text-fg-soft">{t('logs.loading')}</p>
                 ) : lines.length === 0 ? (
                     <p className="p-4 text-center text-fg-soft">
                         {filter ? t('logs.noMatches', { filter: filter.trim() }) : t('logs.noMessages')}
                     </p>
                 ) : (
-                    lines.map(line => (
-                        <div key={`${line.type}-${line.sequence_id}`} className="flex gap-2 whitespace-pre-wrap">
-                            <span className="shrink-0 text-fg-soft opacity-60">{line.time}</span>
-                            <span className="shrink-0" style={{ color: colorFor(line.type) }}>
-                                [{tDynamic(line.type)}]
-                            </span>
-                            <span className="min-w-0 break-words text-fg">{line.message}</span>
-                        </div>
-                    ))
+                    <WindowedLines
+                        items={lines}
+                        scrollRef={scrollRef}
+                        stickToBottom={stickToBottom}
+                        itemKey={lineKey}
+                        renderItem={line => (
+                            <div className="flex gap-2 whitespace-pre-wrap">
+                                <span className="shrink-0 text-fg-soft opacity-60">{line.time}</span>
+                                <span className="shrink-0" style={{ color: colorFor(line.type) }}>
+                                    [{tDynamic(line.type)}]
+                                </span>
+                                <span className="min-w-0 break-words text-fg">{line.message}</span>
+                            </div>
+                        )}
+                    />
                 )}
             </div>
 
@@ -319,6 +371,137 @@ export function LogsPage() {
             {pastebinOpen && (
                 <PastebinDialog source={source} sourceName={remoteName} onOpenChange={setPastebinOpen} />
             )}
+        </div>
+    );
+}
+
+/** Stable row key; sequence ids are unique per server, the type only guards against a message
+ *  that somehow sits in two trackers. */
+function lineKey(line: StreamLine): string {
+    return `${line.type}-${line.sequence_id}`;
+}
+
+/** Assumed height of a row not yet measured; one line of 11px text at relaxed leading. */
+const ESTIMATED_ROW_HEIGHT = 18;
+/** Pixels rendered beyond each edge of the viewport, so a fast scroll does not show blank space. */
+const OVERSCAN_PX = 600;
+
+/** Renders only the rows near the viewport of `scrollRef`, with spacers standing in for the rest.
+ *  Rows wrap, so heights vary: each rendered row is measured and the measurement kept by key, with
+ *  an estimate for rows never seen. A width change drops every measurement, since wrapping moves.
+ *  Also keeps the view pinned to the tail while `stickToBottom` is set. */
+function WindowedLines<T>(props: {
+    items: T[];
+    itemKey: (item: T) => string;
+    renderItem: (item: T) => ReactNode;
+    scrollRef: RefObject<HTMLDivElement | null>;
+    stickToBottom: RefObject<boolean>;
+}) {
+    const { items, itemKey, scrollRef, stickToBottom } = props;
+    const heights = useRef(new Map<string, number>());
+    const rowRefs = useRef(new Map<string, HTMLDivElement>());
+    const [viewport, setViewport] = useState({ top: 0, height: 600 });
+    const [measured, setMeasured] = useState(0);
+
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) {
+            return;
+        }
+        let width = el.clientWidth;
+        const update = () => setViewport({ top: el.scrollTop, height: el.clientHeight });
+        const observer = new ResizeObserver(() => {
+            if (el.clientWidth !== width) {
+                width = el.clientWidth;
+                heights.current.clear();
+            }
+            update();
+        });
+        observer.observe(el);
+        el.addEventListener('scroll', update, { passive: true });
+        update();
+        return () => {
+            observer.disconnect();
+            el.removeEventListener('scroll', update);
+        };
+    }, [scrollRef]);
+
+    // Prefix sums of row heights; tops[i] is where row i starts and tops[n] the total height.
+    const keys = useMemo(() => items.map(itemKey), [items, itemKey]);
+    const tops = useMemo(() => {
+        const result = new Array<number>(keys.length + 1);
+        result[0] = 0;
+        for (let i = 0; i < keys.length; i++) {
+            result[i + 1] = result[i] + (heights.current.get(keys[i]) ?? ESTIMATED_ROW_HEIGHT);
+        }
+        return result;
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- measured is the heights' change signal
+    }, [keys, measured]);
+
+    /** First row whose bottom edge is below `y`. */
+    function rowAt(y: number): number {
+        let low = 0;
+        let high = keys.length;
+        while (low < high) {
+            const mid = (low + high) >> 1;
+            if (tops[mid + 1] <= y) {
+                low = mid + 1;
+            }
+            else {
+                high = mid;
+            }
+        }
+        return low;
+    }
+
+    const total = tops[keys.length];
+    // While pinned to the tail, window off the bottom rather than the last scroll position, which
+    // is stale until the scroll below lands.
+    const top = stickToBottom.current ? Math.max(0, total - viewport.height) : viewport.top;
+    const start = rowAt(Math.max(0, top - OVERSCAN_PX));
+    const end = Math.min(keys.length, rowAt(top + viewport.height + OVERSCAN_PX) + 1);
+
+    useLayoutEffect(() => {
+        let changed = false;
+        for (const [key, el] of rowRefs.current) {
+            const height = el.offsetHeight;
+            if (height > 0 && heights.current.get(key) !== height) {
+                heights.current.set(key, height);
+                changed = true;
+            }
+        }
+        if (changed) {
+            setMeasured(m => m + 1);
+        }
+        const el = scrollRef.current;
+        if (el && stickToBottom.current) {
+            el.scrollTop = el.scrollHeight;
+        }
+    });
+
+    const rendered: ReactNode[] = [];
+    for (let i = start; i < end; i++) {
+        const key = keys[i];
+        rendered.push(
+            <div
+                key={key}
+                ref={el => {
+                    if (el) {
+                        rowRefs.current.set(key, el);
+                    }
+                    else {
+                        rowRefs.current.delete(key);
+                    }
+                }}
+            >
+                {props.renderItem(items[i])}
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ height: total, position: 'relative' }}>
+            <div style={{ position: 'absolute', left: 0, right: 0, top: tops[start] }}>{rendered}</div>
         </div>
     );
 }

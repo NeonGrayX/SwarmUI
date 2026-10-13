@@ -75,10 +75,11 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
     // and the form falls back to downloading here with no target picker and no reach warning.
     const canSeeBackends = usePermission('view_backends_list');
     // Same key and payload as ComfyWorkflow's query, so this shares that cache rather than adding
-    // a request of its own.
+    // a request of its own. The key carries the body, so the Backends page's full_data list never
+    // lands in the same entry.
     const backends = useQuery({
-        queryKey: ['backends'],
-        queryFn: () => api.post<Record<string, Backend>>('ListBackends', {}),
+        queryKey: queryKeys.backends(false),
+        queryFn: () => api.post<Record<string, Backend>>('ListBackends', { full_data: false }),
         enabled: canSeeBackends,
         refetchInterval: 10_000
     });
@@ -214,6 +215,7 @@ export function useDownloaderForm(options: DownloaderFormOptions = {}): Download
                   })
                 : t('downloader.jobTitle', { type: subtypeLabel(type, t), name: fullName }),
             route: 'DoModelDownloadWS',
+            signalCancel: true,
             // Omitted rather than sent empty for the local case, so the request is byte-identical
             // to what it was before targets existed.
             payload: { url: source.downloadUrl, type, name: fullName, metadata, backendId: target || undefined },

@@ -12,6 +12,10 @@ export class PickerTool extends EditorTool {
     toolFor: ColorTool | null = null;
     private picking = false;
     private color = '#ffffff';
+    /** The rendered view, read back once when the press starts. Reading the display canvas on
+     *  every move forces a GPU readback each time; the view does not change under an eyedropper
+     *  drag, so one copy serves the whole press. */
+    private view: ImageData | null = null;
 
     constructor(engine: ImageEditorEngine) {
         super(engine, 'picker', Pipette, 'editor.tool.picker', 'editor.tool.pickerDesc');
@@ -26,6 +30,7 @@ export class PickerTool extends EditorTool {
     setInactive(): void {
         super.setInactive();
         this.picking = false;
+        this.view = null;
     }
 
     draw(): void {
@@ -39,12 +44,17 @@ export class PickerTool extends EditorTool {
         if (!engine.canvas || !this.toolFor) {
             return;
         }
+        if (!this.view || this.view.width !== engine.canvas.width || this.view.height !== engine.canvas.height) {
+            this.view = engine.ctx.getImageData(0, 0, engine.canvas.width, engine.canvas.height);
+        }
         const x = Math.round(engine.pointerX * engine.devicePixel);
         const y = Math.round(engine.pointerY * engine.devicePixel);
-        if (x < 0 || y < 0 || x >= engine.canvas.width || y >= engine.canvas.height) {
+        if (x < 0 || y < 0 || x >= this.view.width || y >= this.view.height) {
             return;
         }
-        const [r, g, b] = engine.ctx.getImageData(x, y, 1, 1).data;
+        const index = (y * this.view.width + x) * 4;
+        const data = this.view.data;
+        const [r, g, b] = [data[index], data[index + 1], data[index + 2]];
         this.color = rgbToHex(r, g, b);
         if (engine.activeLayer?.isMask) {
             this.color = hexToGrayscale(this.color);
@@ -58,11 +68,12 @@ export class PickerTool extends EditorTool {
             return;
         }
         this.picking = true;
+        this.view = null;
         this.pickNow();
     }
 
     onPointerMove(): void {
-        if (this.picking) {
+        if (this.picking && this.engine.pointerDown) {
             this.pickNow();
         }
     }
@@ -72,6 +83,7 @@ export class PickerTool extends EditorTool {
             return false;
         }
         this.picking = false;
+        this.view = null;
         const owner = this.toolFor;
         if (owner) {
             owner.setColor(this.color);

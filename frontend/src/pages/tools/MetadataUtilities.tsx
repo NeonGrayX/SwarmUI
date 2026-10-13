@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { queryKeys } from '@/api/hooks';
 import { usePermission } from '@/api/permissions';
+import { MetadataScanner } from '@/components/tools/MetadataScanner';
 import { ToolLayout } from '@/components/tools/ToolLayout';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useTranslation, trailingFragment } from '@/i18n';
@@ -102,6 +103,8 @@ export function MetadataUtilitiesPage() {
                     {result.text}
                 </p>
             )}
+
+            <MetadataScanner />
 
             <ConfirmDialog
                 open={confirming !== null}

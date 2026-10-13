@@ -37,7 +37,10 @@ export function LibraryPage(props: { destinationId: string }) {
         return null;
     }
     return (
+        // Keyed so moving between two model screens starts the second afresh, rather than carrying
+        // the first one's folder, selection and open sheet over into another subtype.
         <ModelBrowser
+            key={entry.subtype}
             subtype={entry.subtype}
             label={subtypeNoun(entry.subtype)}
             emptyHint={t(entry.emptyHintKey)}

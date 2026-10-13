@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { RefreshCw, X } from 'lucide-react';
 import { Outlet } from '@tanstack/react-router';
 import { Rail, useActiveSection } from './Rail';
 import { SectionNav } from './SectionNav';
@@ -7,7 +8,10 @@ import { Breadcrumbs } from './Breadcrumbs';
 import { GenerationCounters, StatusAlert } from './StatusAlert';
 import { CommandPalette, CommandPaletteHint } from '../CommandPalette';
 import { ShortcutsDialog } from './ShortcutsDialog';
-import { useSession } from '@/api/hooks';
+import { AccountMenu, ImpersonationBanner } from './AccountMenu';
+import { useCurrentStatus, useSession } from '@/api/hooks';
+import { useApiNotices } from '@/api/notices';
+import { useRunProgress } from '@/generate/store';
 import { useIsCompact, useIsMobile } from '@/shell/viewport';
 import { useThemes } from '@/theme/useTheme';
 import { useTranslation, useTranslationSync } from '@/i18n';
@@ -39,6 +43,16 @@ export function AppShell() {
                 <div className="mt-2 text-sm text-fg-soft">
                     {session.error instanceof Error ? session.error.message : String(session.error)}
                 </div>
+                <button
+                    type="button"
+                    onClick={() => void session.refetch()}
+                    disabled={session.isFetching}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm disabled:opacity-60"
+                    style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
+                >
+                    <RefreshCw size={14} className={session.isFetching ? 'animate-spin' : ''} aria-hidden />
+                    {t('shell.retry')}
+                </button>
             </Splash>
         );
     }
@@ -58,8 +72,11 @@ export function AppShell() {
                     <GenerationCounters />
                     {/* A keyboard-shortcut hint is dead weight on a device with no keyboard. */}
                     {!mobile && <CommandPaletteHint />}
+                    <AccountMenu compact={mobile} />
                 </header>
                 {section && compact && <SectionNav section={section} orientation="horizontal" />}
+                <ServerUpdatedNotice />
+                <ImpersonationBanner />
                 <StatusAlert />
                 <main className="flex-1 min-h-0 overflow-auto">
                     <Outlet />
@@ -67,6 +84,7 @@ export function AppShell() {
             </div>
             <CommandPalette />
             <ShortcutsDialog />
+            <ProgressTitle />
         </div>
     );
 }
@@ -82,4 +100,75 @@ function Splash(props: { children: ReactNode; tone?: 'error' }) {
             </div>
         </div>
     );
+}
+
+/** Asks for a reload once the server is running a different build than this page loaded against
+ *  (the legacy page's "server has updated" error, site.js getSession). */
+function ServerUpdatedNotice() {
+    const { t } = useTranslation();
+    const updated = useApiNotices(s => s.serverUpdated);
+    const dismiss = useApiNotices(s => s.dismissServerUpdated);
+    if (!updated) {
+        return null;
+    }
+    return (
+        <div
+            role="alert"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-1.5 text-sm text-fg"
+            style={{
+                background: 'color-mix(in srgb, var(--status-bar-warn-color-middle) 18%, transparent)',
+                borderColor: 'color-mix(in srgb, var(--status-bar-warn-color-middle) 40%, transparent)'
+            }}
+        >
+            <span className="flex-1">{t('shell.serverUpdated')}</span>
+            <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded border border-default px-2 py-0.5 text-xs hover:bg-[var(--sw-hover)]"
+            >
+                {t('common.reload')}
+            </button>
+            <button
+                type="button"
+                onClick={dismiss}
+                aria-label={t('common.dismiss')}
+                className="shrink-0 rounded p-0.5 text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
+            >
+                <X size={14} aria-hidden />
+            </button>
+        </div>
+    );
+}
+
+/** The tab's own title at load, which the progress prefix is put in front of. */
+const BASE_TITLE = document.title;
+
+/** Shows generation progress in the browser tab's title, so a run can be watched from another tab
+ *  (legacy main.js updateGenCount: "(N generating) SwarmUI"). This tab's own run reports its
+ *  percentage; otherwise the status poll's count covers runs from elsewhere.
+ *
+ * A component of its own rather than a hook in the shell: it re-renders with every progress
+ * message, and the shell must not. */
+function ProgressTitle(): null {
+    const { t } = useTranslation();
+    const session = useSession();
+    const status = useCurrentStatus(session.isSuccess);
+    const local = useRunProgress();
+    const stats = status.data?.status;
+    const elsewhere = Math.max(stats?.waiting_gens ?? 0, stats?.live_gens ?? 0, stats?.loading_models ?? 0);
+    const percent = local.percent === null ? null : Math.round(local.percent * 100);
+
+    const title = percent !== null
+        ? t('shell.title.progress', { percent, title: BASE_TITLE })
+        : elsewhere > 0
+          ? t('shell.title.generating', { count: elsewhere, title: BASE_TITLE })
+          : BASE_TITLE;
+
+    useEffect(() => {
+        document.title = title;
+    }, [title]);
+    useEffect(() => () => {
+        document.title = BASE_TITLE;
+    }, []);
+    return null;
 }

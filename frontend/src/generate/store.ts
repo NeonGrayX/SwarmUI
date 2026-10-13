@@ -2,8 +2,10 @@
 
 import { useMemo } from 'react';
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { api, SOCKET_FAILED, SwarmApiError } from '@/api/client';
 import type { StreamClose } from '@/api/client';
+import { readUserSetting } from '@/api/queryClient';
 import { t } from '@/i18n/store';
 import type { BatchItem, GenMessage } from './types';
 import type { GenIssue } from './validate';
@@ -36,8 +38,15 @@ interface GenerateStore {
     fail: (issue: GenIssue) => void;
     clearInputError: () => void;
     dismissDisconnected: () => void;
-    interrupt: (all?: boolean) => void;
+    /** Resolves once the server has been asked to stop, so a run started after it is not caught
+     *  by the same interrupt. */
+    interrupt: (all?: boolean) => Promise<void>;
     select: (id: string | null) => void;
+    /** Drops a slot from the rail; when it was selected, `next` (or nothing) takes its place. */
+    removeItem: (id: string, next: string | null) => void;
+    /** Replaces a slot's metadata, eg to record a star. */
+    setItemMetadata: (id: string, metadata: string | null) => void;
+    clearError: () => void;
     clearBatch: () => void;
     setForever: (on: boolean) => void;
     setAutoSwapToImages: (on: boolean) => void;
@@ -79,6 +88,31 @@ function isUnfinished(item: BatchItem): boolean {
     return item.status === 'pending' || item.status === 'running';
 }
 
+/** How many slots of this tab's runs are still waiting or generating - what "Generate Forever"
+ *  keeps topped up (legacy `num_waiting_gens`). */
+export function unfinishedSlotCount(): number {
+    let count = 0;
+    for (const item of useGenerateStore.getState().batch) {
+        if (isUnfinished(item)) {
+            count++;
+        }
+    }
+    return count;
+}
+
+/** Plays the user's completion sound, if they chose one (site.js playCompletionAudio). */
+function playCompletionSound(): void {
+    const file = readUserSetting<string>('audio.completionsound', '');
+    if (!file) {
+        return;
+    }
+    const audio = new Audio(`/Audio/${file}`);
+    audio.volume = Math.min(1, Math.max(0, Number(readUserSetting<unknown>('audio.volume', 0.5)) || 0));
+    audio.play().catch(() => {
+        // Autoplay policy, or a file that has since been removed: a missing chime is not an error.
+    });
+}
+
 /** Settles a run whose socket has closed.
  *
  * The distinction this makes is the whole point of it. A socket closing is not evidence that a
@@ -104,28 +138,45 @@ function endRun(
     // did fail - but with an explanation, since bare "failed" reads as a generation problem.
     const neverStarted = !info.opened;
     const note = neverStarted ? t('generate.couldNotConnect') : undefined;
-    const status = serverEnded || neverStarted ? 'failed' : info.local ? 'cancelled' : 'disconnected';
+    const status: BatchItem['status'] = serverEnded || neverStarted ? 'failed' : info.local ? 'cancelled' : 'disconnected';
+    // The user setting that drops an interrupted run's unfinished slots instead of leaving them in
+    // the rail marked as stopped (ui.removeinterruptedgens, generatehandler.js).
+    const removeLeftovers = status === 'cancelled' && readUserSetting<unknown>('ui.removeinterruptedgens', false) === true;
     set(s => {
         // Only worth saying anything if the run still had work outstanding - a socket closing on a
         // run that already delivered everything is just the run ending.
         const outstanding = s.batch.some(item => item.runId === runId && isUnfinished(item));
+        const batch: BatchItem[] = removeLeftovers
+            ? s.batch.filter(item => item.runId !== runId || !isUnfinished(item))
+            : s.batch.map(item =>
+                item.runId === runId && isUnfinished(item)
+                    ? {
+                        ...item,
+                        status,
+                        error: note ?? item.error,
+                        // A preview of an image that will never arrive is a large data URL kept
+                        // for nothing; the slot's status says what happened to it.
+                        ...(item.isPreview ? { src: undefined, isPreview: false } : {})
+                    }
+                    : item
+            );
         return {
             // Other runs may still be going: this tab is only idle once every socket has closed.
             running: liveRuns.size > 0,
+            // A run that could not even connect will fail the same way on the next tick, so
+            // "Generate Forever" stops instead of filling the rail with failed slots.
+            ...(neverStarted ? { forever: false } : {}),
             // A dropped connection must not re-fire the loop, or a phone coming back from sleep
             // finds a queue of runs nobody asked for.
             ...(outstanding && status === 'disconnected' ? { disconnected: true, forever: false } : {}),
             ...(outstanding && note ? { error: note } : {}),
-            batch: s.batch.map(item =>
-                item.runId === runId && isUnfinished(item)
-                    ? { ...item, status, error: note ?? item.error }
-                    : item
-            )
+            ...(s.selected !== null && !batch.some(item => item.id === s.selected) ? { selected: null } : {}),
+            batch
         };
     });
 }
 
-export const useGenerateStore = create<GenerateStore>((set, get) => ({
+export const useGenerateStore = create<GenerateStore>()(persist((set, get) => ({
     batch: [],
     selected: null,
     running: false,
@@ -141,13 +192,27 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
         const state = get();
         const runId = state.nextRunId;
         if (state.autoClearBatch) {
-            set({ batch: [], selected: null });
+            // Only finished slots go: a run still queued or generating keeps its slots, or "Generate
+            // Forever" would never see its queue fill and would start a new run on every tick.
+            const kept = state.batch.filter(isUnfinished);
+            set({ batch: kept, selected: kept.some(item => item.id === state.selected) ? state.selected : null });
         }
         set({ running: true, error: null, inputError: null, disconnected: false, nextRunId: runId + 1 });
 
-        /** Set when the server announces the run is over, which is what separates "this run
-         *  finished" from "this socket stopped talking to us". */
-        let serverEnded = false;
+        /** Set once the run has been settled, by whichever came first: the server announcing the
+         *  end, or the socket closing. */
+        let settled = false;
+        /** Set when this tab interrupted the run, after which nothing more it says is wanted. */
+        let interrupted = false;
+        /** Settles the run exactly once. `serverEnded` is what separates "this run finished" from
+         *  "this socket stopped talking to us". */
+        const finish = (info: StreamClose, serverEnded: boolean) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            endRun(runId, info, serverEnded, set);
+        };
 
         // Seed placeholder slots so the rail shows the shape of the run immediately.
         set(s => ({
@@ -167,8 +232,17 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
             { images, ...params },
             {
                 onMessage: message => {
+                    if (settled || interrupted) {
+                        return;
+                    }
+                    // The server holds the socket open for two more seconds after this, in case the
+                    // page wants to queue more on it (T2IAPI.cs GenT2I). Nothing here does, so the
+                    // run is over now - waiting for the close would stall "Generate Forever" and
+                    // the Generate button by those two seconds every run.
                     if (message.socket_intention === 'close') {
-                        serverEnded = true;
+                        finish({ local: false, opened: true, code: 1000, reason: '' }, true);
+                        close();
+                        playCompletionSound();
                         return;
                     }
                     if (message.gen_progress) {
@@ -214,7 +288,7 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
                 // merely dropped is left for `onClose`, which always follows it and can tell a
                 // lost connection from a finished one.
                 onError: (error: SwarmApiError) => {
-                    if (error.errorId === SOCKET_FAILED) {
+                    if (error.errorId === SOCKET_FAILED || settled || interrupted) {
                         return;
                     }
                     set(s => ({
@@ -222,16 +296,24 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
                         forever: false,
                         batch: s.batch.map(item =>
                             item.runId === runId && isUnfinished(item)
-                                ? { ...item, status: 'failed' as const, error: error.message }
+                                ? {
+                                    ...item,
+                                    status: 'failed' as const,
+                                    error: error.message,
+                                    ...(item.isPreview ? { src: undefined, isPreview: false } : {})
+                                }
                                 : item
                         )
                     }));
                 },
-                onClose: info => endRun(runId, info, serverEnded, set)
+                onClose: info => finish(info, false)
             }
         );
 
-        liveRuns.set(runId, close);
+        liveRuns.set(runId, () => {
+            interrupted = true;
+            close();
+        });
     },
 
     /** Given a run of its own, so arriving mid-batch neither claims a pending slot nor renumbers
@@ -249,8 +331,9 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
         }));
     },
 
-    /** Stops "generate forever" too, so a bad request cannot re-fire on a loop. */
-    fail: issue => set({ inputError: issue, running: false, forever: false }),
+    /** Stops "generate forever" too, so a bad request cannot re-fire on a loop. Runs already going
+     *  are untouched, since a press can now queue behind them. */
+    fail: issue => set({ inputError: issue, running: liveRuns.size > 0, forever: false }),
     clearInputError: () => set({ inputError: null }),
     dismissDisconnected: () => set({ disconnected: false }),
 
@@ -264,16 +347,31 @@ export const useGenerateStore = create<GenerateStore>((set, get) => ({
             close();
         }
         set({ running: false, forever: false, disconnected: false });
-        api.post('InterruptAll', { other_sessions: all }).catch(() => {
-            // The sockets are already closed locally; a failed interrupt call is not worth a toast.
-        });
+        return api.post('InterruptAll', { other_sessions: all }).then(
+            () => {},
+            () => {
+                // The sockets are already closed locally; a failed interrupt call is not worth a toast.
+            }
+        );
     },
 
     select: id => set({ selected: id }),
+    removeItem: (id, next) =>
+        set(s => ({
+            batch: s.batch.filter(item => item.id !== id),
+            selected: s.selected === id ? next : s.selected
+        })),
+    setItemMetadata: (id, metadata) =>
+        set(s => ({ batch: s.batch.map(item => (item.id === id ? { ...item, metadata } : item)) })),
+    clearError: () => set({ error: null }),
     clearBatch: () => set({ batch: [], selected: null }),
     setForever: on => set({ forever: on }),
     setAutoSwapToImages: on => set({ autoSwapToImages: on }),
     setAutoClearBatch: on => set({ autoClearBatch: on })
+}), {
+    name: 'swarm-ui-generate',
+    // Only the user's toggles: everything else is the state of runs that died with the page.
+    partialize: state => ({ autoSwapToImages: state.autoSwapToImages, autoClearBatch: state.autoClearBatch })
 }));
 
 /** What this tab's own runs are doing, as the socket reports it. */

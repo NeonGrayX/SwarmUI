@@ -99,6 +99,10 @@ export abstract class EditorTool {
     /** The document was replaced wholesale; drop any state tied to the old one. */
     onDocumentReset(): void {}
 
+    /** The editor is closing. Stop anything still running in the background - a request whose
+     *  result would otherwise land on a document nobody is looking at. */
+    onDetach(): void {}
+
     /** Called on every tool when the active layer changes, with what the previously active layer
      *  was, so a tool can compare rather than having to have cached it. Converting a layer between
      *  image and mask reports the same layer's former state, which is why this is a plain

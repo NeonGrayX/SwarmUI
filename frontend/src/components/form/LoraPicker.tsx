@@ -35,7 +35,7 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
         <div className="min-w-0">
             {selection.selected.length > 0 && (
                 <ul className="mb-1 space-y-1">
-                    {selection.selected.map(lora => {
+                    {selection.selected.map((lora, index) => {
                         const option = catalog.byName.get(lora.name);
                         const incompatible =
                             option !== undefined &&
@@ -43,7 +43,9 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
                             !isArchCompatible(option, current.compatClass);
                         return (
                             <li
-                                key={lora.name}
+                                // By position: the same LoRA can be listed twice, eg once confined to a
+                                // segment, and the two rows are still separate entries.
+                                key={index}
                                 className="flex items-center gap-1.5 rounded border border-subtle bg-surface px-1 py-1"
                                 title={lora.name}
                             >
@@ -71,19 +73,19 @@ export function LoraPicker(props: { inputId?: string; disabled?: boolean }) {
                                     max={weightParam?.max ?? WEIGHT_MAX}
                                     step={weightParam?.step || WEIGHT_STEP}
                                     value={lora.weight}
-                                    onChange={e => selection.setWeight(lora.name, e.target.value)}
+                                    onChange={e => selection.setWeight(index, e.target.value)}
                                     // A box left empty mid-edit would reach the backend as an
                                     // unparseable weight, so it settles back to full strength.
                                     onBlur={e => {
                                         if (!Number.isFinite(Number(e.target.value)) || e.target.value === '') {
-                                            selection.setWeight(lora.name, '1');
+                                            selection.setWeight(index, '1');
                                         }
                                     }}
                                     className="w-14 shrink-0 rounded border border-default bg-surface-sunken px-1 py-0.5 text-right text-xs text-fg tabular-nums outline-none focus:border-[var(--emphasis)]"
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => selection.remove(lora.name)}
+                                    onClick={() => selection.remove(index)}
                                     disabled={props.disabled}
                                     aria-label={t('lora.remove', { name: lora.name })}
                                     className="shrink-0 rounded p-0.5 text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg"

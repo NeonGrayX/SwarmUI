@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Field } from '@/components/form/Field';
 import { ToolLayout } from '@/components/tools/ToolLayout';
@@ -12,6 +12,9 @@ interface Token {
 }
 
 const WORD_END = '</w>';
+
+/** How long typing settles before the text is sent off. */
+const TOKENIZE_DEBOUNCE_MS = 250;
 
 /** Word-end vs word-piece. The colour is the only way to see where the encoder thinks a word
  *  actually ends: "photorealistic" is two tokens, and only the second carries the word break. */
@@ -34,18 +37,36 @@ export function TokenizerPage() {
     const [weighting, setWeighting] = useState(true);
     const [skipPromptSyntax, setSkipPromptSyntax] = useState(false);
 
+    /** The text last handed to the server. Lags `text` by the debounce, and never moves while a
+     *  request is still out, so typing costs at most one request in flight at a time. */
+    const [sentText, setSentText] = useState(text);
+
     const tokens = useQuery({
-        queryKey: ['tokenize', text, weighting, skipPromptSyntax],
+        queryKey: ['tokenize', sentText, weighting, skipPromptSyntax],
         queryFn: () =>
             api.post<{ tokens: Token[] }>('TokenizeInDetail', {
-                text,
+                text: sentText,
                 weighting,
                 skipPromptSyntax
             }),
-        enabled: text.trim().length > 0
+        enabled: sentText.trim().length > 0,
+        // Keep the previous tokens on screen while the next answer is on its way.
+        placeholderData: keepPreviousData
     });
 
-    const list = useMemo(() => tokens.data?.tokens ?? [], [tokens.data]);
+    const busy = tokens.isFetching;
+    useEffect(() => {
+        if (text === sentText || busy) {
+            return;
+        }
+        const timer = setTimeout(() => setSentText(text), TOKENIZE_DEBOUNCE_MS);
+        return () => clearTimeout(timer);
+    }, [text, sentText, busy]);
+
+    const list = useMemo(
+        () => (sentText.trim().length > 0 ? (tokens.data?.tokens ?? []) : []),
+        [tokens.data, sentText]
+    );
     // CLIP-family encoders work in chunks of 75 tokens; going over means an extra chunk.
     const chunks = Math.max(1, Math.ceil(list.length / 75));
 
@@ -114,7 +135,7 @@ export function TokenizerPage() {
                     <span className="text-fg-soft">
                         {t('tokenizer.chunkCount', { count: chunks, size: 75 })}
                     </span>
-                    {tokens.isFetching && (
+                    {(tokens.isFetching || text !== sentText) && (
                         <span className="text-xs text-fg-soft">{t('tokenizer.updating')}</span>
                     )}
                     <div className="flex-1" />

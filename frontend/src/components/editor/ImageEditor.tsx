@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { Ellipsis, Maximize, Undo2, X } from 'lucide-react';
+import { Ellipsis, Maximize, Redo2, Undo2, X } from 'lucide-react';
 import { api } from '@/api/client';
 import { useCurrentStatus, useSession } from '@/api/hooks';
 import type { GenMessage } from '@/generate/types';
@@ -30,15 +30,17 @@ export function ImageEditor() {
     useEditorVersion();
 
     const compact = useIsCompact();
+    const rootRef = useRef<HTMLDivElement>(null);
     const hostRef = useRef<HTMLDivElement>(null);
     const [notice, setNotice] = useState<{ key: string; tone: 'ok' | 'error' } | null>(null);
 
     useEditorHost(setNotice);
 
-    // The engine owns the canvas element and every listener on it, so mounting is one call.
+    // The engine owns the canvas element and every listener on it, so mounting is one call. The
+    // root scopes its keyboard shortcuts to the editor's own UI.
     useEffect(() => {
         const host = hostRef.current;
-        return host ? engine.attach(host) : undefined;
+        return host ? engine.attach(host, rootRef.current ?? host) : undefined;
     }, [engine]);
 
     // A notice is an acknowledgement, not something to dismiss.
@@ -50,7 +52,7 @@ export function ImageEditor() {
     }, [notice]);
 
     return (
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        <div ref={rootRef} className="relative flex min-h-0 flex-1 flex-col">
             <div className="flex shrink-0 items-center gap-2 border-b border-subtle px-3 py-1">
                 {/* On a phone the header has room for the controls or for the caption, not both,
                     and the controls are the half that does something. */}
@@ -70,6 +72,13 @@ export function ImageEditor() {
                     onClick={() => engine.undoOnce()}
                 >
                     <Undo2 size={14} aria-hidden />
+                </HeaderButton>
+                <HeaderButton
+                    label={t('editor.redo')}
+                    disabled={!engine.canRedo}
+                    onClick={() => engine.redoOnce()}
+                >
+                    <Redo2 size={14} aria-hidden />
                 </HeaderButton>
                 <HeaderButton label={t('editor.fitView')} onClick={() => engine.autoZoom()}>
                     <Maximize size={14} aria-hidden />

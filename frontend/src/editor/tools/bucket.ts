@@ -12,6 +12,9 @@ import { hexToRgb } from '../color';
 import type { ImageEditorEngine } from '../engine';
 import type { ToolOption, ToolOptionValue } from '../types';
 
+const MIN_THRESHOLD = 1;
+const MAX_THRESHOLD = 256;
+
 export class BucketTool extends ColorTool {
     threshold = 10;
 
@@ -35,8 +38,8 @@ export class BucketTool extends ColorTool {
                 key: 'threshold',
                 labelKey: 'editor.option.threshold',
                 value: this.threshold,
-                min: 1,
-                max: 256,
+                min: MIN_THRESHOLD,
+                max: MAX_THRESHOLD,
                 step: 1
             }
         ];
@@ -44,7 +47,11 @@ export class BucketTool extends ColorTool {
 
     setOption(key: string, value: ToolOptionValue): void {
         if (key === 'threshold') {
-            this.threshold = Number(value);
+            const threshold = Number(value);
+            if (!Number.isFinite(threshold)) {
+                return;
+            }
+            this.threshold = Math.max(MIN_THRESHOLD, Math.min(MAX_THRESHOLD, Math.round(threshold)));
             this.engine.notify();
             this.engine.redraw();
         }
@@ -166,19 +173,70 @@ export class BucketTool extends ColorTool {
             return distance <= threshold;
         };
 
-        const stack: [number, number][] = [[targetX, targetY]];
-        while (stack.length > 0) {
-            const [x, y] = stack.pop()!;
-            if (!canInclude(x, y)) {
-                continue;
-            }
+        const paint = (x: number, y: number): void => {
             filled[y * width + x] = 1;
             const index = (y * width + x) * 4;
             rawData[index] = newColor.r;
             rawData[index + 1] = newColor.g;
             rawData[index + 2] = newColor.b;
             rawData[index + 3] = 255;
-            stack.push([x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]);
+        };
+
+        // Scanline fill: each seed is widened into the whole run it sits on, and only the rows
+        // above and below that run are scanned for new seeds - one per contiguous stretch, rather
+        // than four per pixel. Seeds are packed `y * width + x` into a growable typed stack.
+        let stack = new Int32Array(1024);
+        let stackSize = 0;
+        const pushSeed = (x: number, y: number): void => {
+            if (stackSize === stack.length) {
+                const grown = new Int32Array(stack.length * 2);
+                grown.set(stack);
+                stack = grown;
+            }
+            stack[stackSize++] = y * width + x;
+        };
+        /** Seeds every stretch of fillable pixels on row `y` between `left` and `right`. */
+        const scanRow = (left: number, right: number, y: number): void => {
+            if (y < boundsMinY || y >= boundsMaxY) {
+                return;
+            }
+            let inRun = false;
+            for (let x = left; x <= right; x++) {
+                if (canInclude(x, y)) {
+                    if (!inRun) {
+                        pushSeed(x, y);
+                        inRun = true;
+                    }
+                }
+                else {
+                    inRun = false;
+                }
+            }
+        };
+
+        if (canInclude(targetX, targetY)) {
+            pushSeed(targetX, targetY);
+        }
+        while (stackSize > 0) {
+            const seed = stack[--stackSize];
+            const y = Math.floor(seed / width);
+            const x = seed - y * width;
+            if (!canInclude(x, y)) {
+                continue;
+            }
+            let left = x;
+            while (canInclude(left - 1, y)) {
+                left--;
+            }
+            let right = x;
+            while (canInclude(right + 1, y)) {
+                right++;
+            }
+            for (let fillX = left; fillX <= right; fillX++) {
+                paint(fillX, y);
+            }
+            scanRow(left, right, y - 1);
+            scanRow(left, right, y + 1);
         }
 
         layer.ctx.save();

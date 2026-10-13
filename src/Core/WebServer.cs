@@ -588,7 +588,19 @@ public class WebServer
         }
         path = UserImageHistoryHelper.GetRealPathFor(user, path, root: root);
         byte[] data = null;
+        string entityTag = null;
         string contentType = Utilities.GuessContentType(path);
+        void applyCacheControl()
+        {
+            if (contentType.StartsWith("application/") || contentType.StartsWith("text/"))
+            {
+                context.Response.Headers.CacheControl = "private, max-age=2";
+            }
+            else
+            {
+                context.Response.Headers.CacheControl = $"private, max-age={Program.ServerSettings.Network.OutputCacheSeconds}";
+            }
+        }
         try
         {
             if (context.Request.Query.TryGetValue("preview", out StringValues previewToken) && $"{previewToken}" == "true" && user.Settings.ImageHistoryUsePreviews)
@@ -614,7 +626,24 @@ public class WebServer
             {
                 data = await cacheData;
             }
-            data ??= await File.ReadAllBytesAsync(path);
+            if (data is null)
+            {
+                // A file on disk is tagged by size and modified time, so a browser revalidating it costs a stat rather than reading and hashing the whole file (which matters for videos).
+                FileInfo info = new(path);
+                if (info.Exists)
+                {
+                    entityTag = $"\"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}\"";
+                    if ($"{context.Request.Headers.IfNoneMatch}" == entityTag)
+                    {
+                        applyCacheControl();
+                        context.Response.Headers.ETag = entityTag;
+                        context.Response.StatusCode = 304;
+                        await context.Response.CompleteAsync();
+                        return;
+                    }
+                }
+                data = await File.ReadAllBytesAsync(path);
+            }
         }
         catch (Exception ex)
         {
@@ -630,18 +659,11 @@ public class WebServer
             }
             return;
         }
-        if (contentType.StartsWith("application/") || contentType.StartsWith("text/"))
-        {
-            context.Response.Headers.CacheControl = "private, max-age=2";
-        }
-        else
-        {
-            context.Response.Headers.CacheControl = $"private, max-age={Program.ServerSettings.Network.OutputCacheSeconds}";
-        }
+        applyCacheControl();
         // An ETag lets a browser ask "still the same?" once the cache duration above lapses, and be told
         // so in a few bytes, rather than re-downloading the file. Matters most for image history over a
         // slow connection, where a screen of thumbnails otherwise re-transfers in full every 30 seconds.
-        await Results.Bytes(data, contentType, enableRangeProcessing: true, entityTag: new($"\"{Utilities.HashSHA256(data)}\"")).ExecuteAsync(context);
+        await Results.Bytes(data, contentType, enableRangeProcessing: true, entityTag: new(entityTag ?? $"\"{Utilities.HashSHA256(data)}\"")).ExecuteAsync(context);
     }
 
     /// <summary>Web route for viewing special images (eg model icons).</summary>

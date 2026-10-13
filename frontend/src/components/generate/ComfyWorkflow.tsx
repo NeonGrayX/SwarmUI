@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
+import { queryKeys } from '@/api/hooks';
 import { setComfyFrame } from '@/comfy/bridge';
 import { useTranslation } from '@/i18n';
 import { isComfyCapable, type Backend } from '@/server/backends';
@@ -19,47 +20,80 @@ export function ComfyWorkflow(props: { reloadKey: number }) {
     useEffect(() => () => setComfyFrame(null), []);
 
     const backends = useQuery({
-        queryKey: ['backends'],
-        queryFn: () => api.post<Record<string, Backend>>('ListBackends', {}),
+        queryKey: queryKeys.backends(false),
+        queryFn: () => api.post<Record<string, Backend>>('ListBackends', { full_data: false }),
         refetchInterval: 10_000
     });
 
     const comfyBackends = Object.values(backends.data ?? {}).filter(isComfyCapable);
     const running = comfyBackends.some(b => b.status === 'running' || b.status === 'idle');
 
-    if (backends.isPending) {
+    // Once the editor has been up, it stays up: a backend restarting (or one poll catching it
+    // mid-load) must not throw away the graph someone is working on. The outage is reported over
+    // the frame instead, and the frame picks back up when the backend does.
+    const [mounted, setMounted] = useState(false);
+    if (running && !mounted) {
+        setMounted(true);
+    }
+
+    if (!mounted && backends.isPending) {
         return <Centered>{t('comfy.checking')}</Centered>;
     }
 
-    if (!running) {
+    if (!mounted) {
         return (
             <Centered>
-                <p className="text-fg">{t('comfy.noBackend')}</p>
-                <p className="mt-1 text-sm text-fg-soft">
-                    {t('comfy.explain')}{' '}
-                    {comfyBackends.length > 0
-                        ? t('comfy.foundNotRunning', { count: comfyBackends.length })
-                        : t('comfy.noneConfigured')}
-                </p>
-                <a
-                    href="/ui/server/backends"
-                    className="mt-3 inline-block rounded px-3 py-1.5 text-sm"
-                    style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
-                >
-                    {t('comfy.goToBackends')}
-                </a>
+                <NoBackend count={comfyBackends.length} />
             </Centered>
         );
     }
 
     return (
-        <iframe
-            key={props.reloadKey}
-            ref={setComfyFrame}
-            src="/ComfyBackendDirect/"
-            title={t('comfy.editorTitle')}
-            className="h-full w-full border-0"
-        />
+        <div className="relative h-full w-full">
+            <iframe
+                key={props.reloadKey}
+                ref={setComfyFrame}
+                src="/ComfyBackendDirect/"
+                title={t('comfy.editorTitle')}
+                className="h-full w-full border-0"
+            />
+            {!running && backends.isSuccess && (
+                <div
+                    role="status"
+                    className="absolute inset-x-0 top-0 flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2 text-sm text-fg"
+                    style={{
+                        background: 'var(--sw-error-tint)',
+                        borderColor: 'var(--sw-error-border)'
+                    }}
+                >
+                    <span className="flex-1">{t('comfy.backendLost')}</span>
+                    <a href="/ui/server/backends" className="underline">
+                        {t('comfy.goToBackends')}
+                    </a>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/** Why the editor cannot open, and where to go about it. */
+function NoBackend(props: { count: number }) {
+    const { t } = useTranslation();
+    return (
+        <>
+            <p className="text-fg">{t('comfy.noBackend')}</p>
+            <p className="mt-1 text-sm text-fg-soft">
+                {t('comfy.explain')}{' '}
+                {props.count > 0 ? t('comfy.foundNotRunning', { count: props.count }) : t('comfy.noneConfigured')}
+            </p>
+            <a
+                href="/ui/server/backends"
+                className="mt-3 inline-block rounded px-3 py-1.5 text-sm"
+                style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
+            >
+                {t('comfy.goToBackends')}
+            </a>
+        </>
     );
 }
 

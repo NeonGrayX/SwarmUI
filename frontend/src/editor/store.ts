@@ -43,20 +43,27 @@ interface EditorStore {
     open: boolean;
     /** Set when the editor was opened on a specific image, for the window title. */
     sourceName: string | null;
-    openWithImage: (src: string, name?: string) => Promise<ImageEditorEngine>;
+    /** `beforeShow` runs once the document is loaded but before the editor appears, which is the
+     *  moment to bring anything that follows the document's size into line with it. */
+    openWithImage: (
+        src: string,
+        name?: string,
+        beforeShow?: (engine: ImageEditorEngine) => void
+    ) => Promise<ImageEditorEngine>;
     openBlank: (width: number, height: number) => Promise<void>;
     close: () => void;
 }
 
-export const useEditorStore = create<EditorStore>(set => ({
+export const useEditorStore = create<EditorStore>((set, get) => ({
     engine: null,
     open: false,
     sourceName: null,
 
-    openWithImage: async (src, name) => {
+    openWithImage: async (src, name, beforeShow) => {
         // The engine chunk and the image download are independent, so pay for them at once.
         const [ready, image] = await Promise.all([loadEngine(), loadImage(src)]);
         ready.setBaseImage(image);
+        beforeShow?.(ready);
         set({ open: true, sourceName: name ?? null });
         return ready;
     },
@@ -67,7 +74,11 @@ export const useEditorStore = create<EditorStore>(set => ({
         set({ open: true, sourceName: null });
     },
 
-    close: () => set({ open: false })
+    close: () => {
+        // Undo entries hold full-resolution layer copies; a closed editor has no use for them.
+        get().engine?.clearHistory();
+        set({ open: false });
+    }
 }));
 
 function loadImage(src: string): Promise<HTMLImageElement> {

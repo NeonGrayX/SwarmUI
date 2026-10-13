@@ -24,6 +24,13 @@ export interface SessionData {
     permissions: string[];
 }
 
+/** One registered theme, as GetUserSettings lists them (BasicAPIFeatures.GetUserSettings). */
+export interface ThemeInfo {
+    name: string;
+    is_dark: boolean;
+    css_paths: string[];
+}
+
 /** How a parameter should be presented. Mirrors ParamViewType (T2IParamTypes.cs:50). */
 export type ParamViewType =
     | 'normal'

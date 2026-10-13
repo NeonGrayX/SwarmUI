@@ -91,5 +91,31 @@ export function isChangedFromDefault(node: SettingNode, value: unknown): boolean
     if (node.is_secret || node.default_value === undefined) {
         return false;
     }
-    return String(value) !== String(node.default_value);
+    const text = Array.isArray(value) ? value.join(' || ') : String(value);
+    return text !== String(node.default_value);
+}
+
+/** Model-folder settings that are meant to be relative to the model root(s). */
+const MODEL_FOLDER_SETTINGS = new Set([
+    'paths.sdmodelfolder',
+    'paths.sdlorafolder',
+    'paths.sdvaefolder',
+    'paths.sdembeddingfolder',
+    'paths.sdcontrolnetsfolder',
+    'paths.sdclipfolder',
+    'paths.sdclipvisionfolder'
+]);
+
+/** Catches a common mistake: a model folder given as a full path inside the model root, which the
+ *  server then resolves relative to that root a second time. Mirrors the legacy check
+ *  (src/wwwroot/js/genpage/helpers/settings_editor.js isSettingWrongLooking). */
+export function isSettingWrongLooking(key: string, value: unknown, modelRoot: string): boolean {
+    if (!MODEL_FOLDER_SETTINGS.has(key.toLowerCase()) || typeof value !== 'string') {
+        return false;
+    }
+    if ((!value.includes('/') && !value.includes('\\')) || value.includes(';')) {
+        return false;
+    }
+    const roots = modelRoot.split(';').map(root => root.trim()).filter(Boolean);
+    return roots.some(root => value.startsWith(root));
 }

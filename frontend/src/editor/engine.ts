@@ -62,6 +62,19 @@ const GESTURE_GRACE_MS = 250;
 /** And how little the first finger may have travelled in that time. */
 const GESTURE_GRACE_SLOP = 16;
 
+/** Input types that take no text, so a focused one does not block the single-letter hotkeys. */
+const NON_TEXT_INPUTS: ReadonlySet<string> = new Set([
+    'button',
+    'checkbox',
+    'color',
+    'file',
+    'image',
+    'radio',
+    'range',
+    'reset',
+    'submit'
+]);
+
 /** The span and midpoint of a two-finger gesture, in canvas coordinates. */
 interface GestureFrame {
     distance: number;
@@ -100,6 +113,11 @@ export class ImageEditorEngine {
     lastPointerX = 0;
     lastPointerY = 0;
     pointerDown = false;
+    /** The button and pointer type of the press in progress, so one can be closed out on the
+     *  tool's behalf when it loses control mid-press (`endToolPress`). */
+    private pressButton = 0;
+    private pressPointerId = 0;
+    private pressPointerType = 'mouse';
     altDown = false;
     /** True while the pointer in use is a fingertip. Hit targets a mouse can land on exactly are
      *  grown when this is set; nothing about what the tools *do* changes with it. */
@@ -144,6 +162,8 @@ export class ImageEditorEngine {
 
     /* ---- History ------------------------------------------------------------------------- */
     editHistory: HistoryEntry[] = [];
+    /** What undo took back, most recent last. Any new edit empties it. */
+    redoHistory: HistoryEntry[] = [];
 
     /* ---- React bridge -------------------------------------------------------------------- */
     private listeners = new Set<() => void>();
@@ -152,6 +172,9 @@ export class ImageEditorEngine {
     private maskHelperCanvas: HTMLCanvasElement;
     private maskHelperCtx: CanvasRenderingContext2D;
     private detachers: (() => void)[] = [];
+    /** The editor's whole UI. Keyboard shortcuts only apply to keys pressed within it, or with
+     *  nothing in particular focused - never to a field or button elsewhere on the page. */
+    private keyRoot: HTMLElement | null = null;
     private frame = 0;
     private antsTimer = 0;
     /** Whether the host element currently has a box at all. A pane that is hidden when the editor
@@ -198,8 +221,10 @@ export class ImageEditorEngine {
 
     /* ============================ Attach / detach ============================ */
 
-    /** Binds the engine to a host element, creating the canvas and its listeners. */
-    attach(host: HTMLElement): () => void {
+    /** Binds the engine to a host element, creating the canvas and its listeners. `keyRoot` is the
+     *  editor's whole UI, which scopes the keyboard shortcuts; it defaults to the host. */
+    attach(host: HTMLElement, keyRoot: HTMLElement = host): () => void {
+        this.keyRoot = keyRoot;
         const canvas = document.createElement('canvas');
         canvas.className = 'absolute inset-0 h-full w-full touch-none';
         host.appendChild(canvas);
@@ -237,6 +262,7 @@ export class ImageEditorEngine {
         const observer = new ResizeObserver(() => this.resize());
         observer.observe(host);
         this.detachers.push(() => observer.disconnect());
+        this.watchPixelRatio();
 
         this.coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
         this.fitted = false;
@@ -251,7 +277,40 @@ export class ImageEditorEngine {
         return () => this.detach();
     }
 
+    /** Re-renders at the new density when the device pixel ratio changes without the element
+     *  resizing - a browser zoom, or the window moving to a screen of a different density - which
+     *  would otherwise leave the canvas upscaled and blurry. A resolution query only matches the
+     *  one ratio it names, so each change re-arms it for the new one. */
+    private watchPixelRatio(): void {
+        const query = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+        if (!query) {
+            return;
+        }
+        let armed = true;
+        const onChange = () => {
+            if (!armed) {
+                return;
+            }
+            armed = false;
+            query.removeEventListener('change', onChange);
+            this.resize();
+            if (this.canvas) {
+                this.watchPixelRatio();
+            }
+        };
+        query.addEventListener('change', onChange);
+        this.detachers.push(() => {
+            armed = false;
+            query.removeEventListener('change', onChange);
+        });
+    }
+
     private detach(): void {
+        this.endToolPress(this.activeTool);
+        for (const tool of Object.values(this.tools)) {
+            tool.onDetach();
+        }
+        this.keyRoot = null;
         window.clearInterval(this.antsTimer);
         cancelAnimationFrame(this.frame);
         this.frame = 0;
@@ -360,6 +419,9 @@ export class ImageEditorEngine {
         if (!next || (next.hidden && !next.isTempTool)) {
             return;
         }
+        // A hotkey pressed mid-stroke: finish the stroke rather than leaving the outgoing tool
+        // thinking it is still down. May itself switch tools (the eyedropper hands back control).
+        this.endToolPress(this.activeTool);
         if (this.activeTool && !next.isTempTool) {
             this.activeTool.setInactive();
         }
@@ -386,6 +448,9 @@ export class ImageEditorEngine {
         if (this.preAltTool || this.activeTool.id === 'general') {
             return;
         }
+        // Closes a stroke in progress, so the tool does not keep painting along the pan and pick
+        // up again on hover once Alt is released. The press itself stays down, and pans.
+        this.endToolPress(this.activeTool);
         this.preAltTool = this.activeTool;
         this.activeTool = this.tools.general;
         this.activeTool.setActive();
@@ -398,6 +463,7 @@ export class ImageEditorEngine {
         if (!this.preAltTool) {
             return;
         }
+        this.endToolPress(this.tools.general);
         this.tools.general.setInactive();
         this.activeTool = this.preAltTool;
         this.preAltTool = null;
@@ -405,28 +471,79 @@ export class ImageEditorEngine {
         this.redraw();
     }
 
+    /** Delivers a release to `tool` for a press that is still physically down, because control is
+     *  being taken away from it mid-press. `pointerDown` is held false while it runs, so the tool
+     *  sees an ordinary release and anything it does in response (the eyedropper switching back
+     *  to its owner) does not loop back here; the press then carries on for whoever comes next. */
+    private endToolPress(tool: EditorTool): void {
+        if (!this.pointerDown) {
+            return;
+        }
+        const rect = this.canvas?.getBoundingClientRect();
+        const release = new PointerEvent('pointerup', {
+            button: this.pressButton,
+            pointerId: this.pressPointerId,
+            pointerType: this.pressPointerType,
+            clientX: this.pointerX + (rect?.left ?? 0),
+            clientY: this.pointerY + (rect?.top ?? 0)
+        });
+        this.pointerDown = false;
+        tool.onPointerUp(release);
+        tool.onGlobalPointerUp(release);
+        this.pointerDown = true;
+    }
+
     /* ============================ History ============================ */
 
     addHistoryEntry(entry: HistoryEntry): void {
-        if (this.editHistory.length >= MAX_HISTORY) {
-            this.editHistory.splice(0, 1);
+        this.pushHistory(this.editHistory, entry);
+        this.redoHistory = [];
+    }
+
+    private pushHistory(stack: HistoryEntry[], entry: HistoryEntry): void {
+        if (stack.length >= MAX_HISTORY) {
+            stack.splice(0, 1);
         }
-        this.editHistory.push(entry);
+        stack.push(entry);
     }
 
     get canUndo(): boolean {
         return this.editHistory.length > 0;
     }
 
+    get canRedo(): boolean {
+        return this.redoHistory.length > 0;
+    }
+
     undoOnce(): void {
-        if (this.editHistory.length === 0) {
+        this.stepHistory(this.editHistory, this.redoHistory);
+    }
+
+    redoOnce(): void {
+        this.stepHistory(this.redoHistory, this.editHistory);
+    }
+
+    /** Reverts the newest entry of `from`, filing the entry that would reapply it on `to`. */
+    private stepHistory(from: HistoryEntry[], to: HistoryEntry[]): void {
+        if (from.length === 0) {
             return;
         }
         this.activeTool.onBeforeHistoryUndo();
-        this.editHistory.pop()!.undo();
+        const inverse = from.pop()!.undo();
+        if (inverse) {
+            this.pushHistory(to, inverse);
+        }
         this.markChanged();
         this.notify();
         this.redraw();
+    }
+
+    /** Drops the whole undo and redo history. Every canvas edit entry holds a full-resolution copy
+     *  of a layer, so a closed editor should not keep them alive. */
+    clearHistory(): void {
+        this.editHistory = [];
+        this.redoHistory = [];
+        this.notify();
     }
 
     /* ============================ Layers ============================ */
@@ -452,6 +569,7 @@ export class ImageEditorEngine {
         this.finalOffsetX = 0;
         this.finalOffsetY = 0;
         this.editHistory = [];
+        this.redoHistory = [];
         this.hasSelection = false;
     }
 
@@ -588,6 +706,7 @@ export class ImageEditorEngine {
         this.offsetX = 0;
         this.offsetY = 0;
         this.editHistory = [];
+        this.redoHistory = [];
         this.fitted = false;
         for (const tool of Object.values(this.tools)) {
             tool.onDocumentReset();
@@ -647,6 +766,9 @@ export class ImageEditorEngine {
             hasSelection: this.hasSelection
         };
         this.capturePointer(e.pointerId);
+        this.pressButton = e.button;
+        this.pressPointerId = e.pointerId;
+        this.pressPointerType = e.pointerType;
         // Middle button pans; right button pans unless the tool wants it.
         if (this.altDown || e.button === 1) {
             this.handleAltDown();
@@ -669,7 +791,9 @@ export class ImageEditorEngine {
         }
         this.updatePointerFrom(e);
         let draw = false;
-        if (this.isPointerInBox(0, 0, this.viewWidth, this.viewHeight)) {
+        // Pointer capture keeps a press's moves coming once it leaves the canvas; those are still
+        // the stroke, and dropping them would cut it straight across to wherever it came back in.
+        if (this.pointerDown || this.isPointerInBox(0, 0, this.viewWidth, this.viewHeight)) {
             this.activeTool.onPointerMove(e);
             draw = true;
         }
@@ -734,8 +858,12 @@ export class ImageEditorEngine {
             this.activeTool.onPointerUp(e);
             this.activeTool.onGlobalPointerUp(e);
             if (mark && together) {
-                while (this.editHistory.length > mark.history) {
-                    this.undoOnce();
+                // The rolled-back dab is not something to offer as a redo.
+                if (this.editHistory.length > mark.history) {
+                    while (this.editHistory.length > mark.history) {
+                        this.undoOnce();
+                    }
+                    this.redoHistory = [];
                 }
                 [this.selectX, this.selectY, this.selectWidth, this.selectHeight] = mark.selection;
                 this.hasSelection = mark.hasSelection;
@@ -810,13 +938,28 @@ export class ImageEditorEngine {
         this.redraw();
     }
 
-    /** True while the user is typing somewhere, so single-letter hotkeys stay out of the way. */
+    /** True while the user is typing somewhere, so single-letter hotkeys stay out of the way.
+     *  Only text-like fields count: a focused slider, checkbox or button takes no letters, and
+     *  treating it as typing would leave the hotkeys dead after any click on the option bar. */
     private isTypingTarget(target: EventTarget | null): boolean {
         const element = target as HTMLElement | null;
-        return (
-            element?.isContentEditable === true ||
-            ['INPUT', 'TEXTAREA', 'SELECT'].includes(element?.tagName ?? '')
-        );
+        if (!element) {
+            return false;
+        }
+        if (element.isContentEditable || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT') {
+            return true;
+        }
+        return element.tagName === 'INPUT' && !NON_TEXT_INPUTS.has((element as HTMLInputElement).type);
+    }
+
+    /** Whether a key event belongs to the editor: pressed within its UI, or with focus on nothing
+     *  in particular (clicking the canvas, which is not focusable, leaves it on the body). */
+    private isEditorKeyTarget(target: EventTarget | null): boolean {
+        const node = target as Node | null;
+        if (!node || node === document.body || node === document.documentElement || node === document) {
+            return true;
+        }
+        return this.keyRoot?.contains(node) ?? false;
     }
 
     private onKeyDown(e: KeyboardEvent): void {
@@ -828,10 +971,16 @@ export class ImageEditorEngine {
             }
             return;
         }
-        if (this.isTypingTarget(e.target)) {
+        if (this.isTypingTarget(e.target) || !this.isEditorKeyTarget(e.target)) {
             return;
         }
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        const key = e.key.toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && (key === 'y' || (key === 'z' && e.shiftKey))) {
+            e.preventDefault();
+            this.redoOnce();
+            return;
+        }
+        if ((e.ctrlKey || e.metaKey) && key === 'z') {
             e.preventDefault();
             this.undoOnce();
             return;
@@ -842,7 +991,8 @@ export class ImageEditorEngine {
             void this.copySelectionToClipboard(select.copyMode === 'layer');
             return;
         }
-        if (e.key === 'Delete' && this.activeLayer) {
+        // Backspace too, since a Mac keyboard has no key labelled Delete that sends it.
+        if ((e.key === 'Delete' || e.key === 'Backspace') && this.activeLayer) {
             if (this.activeTool.id === 'general') {
                 e.preventDefault();
                 this.removeLayer(this.activeLayer);
@@ -885,7 +1035,7 @@ export class ImageEditorEngine {
 
     /** Native paste, which works without the clipboard-read permission Firefox does not grant. */
     private handlePasteEvent(e: ClipboardEvent): void {
-        if (this.isTypingTarget(e.target)) {
+        if (this.isTypingTarget(e.target) || !this.isEditorKeyTarget(e.target)) {
             return;
         }
         for (const item of Array.from(e.clipboardData?.items ?? [])) {

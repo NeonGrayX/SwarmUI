@@ -7,12 +7,14 @@
  *     to the LoRA list would apply them twice,
  *   - media params record a server-side source path, which is reusable, or inline data, which is not.
  *
- * The `reuseparamexcludelist` user setting is not honored: it lives in GetUserSettings, which this
- * UI does not otherwise read.
+ * Fooocus JSON and the A1111 text block are converted on the way in, as interpretMetadata does
+ * (src/wwwroot/js/genpage/helpers/metadatahelpers.js:83). Params named in the user's
+ * `reuseparamexcludelist` setting are neither reset nor overwritten.
  */
 
 import { useCallback } from 'react';
 import { t } from '@/i18n';
+import { useUserSetting } from '@/settings/useUserSetting';
 import type { ParamSchema } from '@/api/types';
 import { cleanModelName, useParamSchema, type NormalizedSchema } from './schema';
 import {
@@ -46,26 +48,127 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Reads the metadata blob into params + extra, or throws with a reason it can't be reused. */
-function readMetadata(raw: string | null | undefined): ImageParameters {
-    if (!raw) {
+/** A param id as the existing interface derives one from a label: lowercase letters only.
+ *  Mirrors cleanParamName (params.js:1577). */
+export function cleanParamName(name: string): string {
+    return name.toLowerCase().replace(/[^a-z]/g, '');
+}
+
+/** Fooocus key names for the Swarm params they correspond to (fooocusMetadataMap,
+ *  metadatahelpers.js:59). The original maps `denoise` to `imageinitcreativity`, which is no param
+ *  at all; the param it means is `initimagecreativity`. */
+const FOOOCUS_KEYS: [string, string][] = [
+    ['Prompt', 'prompt'],
+    ['Negative', 'negativeprompt'],
+    ['cfg', 'cfgscale'],
+    ['sampler_name', 'sampler'],
+    ['base_model_name', 'model'],
+    ['denoise', 'initimagecreativity']
+];
+
+function fromFooocus(data: Record<string, unknown>): Record<string, unknown> {
+    const params = { ...data };
+    for (const [from, to] of FOOOCUS_KEYS) {
+        if (from in params) {
+            params[to] = params[from];
+            delete params[from];
+        }
+    }
+    // Fooocus writes nulls for what it did not use.
+    for (const key of Object.keys(params)) {
+        if (params[key] === null || params[key] === undefined) {
+            delete params[key];
+        }
+    }
+    return params;
+}
+
+/** Best-effort read of the A1111 text block: the prompt, an optional "Negative prompt:" line, then
+ *  one line of comma-separated `Key: value` pairs. It has no formal syntax, so this follows
+ *  upvertAutoWebuiMetadataToSwarm (metadatahelpers.js:3) rather than trying to be clever. */
+function fromAutoWebui(text: string, schema: NormalizedSchema): Record<string, unknown> {
+    const params: Record<string, unknown> = {};
+    const marker = '\nNegative prompt: ';
+    const at = text.indexOf(marker);
+    let rest: string;
+    if (at !== -1) {
+        params.prompt = text.slice(0, at);
+        const after = text.slice(at + marker.length);
+        const lineEnd = after.indexOf('\n');
+        params.negativeprompt = lineEnd === -1 ? after : after.slice(0, lineEnd);
+        rest = lineEnd === -1 ? '' : after.slice(lineEnd + 1);
+    }
+    else {
+        const lines = text.split('\n');
+        params.prompt = lines.slice(0, -1).join('\n');
+        rest = lines[lines.length - 1];
+    }
+    const lines = rest.split('\n');
+    for (const part of lines[lines.length - 1].split(',')) {
+        const pair = part.split(':').map(entry => entry.trim());
+        if (pair.length !== 2) {
+            continue;
+        }
+        const id = cleanParamName(pair[0]);
+        if (schema.byId.has(id)) {
+            params[id] = pair[1];
+        }
+        else if (id === 'size') {
+            const size = pair[1].split('x').map(entry => parseInt(entry));
+            if (size.length === 2) {
+                params.width = size[0];
+                params.height = size[1];
+            }
+        }
+        else if (id === 'scheduletype') {
+            params.scheduler = pair[1].toLowerCase();
+        }
+        else {
+            params[pair[0]] = pair[1];
+        }
+    }
+    return params;
+}
+
+/** Reads the metadata blob into params + extra, or throws with a reason it can't be reused.
+ *  Takes Swarm's own JSON, Fooocus JSON, or an A1111 text block. */
+function readMetadata(raw: string | null | undefined, schema: NormalizedSchema): ImageParameters {
+    const text = raw?.trim();
+    if (!text) {
         throw new Error(t('reuse.noParameters'));
     }
-    let data: unknown;
-    try {
-        data = JSON.parse(raw);
+    let params: Record<string, unknown>;
+    let extra: Record<string, unknown>;
+    if (text.startsWith('{')) {
+        let data: unknown;
+        try {
+            data = JSON.parse(text);
+        }
+        catch {
+            throw new Error(t('reuse.unreadableMetadata'));
+        }
+        if (!isRecord(data)) {
+            throw new Error(t('reuse.unreadableMetadata'));
+        }
+        // Swarm images nest their params; images from other tools tend to be one flat object.
+        if (isRecord(data.sui_image_params)) {
+            params = { ...(data.sui_image_params as Record<string, unknown>) };
+        }
+        else if ('Prompt' in data) {
+            params = fromFooocus(data);
+        }
+        else {
+            params = { ...data };
+        }
+        extra = isRecord(data.sui_extra_data) ? { ...(data.sui_extra_data as Record<string, unknown>) } : params;
     }
-    catch {
+    else if (text.includes('\n')) {
+        params = fromAutoWebui(text, schema);
+        extra = params;
+    }
+    else {
         throw new Error(t('reuse.unreadableMetadata'));
     }
-    if (!isRecord(data)) {
-        throw new Error(t('reuse.unreadableMetadata'));
-    }
-    // Swarm images nest their params; images from other tools tend to be one flat object.
-    const params = isRecord(data.sui_image_params)
-        ? { ...(data.sui_image_params as Record<string, unknown>) }
-        : { ...data };
-    const extra = isRecord(data.sui_extra_data) ? { ...(data.sui_extra_data as Record<string, unknown>) } : params;
     for (const [oldId, newId] of Object.entries(REMAPS)) {
         if (oldId in params) {
             params[newId] = params[oldId];
@@ -101,7 +204,7 @@ function dropPromptedLoras(params: Record<string, unknown>, extra: Record<string
     const prompted = Array.isArray(extra.prompted_loras) ? extra.prompted_loras : [];
     const version = typeof params.swarm_version === 'string' ? params.swarm_version : '';
     const old = !version || /^0\.9\.[0-6]\./.test(version);
-    const keep = loras.map((lora, index) => (old ? confinements[index] === -1 : !prompted.includes(lora)));
+    const keep = loras.map((lora, index) => (old ? Number(confinements[index]) === -1 : !prompted.includes(lora)));
     params.loras = loras.filter((_, index) => keep[index]);
     params.loraweights = weights.filter((_, index) => keep[index]);
     if (old) {
@@ -188,17 +291,25 @@ function revealGroups(param: ParamSchema, schema: NormalizedSchema): void {
     }
 }
 
-/** Loads an image's recorded parameters into the form, replacing what is there.
- *  Throws when the metadata can't be read; the caller reports that to the user. */
-export function applyImageParameters(schema: NormalizedSchema, raw: string | null | undefined): void {
-    const source = readMetadata(raw);
-    const store = useParamStore.getState();
-    // Reuse means "generate this image again", so anything the image did not record goes back to
-    // default rather than lingering from whatever was last set up.
-    store.resetAll();
+/** The `reuseparamexcludelist` user setting as param ids. */
+export function parseExcludeList(setting: string | null | undefined): string[] {
+    return (setting ?? '').split(',').map(cleanParamName).filter(Boolean);
+}
 
+/** Loads an image's recorded parameters into the form, replacing what is there. Params in
+ *  `exclude` keep their current value. Throws when the metadata can't be read, or holds nothing
+ *  this form has a param for - before anything is reset, so a failed reuse changes nothing. */
+export function applyImageParameters(
+    schema: NormalizedSchema,
+    raw: string | null | undefined,
+    exclude: string[] = []
+): void {
+    const source = readMetadata(raw, schema);
+    const excluded = new Set(exclude);
+
+    const updates: { param: ParamSchema; value: ParamValue; media?: MediaMeta[] }[] = [];
     for (const param of schema.params) {
-        if (param.nonreusable) {
+        if (param.nonreusable || excluded.has(param.id)) {
             continue;
         }
         if (isMediaType(param.type)) {
@@ -206,23 +317,36 @@ export function applyImageParameters(schema: NormalizedSchema, raw: string | nul
             if (paths.length === 0) {
                 continue;
             }
-            store.setValue(param.id, isMediaListType(param.type) ? paths : paths[0]);
-            store.setMedia(
-                param.id,
-                paths.map(path => metaFor(param, path))
-            );
+            updates.push({
+                param,
+                value: isMediaListType(param.type) ? paths : paths[0],
+                media: paths.map(path => metaFor(param, path))
+            });
         }
         else {
             const value = coerce(param, source.params[param.id], schema);
-            if (value === undefined) {
-                continue;
+            if (value !== undefined) {
+                updates.push({ param, value });
             }
-            store.setValue(param.id, value);
         }
-        if (param.toggleable) {
-            store.setToggle(param.id, true);
+    }
+    if (updates.length === 0) {
+        throw new Error(t('reuse.nothingReusable'));
+    }
+
+    const store = useParamStore.getState();
+    // Reuse means "generate this image again", so anything the image did not record goes back to
+    // default rather than lingering from whatever was last set up.
+    store.resetAll([...excluded]);
+    for (const update of updates) {
+        store.setValue(update.param.id, update.value);
+        if (update.media) {
+            store.setMedia(update.param.id, update.media);
         }
-        revealGroups(param, schema);
+        if (update.param.toggleable) {
+            store.setToggle(update.param.id, true);
+        }
+        revealGroups(update.param, schema);
     }
 }
 
@@ -230,13 +354,20 @@ export function applyImageParameters(schema: NormalizedSchema, raw: string | nul
  *  image carries nothing reusable, or when the param schema hasn't loaded yet. */
 export function useReuseParameters(): (metadata: string | null | undefined) => void {
     const schema = useParamSchema();
+    const excludeSetting = useUserSetting<string>('reuseparamexcludelist', 'wildcardseed');
     return useCallback(
         (metadata: string | null | undefined) => {
             if (!schema) {
                 throw new Error(t('reuse.schemaLoading'));
             }
-            applyImageParameters(schema, metadata);
+            applyImageParameters(schema, metadata, parseExcludeList(excludeSetting));
         },
-        [schema]
+        [schema, excludeSetting]
     );
 }
+
+/** Loads parameters from raw image metadata - the text of a PNG `parameters` chunk or an EXIF
+ *  UserComment, as a dropped file carries it - into the form. Accepts Swarm, Fooocus and A1111
+ *  formats. The returned function throws an Error with a readable message on failure, leaving the
+ *  form untouched. */
+export const useApplyRawImageMetadata = useReuseParameters;

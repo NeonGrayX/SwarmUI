@@ -46,6 +46,9 @@ export function ZoomableImage(props: {
     alt: string;
     /** Previews are half-finished renders, dimmed slightly so they do not read as the result. */
     isPreview?: boolean;
+    /** Scales the image up to fill the viewport rather than showing it no larger than its own size
+     *  (the `centerimagealwaysgrow` user setting, and live previews, which are rendered small). */
+    grow?: boolean;
     /** Changing this resets the view - a new image should always start out fitted. */
     resetKey?: string;
     /** Steps to the neighbouring image, when the caller is showing a set rather than one image.
@@ -280,7 +283,7 @@ export function ZoomableImage(props: {
                     src={props.src}
                     alt={props.alt}
                     draggable={false}
-                    className="max-h-full max-w-full object-contain"
+                    className={props.grow ? 'h-full w-full object-contain' : 'max-h-full max-w-full object-contain'}
                     style={{
                         transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
                         filter: props.isPreview ? 'saturate(0.9)' : undefined

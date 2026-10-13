@@ -25,13 +25,17 @@ interface PointSet {
     negative: SamPoint[];
 }
 
-/** The image handed to SAM2, and where it sits in the document. */
+/** The image handed to SAM2, and where it sits in the document. Captured when the request is
+ *  made, so a result is placed where its own image came from even if the selection has changed
+ *  while it was in flight. */
 interface SamInput {
     image: string;
     offsetX: number;
     offsetY: number;
     width: number;
     height: number;
+    /** Whether the image is a crop to the selection, whose edges the mask is then clipped to. */
+    cropped: boolean;
 }
 
 abstract class Sam2Tool extends EditorTool {
@@ -41,6 +45,8 @@ abstract class Sam2Tool extends EditorTool {
     private modelWarmed = false;
     protected warmingUp = false;
     private cancelWarmup: (() => void) | null = null;
+    /** Stops the segmentation request in flight, if any. */
+    protected cancelRequest: (() => void) | null = null;
 
     constructor(
         engine: ImageEditorEngine,
@@ -92,6 +98,15 @@ abstract class Sam2Tool extends EditorTool {
 
     setInactive(): void {
         super.setInactive();
+        this.stopPending();
+    }
+
+    onDetach(): void {
+        this.stopPending();
+    }
+
+    /** Cancels the warmup and any segmentation request, and drops whatever they would return. */
+    protected stopPending(): void {
         // Abandoning a warmup leaves `modelWarmed` false on purpose, so reselecting the tool tries
         // again rather than assuming a load that never finished.
         if (this.warmingUp) {
@@ -100,6 +115,7 @@ abstract class Sam2Tool extends EditorTool {
         }
         this.cancelWarmup?.();
         this.cancelWarmup = null;
+        this.abandonRequests();
     }
 
     /** Segmentation arguments for the throwaway warmup request, around the centre of the image. */
@@ -154,7 +170,8 @@ abstract class Sam2Tool extends EditorTool {
                 offsetX: 0,
                 offsetY: 0,
                 width: Math.round(engine.realWidth),
-                height: Math.round(engine.realHeight)
+                height: Math.round(engine.realHeight),
+                cropped: false
             };
         }
         const width = Math.round(engine.selectWidth);
@@ -164,7 +181,8 @@ abstract class Sam2Tool extends EditorTool {
             offsetX: engine.selectX,
             offsetY: engine.selectY,
             width,
-            height
+            height,
+            cropped: true
         };
     }
 
@@ -184,60 +202,48 @@ abstract class Sam2Tool extends EditorTool {
         return [genData, samInput];
     }
 
-    /** Places a returned mask onto the active mask layer, undoing the selection crop if any. */
-    protected applyMaskResult(maskImg: HTMLImageElement): void {
+    /** Whether `layer` can still take a result: a mask that is still in the document. */
+    protected canReceive(layer: EditorLayer | null): layer is EditorLayer {
+        return layer !== null && layer.isMask && this.engine.layers.includes(layer);
+    }
+
+    /** Places a returned mask onto the layer the request was made for, undoing the crop it was
+     *  made from, if any. Both come from the request rather than the editor's state now. */
+    protected applyMaskResult(maskImg: HTMLImageElement, layer: EditorLayer, samInput: SamInput): void {
         const engine = this.engine;
-        const layer = engine.activeLayer;
-        if (!layer?.isMask) {
-            return;
-        }
         const full = document.createElement('canvas');
         full.width = Math.max(1, Math.round(engine.realWidth));
         full.height = Math.max(1, Math.round(engine.realHeight));
         const ctx = full.getContext('2d')!;
-        if (engine.hasSelection) {
-            const selX = Math.round(engine.selectX);
-            const selY = Math.round(engine.selectY);
-            const selW = Math.round(engine.selectWidth);
-            const selH = Math.round(engine.selectHeight);
-            ctx.drawImage(maskImg, 0, 0, maskImg.width || selW, maskImg.height || selH, selX, selY, selW, selH);
-        }
-        else {
-            ctx.drawImage(
-                maskImg,
-                0,
-                0,
-                maskImg.width || full.width,
-                maskImg.height || full.height,
-                0,
-                0,
-                full.width,
-                full.height
-            );
-        }
+        const x = Math.round(samInput.offsetX);
+        const y = Math.round(samInput.offsetY);
+        ctx.drawImage(
+            maskImg,
+            0,
+            0,
+            maskImg.width || samInput.width,
+            maskImg.height || samInput.height,
+            x,
+            y,
+            samInput.width,
+            samInput.height
+        );
         layer.applyMaskFromImage(full);
-        this.clipMaskToSelection(layer);
+        if (samInput.cropped) {
+            this.clipMaskToRect(layer, x, y, samInput.width, samInput.height);
+        }
         engine.markChanged();
     }
 
-    /** Erases anything the model produced outside the selection, which it can do at the edges. */
-    private clipMaskToSelection(layer: EditorLayer): void {
-        const engine = this.engine;
-        if (!engine.hasSelection) {
-            return;
-        }
+    /** Erases anything the model produced outside the crop, which it can do at the edges. */
+    private clipMaskToRect(layer: EditorLayer, x: number, y: number, width: number, height: number): void {
         const ctx = layer.ctx;
         ctx.save();
         const [offsetX, offsetY] = layer.getOffset();
         layer.setImageSpaceTransform(ctx, offsetX, offsetY);
         ctx.globalCompositeOperation = 'destination-in';
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(
-            Math.round(engine.selectX),
-            Math.round(engine.selectY),
-            Math.round(engine.selectWidth),
-            Math.round(engine.selectHeight)
-        );
+        ctx.fillRect(x, y, width, height);
         ctx.restore();
     }
 
@@ -245,6 +251,8 @@ abstract class Sam2Tool extends EditorTool {
     protected abandonRequests(): void {
         this.activeRequestId = ++this.requestSerial;
         this.requestInFlight = false;
+        this.cancelRequest?.();
+        this.cancelRequest = null;
     }
 
     onBeforeHistoryUndo(): void {
@@ -255,19 +263,63 @@ abstract class Sam2Tool extends EditorTool {
         this.abandonRequests();
     }
 
-    /** Loads a returned image and hands it to `apply`, dropping it if the request is stale. */
-    protected receiveMask(requestId: number, dataUrl: string, apply: (img: HTMLImageElement) => void): void {
-        if (requestId !== this.activeRequestId) {
-            return;
-        }
-        const img = new Image();
-        img.onload = () => {
-            if (requestId !== this.activeRequestId) {
+    /** Runs one segmentation request. `apply` gets the returned mask while the request is still
+     *  current; `finish` runs exactly once when it is over - after the result has been applied, or
+     *  when the request failed, returned nothing, or its image would not load - so the tool can
+     *  never be left waiting on a request that is not coming back. */
+    protected startRequest(
+        genData: Record<string, unknown>,
+        apply: (img: HTMLImageElement) => void,
+        finish: () => void
+    ): void {
+        const requestId = ++this.requestSerial;
+        this.activeRequestId = requestId;
+        this.requestInFlight = true;
+        // The socket can close before an image it delivered has finished decoding, so the request
+        // is only over once the stream has ended *and* no image is still loading.
+        let loading = 0;
+        let streamEnded = false;
+        let finished = false;
+        const settle = () => {
+            if (finished || loading > 0 || !streamEnded) {
                 return;
             }
-            apply(img);
+            finished = true;
+            if (requestId === this.activeRequestId) {
+                this.requestInFlight = false;
+                this.cancelRequest = null;
+                finish();
+            }
         };
-        img.src = dataUrl;
+        const cancel = this.engine.host.runGeneration(
+            genData,
+            dataUrl => {
+                if (requestId !== this.activeRequestId) {
+                    return;
+                }
+                loading++;
+                const img = new Image();
+                img.onload = () => {
+                    loading--;
+                    if (requestId === this.activeRequestId) {
+                        apply(img);
+                    }
+                    settle();
+                };
+                img.onerror = () => {
+                    loading--;
+                    settle();
+                };
+                img.src = dataUrl;
+            },
+            () => {
+                streamEnded = true;
+                settle();
+            }
+        );
+        if (!finished && requestId === this.activeRequestId) {
+            this.cancelRequest = cancel;
+        }
     }
 }
 
@@ -470,22 +522,16 @@ export class Sam2PointsTool extends Sam2Tool {
         this.requestMaskUpdate();
     }
 
-    private finishMaskUpdate(requestId: number): void {
-        if (requestId !== this.activeRequestId) {
-            return;
-        }
-        this.requestInFlight = false;
+    /** The request is over; send the clicks that arrived meanwhile, if any. */
+    private finishMaskUpdate(): void {
         if (this.pendingUpdate) {
             this.pendingUpdate = false;
-            this.requestMaskUpdate();
+            this.queueMaskUpdate();
         }
     }
 
     private requestMaskUpdate(): void {
         const engine = this.engine;
-        this.requestInFlight = true;
-        const requestId = ++this.requestSerial;
-        this.activeRequestId = requestId;
         const [genData, samInput] = this.getMaskRequestInputs();
         const points = this.getActivePoints();
         const shift = (p: SamPoint) => ({ x: p.x - samInput.offsetX, y: p.y - samInput.offsetY });
@@ -503,13 +549,13 @@ export class Sam2PointsTool extends Sam2Tool {
         };
         const maskLayer = engine.activeLayer;
 
-        engine.host.runGeneration(genData, dataUrl => {
-            this.receiveMask(requestId, dataUrl, img => {
-                if (!engine.activeLayer?.isMask || !maskLayer) {
-                    this.finishMaskUpdate(requestId);
+        this.startRequest(
+            genData,
+            img => {
+                if (!this.canReceive(maskLayer)) {
                     return;
                 }
-                this.applyMaskResult(img);
+                this.applyMaskResult(img, maskLayer, samInput);
                 // Undoing the mask has to take the points that produced it back too, or the next
                 // click would regenerate from a prompt the user can no longer see.
                 const last = engine.editHistory.at(-1);
@@ -525,9 +571,9 @@ export class Sam2PointsTool extends Sam2Tool {
                 this.lastAppliedPoints = thisRequestPoints;
                 engine.notify();
                 engine.redraw();
-                this.finishMaskUpdate(requestId);
-            });
-        });
+            },
+            () => this.finishMaskUpdate()
+        );
     }
 }
 
@@ -589,7 +635,7 @@ export class Sam2BBoxTool extends Sam2Tool {
     }
 
     onGlobalPointerMove(): boolean {
-        if (!this.drawing) {
+        if (!this.drawing || !this.engine.pointerDown) {
             return false;
         }
         const [x, y] = this.engine.canvasCoordToImageCoord(this.engine.pointerX, this.engine.pointerY);
@@ -630,10 +676,8 @@ export class Sam2BBoxTool extends Sam2Tool {
             return;
         }
 
-        this.requestInFlight = true;
-        const requestId = ++this.requestSerial;
-        this.activeRequestId = requestId;
         const [genData, samInput] = this.getMaskRequestInputs();
+        const maskLayer = engine.activeLayer;
         genData.sambbox = JSON.stringify([
             minX - samInput.offsetX,
             minY - samInput.offsetY,
@@ -641,16 +685,17 @@ export class Sam2BBoxTool extends Sam2Tool {
             maxY - samInput.offsetY
         ]);
 
-        engine.host.runGeneration(genData, dataUrl => {
-            this.receiveMask(requestId, dataUrl, img => {
-                this.requestInFlight = false;
-                if (!engine.activeLayer?.isMask) {
+        this.startRequest(
+            genData,
+            img => {
+                if (!this.canReceive(maskLayer)) {
                     return;
                 }
-                this.applyMaskResult(img);
+                this.applyMaskResult(img, maskLayer, samInput);
                 engine.notify();
                 engine.redraw();
-            });
-        });
+            },
+            () => {}
+        );
     }
 }

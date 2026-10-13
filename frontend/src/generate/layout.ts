@@ -24,7 +24,8 @@ const MIN = { params: 220, batch: 108 };
 const MAX = { params: 720, batch: 420 };
 
 interface LayoutStore extends PaneSizes {
-    preset: LayoutPreset;
+    /** The named arrangement the panes match, or null once they have been resized by hand. */
+    preset: LayoutPreset | null;
     resize: (pane: keyof PaneSizes, deltaPx: number) => void;
     applyPreset: (preset: LayoutPreset) => void;
 }
@@ -33,12 +34,12 @@ export const useLayoutStore = create<LayoutStore>()(
     persist(
         set => ({
             ...PRESETS.default.sizes,
-            preset: 'default',
+            preset: 'default' as LayoutPreset | null,
             resize: (pane, deltaPx) =>
                 set(state => ({
                     [pane]: Math.min(MAX[pane], Math.max(MIN[pane], state[pane] + deltaPx)),
                     // Any manual resize means the layout no longer matches a named preset.
-                    preset: state.preset
+                    preset: null
                 })),
             applyPreset: preset => set({ ...PRESETS[preset].sizes, preset })
         }),

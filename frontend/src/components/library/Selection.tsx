@@ -87,7 +87,8 @@ export function useSelection(ids: string[]): Selection {
     };
 }
 
-/** The per-entry checkbox. Hidden until the entry is hovered or focused, unless it is checked -
+/** The per-entry checkbox. Hidden until the entry is hovered or focused, unless it is checked or the
+ *  device cannot hover -
  *  a selection you cannot see while the pointer is elsewhere is a selection you delete by
  *  accident. Expects an ancestor marked `group`. */
 export function SelectionCheckbox(props: {
@@ -102,7 +103,10 @@ export function SelectionCheckbox(props: {
             className={[
                 'flex items-center rounded transition-opacity',
                 props.overlay ? 'bg-black/60 p-0.5' : '',
-                props.checked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+                // A touch screen has no hover to reveal it with, so there it is always shown.
+                props.checked
+                    ? 'opacity-100'
+                    : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100'
             ].join(' ')}
         >
             <input

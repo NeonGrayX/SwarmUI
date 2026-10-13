@@ -6,16 +6,13 @@
  * needed. Theme links are appended to <head> after the bundle so they win on equal specificity.
  */
 
-import { useCallback, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
-import { useSession } from '@/api/hooks';
+import { queryKeys, useSession, useUserSettings } from '@/api/hooks';
+import type { ThemeInfo } from '@/api/types';
 
-export interface ThemeInfo {
-    name: string;
-    is_dark: boolean;
-    css_paths: string[];
-}
+export type { ThemeInfo };
 
 const STORAGE_KEY = 'swarm-ui-theme';
 const DARK_KEY = 'swarm-ui-theme-dark';
@@ -53,15 +50,24 @@ export function storedVary(): string {
  * (`?vary=@Utilities.VaryID`). Without it the browser keeps serving a cached theme file across
  * server rebuilds, so edits to a theme silently don't apply. */
 export function applyThemeCss(paths: string[], vary = storedVary()): void {
-    for (const old of document.querySelectorAll(`link[${LINK_ATTR}]`)) {
+    const hrefs = paths.map(path => {
+        const clean = path.replace(/^\//, '');
+        return vary ? `/${clean}?vary=${encodeURIComponent(vary)}` : `/${clean}`;
+    });
+    const existing = Array.from(document.querySelectorAll<HTMLLinkElement>(`link[${LINK_ATTR}]`));
+    // Already showing exactly these: swapping the links anyway would drop the styles for the frame
+    // or two the browser takes to re-apply them, which is a visible flash.
+    if (existing.length === hrefs.length && existing.every((link, i) => link.getAttribute('href') === hrefs[i])) {
+        return;
+    }
+    for (const old of existing) {
         old.remove();
     }
-    for (const path of paths) {
+    for (const href of hrefs) {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.setAttribute(LINK_ATTR, 'true');
-        const clean = path.replace(/^\//, '');
-        link.href = vary ? `/${clean}?vary=${encodeURIComponent(vary)}` : `/${clean}`;
+        link.href = href;
         document.head.append(link);
     }
 }
@@ -79,15 +85,10 @@ export function useThemes() {
         }
     }, [vary]);
 
-    const settings = useQuery({
-        queryKey: ['user-settings'],
-        queryFn: () =>
-            api.post<{ themes: Record<string, ThemeInfo>; settings: Record<string, { value: unknown }> }>(
-                'GetUserSettings'
-            )
-    });
+    const settings = useUserSettings(session.isSuccess);
 
-    const themes = settings.data?.themes ?? {};
+    const rawThemes = settings.data?.themes;
+    const themes = useMemo(() => rawThemes ?? {}, [rawThemes]);
     const current = String(settings.data?.settings?.theme?.value ?? storedThemeId() ?? 'modern_dark');
 
     const setTheme = useCallback(
@@ -100,7 +101,7 @@ export function useThemes() {
             }
             // Persist to the user profile so the legacy UI picks up the same choice.
             await api.post('ChangeUserSettings', { settings: { theme: id } });
-            await queryClient.invalidateQueries({ queryKey: ['user-settings'] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.userSettings });
         },
         [themes, queryClient, vary]
     );

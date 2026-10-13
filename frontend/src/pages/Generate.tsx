@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { ParamForm } from '@/components/form/ParamForm';
@@ -16,9 +16,10 @@ import { useWorkspaceHandoffStore, type WorkspaceMode } from '@/generate/handoff
 import { usePermission } from '@/api/permissions';
 import { useEditorStore } from '@/editor/store';
 import { PRESETS, useLayoutStore, type LayoutPreset } from '@/generate/layout';
-import { useGenerateStore } from '@/generate/store';
-import { useStartGenerate } from '@/generate/start';
+import { unfinishedSlotCount, useGenerateStore } from '@/generate/store';
+import { resetRepeatSkip, useStartGenerate } from '@/generate/start';
 import { useIsCompact } from '@/shell/viewport';
+import { useUserSetting } from '@/settings/useUserSetting';
 import { useTranslation } from '@/i18n';
 
 /** Which of the three panes a narrow screen is showing. */
@@ -54,6 +55,9 @@ export function GeneratePage() {
     // Held here rather than left in the store because the editor cannot take it immediately: the
     // frame is still booting when the hand-off arrives.
     const [pendingGraph, setPendingGraph] = useState<string | null>(null);
+    // Once the editor has it, it is spent: holding on would load it again on the next visit to the
+    // Comfy mode, over whatever was built in the meantime.
+    const clearPendingGraph = useCallback(() => setPendingGraph(null), []);
     useEffect(() => {
         if (!handoff) {
             return;
@@ -69,17 +73,49 @@ export function GeneratePage() {
     }, [handoff, takeHandoff, selectSimple]);
 
     const forever = useGenerateStore(s => s.forever);
-    const running = useGenerateStore(s => s.running);
     const startGenerate = useStartGenerate({ modelOptional: mode === 'simple' });
+    const startForeverRun = useStartGenerate({ modelOptional: mode === 'simple', skipRepeatWithFixedSeed: true });
+    const foreverDelay = Number(useUserSetting<unknown>('generateforeverdelay', 0.1));
+    const foreverQueue = Number(useUserSetting<unknown>('generateforeverqueuesize', 1));
 
-    // "Generate forever" re-fires as soon as the previous run finishes. A refused run clears
-    // `forever` (useGenerateStore.fail), so a bad request stops the loop rather than spinning it.
+    // "Generate forever" checks on the user's interval and tops the queue back up to the user's
+    // size whenever it has drained below it (generatecontrols.js toggleGenerateForever). A refused
+    // run clears `forever` (useGenerateStore.fail), so a bad request stops the loop rather than
+    // spinning it.
     useEffect(() => {
-        if (forever && !running) {
-            const timer = setTimeout(startGenerate, 100);
-            return () => clearTimeout(timer);
+        if (!forever) {
+            return;
         }
-    }, [forever, running, startGenerate]);
+        const delayMs = Math.max(1, Math.round((Number.isFinite(foreverDelay) ? foreverDelay : 0.1) * 1000));
+        const minQueue = Math.max(1, Math.floor(Number.isFinite(foreverQueue) ? foreverQueue : 1));
+        const tick = () => {
+            if (unfinishedSlotCount() < minQueue) {
+                startForeverRun();
+            }
+        };
+        resetRepeatSkip();
+        tick();
+        const timer = setInterval(tick, delayMs);
+        return () => clearInterval(timer);
+    }, [forever, foreverDelay, foreverQueue, startForeverRun]);
+
+    // Ctrl+Enter generates from anywhere on the page, not only from the prompt box
+    // (currentimagehandler.js). A control that already handled the keystroke itself - the prompt
+    // box, with its own binding - marks it handled, and is left to it.
+    useEffect(() => {
+        if (mode === 'comfy') {
+            return;
+        }
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.defaultPrevented || e.repeat || e.isComposing || e.keyCode === 229) {
+                return;
+            }
+            e.preventDefault();
+            startGenerate();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [mode, startGenerate]);
 
     const footer = mode === 'simple' ? <SimpleRunBar /> : <PromptComposer />;
 
@@ -101,6 +137,7 @@ export function GeneratePage() {
                             onUseInGenerate={() => setMode('standard')}
                             onReloadFrame={reloadComfy}
                             pendingLoad={pendingGraph}
+                            onConsumed={clearPendingGraph}
                         />
                     ) : mode === 'simple' ? (
                         <SimpleWorkflowBar session={simpleSession} />
@@ -180,8 +217,22 @@ function StackedWorkspace(props: { footer: React.ReactNode }) {
     const { t } = useTranslation();
     const [pane, setPane] = useState<Pane>('image');
     const selected = useGenerateStore(s => s.selected);
-    const batch = useGenerateStore(s => s.batch);
-    const visibleBatch = batch.filter(item => item.status !== 'discarded').length;
+    // Just the count: the batch itself changes with every progress message, and the whole form
+    // below would re-render with it.
+    const visibleBatch = useGenerateStore(s => {
+        let count = 0;
+        for (const item of s.batch) {
+            if (item.status !== 'discarded') {
+                count++;
+            }
+        }
+        return count;
+    });
+    // The panes take no props, so the same elements are kept across this component's own renders
+    // (a tab switch, the badge) and React skips re-rendering them.
+    const centerPane = useMemo(() => <CenterPane />, []);
+    const paramForm = useMemo(() => <ParamForm />, []);
+    const batchRail = useMemo(() => <BatchRail />, []);
 
     // Picking a tile is a request to look at that image, so the image is what comes up next.
     useEffect(() => {
@@ -244,13 +295,13 @@ function StackedWorkspace(props: { footer: React.ReactNode }) {
                 live generation, neither of which may be thrown away by a tab switch. */}
             <div className="relative min-h-0 flex-1">
                 <PanePanel id="image" active={pane === 'image'}>
-                    <CenterPane />
+                    {centerPane}
                 </PanePanel>
                 <PanePanel id="params" active={pane === 'params'}>
-                    <ParamForm />
+                    {paramForm}
                 </PanePanel>
                 <PanePanel id="batch" active={pane === 'batch'}>
-                    <BatchRail />
+                    {batchRail}
                 </PanePanel>
             </div>
 

@@ -82,7 +82,9 @@ export interface MyUserData {
     permissions: string[];
     /** Keyed by subtype, eg { 'LoRA': ['one', 'two'] }. */
     starred_models: Record<string, string[]>;
-    model_preset_links: Record<string, string>;
+    /** Presets linked to a model, keyed by subtype then cleaned model name, eg
+     *  { 'LoRA': { 'some/lora': ['Preset Title'] } }. Written whole by SetPresetLinks. */
+    model_preset_links: Record<string, Record<string, string[]>>;
     autocompletions: string[] | null;
 }
 
@@ -92,6 +94,20 @@ export type SortMode = 'Name' | 'Title' | 'DateCreated' | 'DateModified';
  *  (ImageHistorySortMode, used by T2IAPI.ListImages). */
 export type ImageSortMode = 'Name' | 'Date';
 export type ViewMode = 'grid' | 'list';
+
+/** How a Library browser lays its entries out. The legacy browsers' display formats
+ *  (src/wwwroot/js/genpage/helpers/browsers.js), minus the variants that only differ in size steps
+ *  nobody could tell apart. */
+export type BrowserFormat = 'cards' | 'smallCards' | 'bigCards' | 'thumbnails' | 'smallThumbnails' | 'list';
+
+export const BROWSER_FORMATS: readonly BrowserFormat[] = [
+    'cards',
+    'smallCards',
+    'bigCards',
+    'thumbnails',
+    'smallThumbnails',
+    'list'
+];
 
 /** True when the entry is a full model card rather than a wildcard. */
 export function isModelCard(entry: ModelCard | WildcardCard): entry is ModelCard {
@@ -105,6 +121,25 @@ export function isModelCard(entry: ModelCard | WildcardCard): entry is ModelCard
  * flags both copies (OutputMetadataTracker.cs:409), so reading the flag is the only answer that
  * holds whichever folder the browser is pointed at. */
 export function isImageStarred(metadata: string | null | undefined): boolean {
+    return parseStarred(metadata);
+}
+
+/** Starred flags already read, per listing entry. Entries are replaced rather than edited when
+ *  their metadata changes (editCachedImages in ./hooks.ts), so an entry object's answer never goes
+ *  stale, and one that has left every listing is free to be collected. */
+const starredCache = new WeakMap<ImageEntry, boolean>();
+
+/** `isImageStarred` for a listing entry, parsing each entry's metadata at most once. */
+export function isEntryStarred(entry: ImageEntry): boolean {
+    let starred = starredCache.get(entry);
+    if (starred === undefined) {
+        starred = parseStarred(entry.metadata);
+        starredCache.set(entry, starred);
+    }
+    return starred;
+}
+
+function parseStarred(metadata: string | null | undefined): boolean {
     if (!metadata) {
         return false;
     }
@@ -131,6 +166,18 @@ function searchValue(value: unknown): string {
  *  and the same lines the server's `filter` matches (ImageHistoryMatchesFilter, src/WebAPI/T2IAPI.cs),
  *  so a server-side search and the local one agree on what counts as a hit. */
 export function imageSearchText(entry: ImageEntry): string {
+    let text = searchTextCache.get(entry);
+    if (text === undefined) {
+        text = buildSearchText(entry);
+        searchTextCache.set(entry, text);
+    }
+    return text;
+}
+
+/** Search text already built, per listing entry - see `starredCache`. */
+const searchTextCache = new WeakMap<ImageEntry, string>();
+
+function buildSearchText(entry: ImageEntry): string {
     const lines = [entry.src, entry.metadata ?? ''];
     try {
         const parsed = JSON.parse(entry.metadata ?? '') as Record<string, unknown>;
@@ -150,6 +197,11 @@ export function imageSearchText(entry: ImageEntry): string {
         // Not JSON: the raw text above is all there is to search.
     }
     return lines.join('\n').toLowerCase();
+}
+
+/** The stand-in image the server reports for a model or wildcard that has no preview of its own. */
+export function isPlaceholderImage(src: string | null | undefined): boolean {
+    return !src || src.endsWith('imgs/model_placeholder.jpg');
 }
 
 /** Resolves a preview image path to something an <img> can load. */

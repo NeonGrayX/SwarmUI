@@ -21,13 +21,27 @@ export interface Incremental<T> {
     endRef: ((node: HTMLElement | null) => void) | null;
 }
 
-/** `items` must be memoized: a fresh array on every render would restart the list at `step`. */
-export function useIncremental<T>(items: T[], step = 120): Incremental<T> {
+/** `resetKey` names the listing: drawing starts over from the top only when it changes - another
+ *  folder, another search, another sort. Without one, every new `items` array counts as a new
+ *  listing, so `items` must then be memoized or every render would restart the list at `step`.
+ *
+ *  With a key, a new array under the same key - a star toggled, an entry deleted, a background
+ *  refetch - keeps everything already drawn, so the page does not jump back to the top under the
+ *  user's scroll position. */
+export function useIncremental<T>(items: T[], step = 120, resetKey?: unknown): Incremental<T> {
     const [count, setCount] = useState(step);
     const [end, setEnd] = useState<HTMLElement | null>(null);
 
-    // A new listing - another folder, a narrowed search - starts from the top again.
-    useEffect(() => setCount(step), [items, step]);
+    // Reset during render rather than in an effect, so the frame after a folder change never
+    // paints the old count against the new listing.
+    const key = resetKey === undefined ? items : resetKey;
+    const [seenKey, setSeenKey] = useState<unknown>(key);
+    const [seenStep, setSeenStep] = useState(step);
+    if (!Object.is(seenKey, key) || seenStep !== step) {
+        setSeenKey(key);
+        setSeenStep(step);
+        setCount(step);
+    }
 
     const complete = count >= items.length;
 

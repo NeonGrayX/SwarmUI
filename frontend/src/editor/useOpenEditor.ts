@@ -46,13 +46,17 @@ export function useOpenEditor(): OpenEditor {
     const editImage = useCallback(
         async (src: string, name?: string) => {
             preloadEditorUI();
-            const engine = await openWithImage(src, name);
-            const store = useParamStore.getState();
-            store.setValue('width', engine.realWidth);
-            store.setValue('height', engine.realHeight);
-            if (schema?.byId.get('aspectratio')) {
-                store.setValue('aspectratio', 'Custom');
-            }
+            // Set before the editor shows rather than after: the open editor follows the
+            // width/height params, and seeing the previous image's size first would resize the
+            // new document to it.
+            await openWithImage(src, name, engine => {
+                const store = useParamStore.getState();
+                store.setValue('width', engine.realWidth);
+                store.setValue('height', engine.realHeight);
+                if (schema?.byId.get('aspectratio')) {
+                    store.setValue('aspectratio', 'Custom');
+                }
+            });
         },
         [openWithImage, schema]
     );

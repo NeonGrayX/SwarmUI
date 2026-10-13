@@ -3,7 +3,7 @@ import { Link, useRouterState } from '@tanstack/react-router';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Menu, X } from 'lucide-react';
 import { usePermitted } from '@/api/permissions';
-import { SECTIONS, defaultDestination } from '@/nav/destinations';
+import { DESTINATIONS, SECTIONS, defaultDestination } from '@/nav/destinations';
 import { useTranslation } from '@/i18n';
 import { useActiveSection } from './Rail';
 
@@ -14,6 +14,7 @@ export function NavDrawer() {
     const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     const sections = usePermitted(SECTIONS);
+    const destinations = usePermitted(DESTINATIONS);
     const activeSection = useActiveSection();
     const pathname = useRouterState({ select: s => s.location.pathname });
 
@@ -55,7 +56,7 @@ export function NavDrawer() {
                     </div>
                     <nav aria-label={t('nav.rail.primary')} className="min-h-0 flex-1 overflow-y-auto p-2">
                         {sections.map(section => {
-                            const target = defaultDestination(section.id);
+                            const target = defaultDestination(section.id, destinations);
                             if (!target) {
                                 return null;
                             }

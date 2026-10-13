@@ -19,7 +19,7 @@ import { isModelCard, previewUrl, type ModelCard, type ModelSubtype } from './ty
 
 /** ListModels clamps depth to 20 (src/WebAPI/ModelsAPI.cs:191); a picker wants the whole library,
  *  not the three levels the folder browser walks. */
-const ALL_DEPTH = 20;
+export const ALL_DEPTH = 20;
 
 /** The subtype the main `model` param picks from. Everything else is an add-on to it. */
 export const BASE_SUBTYPE = 'Stable-Diffusion';

@@ -321,7 +321,7 @@ export function VideoEditor(props: {
                                 overlay laid over it lines up with the frame exactly. */}
                             <div
                                 ref={overlayRef}
-                                className="relative overflow-hidden"
+                                className="relative"
                                 style={{ width: 'fit-content', maxWidth: '100%' }}
                             >
                                 <video
@@ -340,20 +340,23 @@ export function VideoEditor(props: {
                                 />
 
                                 {/* Inert as a whole; only the corners take the pointer, so a press
-                                    anywhere else still reaches the video underneath. */}
-                                <div className="pointer-events-none absolute inset-0">
+                                    anywhere else still reaches the video underneath. The shade is
+                                    clipped to the frame, in a layer of its own, so the handles in
+                                    the layer above can overhang the frame's edge - at full frame
+                                    they sit half outside it, and a clip would cut them in half. */}
+                                <div className="pointer-events-none absolute inset-0 overflow-hidden">
                                     <div
                                         className="absolute border border-dashed border-white/80"
                                         style={{
-                                            left: `${crop.left * 100}%`,
-                                            top: `${crop.top * 100}%`,
-                                            width: `${(crop.right - crop.left) * 100}%`,
-                                            height: `${(crop.bottom - crop.top) * 100}%`,
+                                            ...cropBox(crop),
                                             // Dims everything outside the rectangle in one go,
                                             // rather than fitting four shades around it.
                                             boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.45)'
                                         }}
-                                    >
+                                    />
+                                </div>
+                                <div className="pointer-events-none absolute inset-0">
+                                    <div className="absolute" style={cropBox(crop)}>
                                         {CORNERS.map(corner => (
                                             <CropHandle
                                                 key={corner}
@@ -577,6 +580,16 @@ export function VideoEditor(props: {
     );
 }
 
+/** The crop rectangle's placement over the frame, as CSS. */
+function cropBox(crop: CropBounds): React.CSSProperties {
+    return {
+        left: `${crop.left * 100}%`,
+        top: `${crop.top * 100}%`,
+        width: `${(crop.right - crop.left) * 100}%`,
+        height: `${(crop.bottom - crop.top) * 100}%`
+    };
+}
+
 /** Where a time sits along the timeline, as a percentage. */
 function fraction(time: number, duration: number): number {
     return duration > 0 ? clamp((time / duration) * 100, 0, 100) : 0;
@@ -678,6 +691,9 @@ function CropHandle(props: {
             }}
             className={[
                 'pointer-events-auto absolute size-3 touch-none rounded-sm border border-black/50 bg-white',
+                // A 12px square is fine under a cursor and too small for a fingertip, so an
+                // invisible margin grows what a press can land on - more so on a touch screen.
+                "before:absolute before:-inset-2 before:content-[''] pointer-coarse:before:-inset-4",
                 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--emphasis)]',
                 vertical,
                 horizontal,

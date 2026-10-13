@@ -36,6 +36,9 @@ export function ComfyWorkflowBar(props: {
     onReloadFrame: () => void;
     /** A workflow the Library handed over for editing, to open as soon as the frame is up. */
     pendingLoad?: string | null;
+    /** Called once `pendingLoad` has been opened, so the owner can clear it - otherwise the same
+     *  hand-over would still be pending the next time this bar mounts. */
+    onConsumed?: () => void;
 }) {
     const { t } = useTranslation();
     /** Name of the saved workflow last opened here, so the Generate panel can say which one it is
@@ -98,14 +101,15 @@ export function ComfyWorkflowBar(props: {
     // A workflow arriving from the Library gets here while the frame is still booting, so this
     // waits for it rather than going through `run`, which reports an editor that is not up yet.
     // Loading is tracked by name so a re-render cannot open the same graph twice over the user's
-    // edits to it.
-    const { pendingLoad } = props;
+    // edits to it. The name is recorded only once the graph is actually in: StrictMode runs this
+    // effect, cancels it, and runs it again, and marking it at the start would leave the second
+    // run believing the cancelled first one had done the work.
+    const { pendingLoad, onConsumed } = props;
     const handedOver = useRef<string | null>(null);
     useEffect(() => {
         if (!pendingLoad || handedOver.current === pendingLoad) {
             return;
         }
-        handedOver.current = pendingLoad;
         let cancelled = false;
         notice.show(t('comfy.notice.loading'));
         void (async () => {
@@ -115,8 +119,10 @@ export function ComfyWorkflowBar(props: {
                     return;
                 }
                 loadGraph(savedWorkflowGraph(data));
+                handedOver.current = pendingLoad;
                 setLoadedName(pendingLoad);
                 notice.show(t('comfy.notice.loaded'));
+                onConsumed?.();
             }
             catch (e) {
                 if (!cancelled) {

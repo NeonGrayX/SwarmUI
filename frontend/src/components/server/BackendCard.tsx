@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, Eye, EyeOff, Pencil, Power, RefreshCw, ScrollText, Trash2 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { Field } from '../form/Field';
+import { NumberDraftInput } from '../settings/NumberDraftInput';
 import {
     canRestart,
     isLive,
@@ -45,9 +46,11 @@ export function BackendCard(props: {
     /** Search params for the log viewer link, when this backend has logs to show; see
      *  backendLogTarget. Null renders the button disabled. */
     logTarget: { types: string } | { backend: number } | null;
-    saving: boolean;
+    /** A request for this backend is in flight; every action button locks until it settles. */
+    busy: boolean;
     saveError: string | null;
-    onSave: (input: BackendSaveInput) => void;
+    /** Rejects when the save failed, so the card can stay in edit mode with the draft intact. */
+    onSave: (input: BackendSaveInput) => Promise<void>;
     /** Flips the backend between live and off; the page works out which way from the backend. */
     onToggle: () => void;
     onRestart: () => void;
@@ -67,6 +70,7 @@ export function BackendCard(props: {
     const [idText, setIdText] = useState(String(backend.id));
     const [revealed, setRevealed] = useState<Record<string, boolean>>({});
     const [featuresOpen, setFeaturesOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
 
     const schema = type?.settings ?? [];
     const live = isLive(backend);
@@ -86,17 +90,32 @@ export function BackendCard(props: {
         setRevealed({});
     }
 
-    function save() {
+    async function save() {
+        if (saving) {
+            return;
+        }
         const parsedId = parseInt(idText, 10);
         const input: BackendSaveInput = {
             backend_id: backend.id,
-            title: title.trim() || (type?.name ?? backend.type),
+            // Sent as typed, empty included: an empty title is how the card falls back to the
+            // type name, whereas saving the type name would pin it as a real title.
+            title: title.trim(),
             settings: settingsPayload(schema, baseline, draft)
         };
         if (Number.isFinite(parsedId) && parsedId !== backend.id && parsedId >= 0) {
             input.new_id = parsedId;
         }
-        props.onSave(input);
+        setSaving(true);
+        try {
+            await props.onSave(input);
+        }
+        catch {
+            // The error is shown below the form by the page; keep the edit so it can be retried.
+            return;
+        }
+        finally {
+            setSaving(false);
+        }
         setEditing(false);
         // Drop the draft too, or the modified dots would linger over the now-saved values.
         setDraft({});
@@ -147,7 +166,7 @@ export function BackendCard(props: {
                     <IconButton
                         label={t('backendCard.restartBackend')}
                         onClick={props.onRestart}
-                        disabled={!canRestart(backend.status)}
+                        disabled={!canRestart(backend.status) || props.busy}
                         hint={
                             canRestart(backend.status)
                                 ? t('backends.restart')
@@ -192,6 +211,7 @@ export function BackendCard(props: {
                         label={live ? t('backendCard.disableBackend') : t('backendCard.enableBackend')}
                         hint={live ? t('common.disable') : t('common.enable')}
                         onClick={props.onToggle}
+                        disabled={props.busy}
                         color={live ? 'var(--backend-running)' : undefined}
                     >
                         <Power size={14} aria-hidden />
@@ -202,6 +222,7 @@ export function BackendCard(props: {
                         label={t('backendCard.deleteBackend')}
                         hint={t('common.delete')}
                         onClick={props.onDelete}
+                        disabled={props.busy}
                         color="var(--backend-errored)"
                     >
                         <Trash2 size={14} aria-hidden />
@@ -261,6 +282,7 @@ export function BackendCard(props: {
                             backendId={backend.id}
                             field={field}
                             value={valueOf(field)}
+                            stored={source[field.name]}
                             editing={editing}
                             edited={isDirty(field)}
                             revealed={Boolean(revealed[field.name])}
@@ -313,6 +335,7 @@ export function BackendCard(props: {
                             <button
                                 type="button"
                                 onClick={cancelEdit}
+                                disabled={saving}
                                 className="rounded border border-default px-3 py-1 text-sm text-fg hover:bg-[var(--sw-hover)]"
                             >
                                 {t('common.cancel')}
@@ -320,11 +343,11 @@ export function BackendCard(props: {
                             <button
                                 type="button"
                                 onClick={save}
-                                disabled={props.saving}
+                                disabled={saving || props.busy}
                                 className="rounded px-3 py-1 text-sm disabled:opacity-50"
                                 style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
                             >
-                                {props.saving ? t('common.saving') : t('settings.saveChanges')}
+                                {saving ? t('common.saving') : t('settings.saveChanges')}
                             </button>
                         </div>
                     )}
@@ -344,6 +367,7 @@ function SettingField(props: {
     backendId: number;
     field: BackendSettingSchema;
     value: unknown;
+    stored: unknown;
     editing: boolean;
     edited: boolean;
     revealed: boolean;
@@ -371,6 +395,9 @@ function SettingControl(props: {
     id: string;
     field: BackendSettingSchema;
     value: unknown;
+    /** The saved value, before any draft. */
+    stored: unknown;
+    edited: boolean;
     editing: boolean;
     revealed: boolean;
     onReveal: () => void;
@@ -389,19 +416,40 @@ function SettingControl(props: {
     }
 
     if (field.is_secret) {
-        const isSet = value === SECRET_SENTINEL || (value !== '' && value != null);
-        const typed = editing && value !== SECRET_SENTINEL;
+        // `stored` is the value as the server has it (always the sentinel when something is set);
+        // `value` is the draft over it. Emptying the box after typing goes back to the sentinel,
+        // which the server reads as "leave it alone" - only the clear button sends ''.
+        const storedSet = props.stored === SECRET_SENTINEL || (props.stored !== '' && props.stored != null);
+        const clearing = props.edited && value === '';
+        const typed = editing && value !== SECRET_SENTINEL && !clearing;
         return (
             <div className="flex items-center gap-1">
                 <input
                     id={id}
                     type={props.revealed ? 'text' : 'password'}
                     value={typed ? String(value ?? '') : ''}
-                    placeholder={isSet ? t('settings.secretSet') : t('settings.secretUnset')}
+                    placeholder={
+                        clearing
+                            ? t('settings.secretWillClear')
+                            : storedSet
+                              ? t('settings.secretSet')
+                              : t('settings.secretUnset')
+                    }
                     disabled={disabled}
-                    onChange={e => props.onChange(e.target.value)}
+                    onChange={e => props.onChange(e.target.value === '' ? SECRET_SENTINEL : e.target.value)}
                     className={`${INPUT} min-w-0 flex-1`}
                 />
+                {editing && storedSet && !clearing && (
+                    <button
+                        type="button"
+                        onClick={() => props.onChange('')}
+                        aria-label={t('settings.clearSecret')}
+                        title={t('settings.clearSecret')}
+                        className="shrink-0 rounded border border-default p-1.5 text-fg-soft hover:text-fg"
+                    >
+                        <Trash2 size={13} aria-hidden />
+                    </button>
+                )}
                 <button
                     type="button"
                     onClick={props.onReveal}
@@ -453,14 +501,14 @@ function SettingControl(props: {
         case 'integer':
         case 'decimal':
             return (
-                <input
+                <NumberDraftInput
                     id={id}
-                    type="number"
                     step={field.type === 'integer' ? 1 : 'any'}
-                    value={String(value ?? 0)}
+                    value={Number(value ?? 0)}
+                    integer={field.type === 'integer'}
                     disabled={disabled}
                     placeholder={field.placeholder || undefined}
-                    onChange={e => props.onChange(e.target.value)}
+                    onCommit={props.onChange}
                     className={`${INPUT} w-32`}
                 />
             );

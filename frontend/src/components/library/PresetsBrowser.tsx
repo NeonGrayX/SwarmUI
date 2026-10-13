@@ -6,12 +6,20 @@ import { api } from '@/api/client';
 import { PRESET_HISTORY_KEY, useBrowseHistory } from '@/library/browseHistory';
 import { libraryKeys, useMyUserData } from '@/library/hooks';
 import { usePresetStars } from '@/library/stars';
-import { previewUrl, type PresetEntry, type ViewMode } from '@/library/types';
+import { previewUrl, type PresetEntry } from '@/library/types';
 import { usePermission } from '@/api/permissions';
 import { useWorkspaceHandoffStore } from '@/generate/handoff';
 import { applyPresetMap } from '@/params/presets';
 import { useParamSchema } from '@/params/schema';
-import { BrowserToolbar, EmptyState, StarButton } from './BrowserChrome';
+import {
+    BrowserToolbar,
+    EmptyState,
+    StarButton,
+    formatGridClass,
+    isThumbnailFormat,
+    useBrowserFormat,
+    useFlash
+} from './BrowserChrome';
 import { PresetDetailSheet } from './PresetDetailSheet';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -22,7 +30,7 @@ import { useTranslation } from '@/i18n';
 export function PresetsBrowser() {
     const { t } = useTranslation();
     const [search, setSearch] = useState('');
-    const [view, setView] = useState<ViewMode>('grid');
+    const [view, setView] = useBrowserFormat('presets');
     const [reverse, setReverse] = useState(false);
     const [starredOnly, setStarredOnly] = useState(false);
     // By title rather than by entry, so the sheet follows the preset through a rename of its
@@ -40,6 +48,7 @@ export function PresetsBrowser() {
     const contextMenu = useContextMenu();
     const browseHistory = useBrowseHistory();
     const handOver = useWorkspaceHandoffStore(s => s.openWorkspace);
+    const flash = useFlash();
 
     const presets = userData.data?.presets ?? [];
     // Starred first, then by title - the same ordering the workflow library and the pickers use,
@@ -84,21 +93,41 @@ export function PresetsBrowser() {
 
     /** Copies a preset. The server picks the new title, so the list has to be refetched to see it. */
     async function duplicate(title: string): Promise<void> {
-        await api.post('DuplicatePreset', { preset: title });
+        try {
+            await api.post('DuplicatePreset', { preset: title });
+        }
+        catch (error: unknown) {
+            flash.error(error, t('presets.duplicateFailed'));
+        }
         await refresh();
     }
 
-    /** Deletes every selected preset. One request each - the API has no batch form. */
+    /** Deletes presets, one request each - the API has no batch form. A failure does not stop the
+     *  rest, and the list is refetched either way, since the ones before it are gone. */
+    async function deletePresets(titles: string[]): Promise<void> {
+        if (selected !== null && titles.includes(selected)) {
+            setSelected(null);
+        }
+        const failures: string[] = [];
+        for (const title of titles) {
+            try {
+                await api.post('DeletePreset', { preset: title });
+            }
+            catch (error: unknown) {
+                failures.push(`${title}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+        await refresh();
+        if (failures.length > 0) {
+            flash.show(failures.join('\n'), { error: true });
+        }
+    }
+
+    /** Deletes every selected preset. */
     async function deleteSelected(): Promise<void> {
         const targets = selection.ids;
         selection.clear();
-        if (selected !== null && targets.includes(selected)) {
-            setSelected(null);
-        }
-        for (const title of targets) {
-            await api.post('DeletePreset', { preset: title });
-        }
-        await refresh();
+        await deletePresets(targets);
     }
 
     /** Everything one preset can do, for its right-click menu. */
@@ -133,7 +162,7 @@ export function PresetsBrowser() {
     }
 
     return (
-        <div className="flex h-full min-h-0">
+        <div className="relative flex h-full min-h-0">
             <div className="flex min-w-0 flex-1 flex-col">
                 <BrowserToolbar
                     search={search}
@@ -144,6 +173,8 @@ export function PresetsBrowser() {
                     onReverse={setReverse}
                     count={shown.length}
                     total={presets.length}
+                    onRefresh={() => void refresh()}
+                    refreshing={userData.isFetching}
                 >
                     <button
                         type="button"
@@ -195,8 +226,8 @@ export function PresetsBrowser() {
                             }
                             hint={presets.length === 0 ? t('presets.noneSavedHint') : undefined}
                         />
-                    ) : view === 'grid' ? (
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3">
+                    ) : view !== 'list' ? (
+                        <div className={formatGridClass(view)}>
                             {shown.map(preset => (
                                 <div
                                     key={preset.title}
@@ -244,20 +275,26 @@ export function PresetsBrowser() {
                                                 <ImageOff size={20} className="text-fg-soft opacity-40" aria-hidden />
                                             )}
                                         </div>
-                                        <div className="p-2">
-                                            <p className="truncate text-sm text-fg-strong">{preset.title}</p>
-                                            {preset.description && (
-                                                <p className="line-clamp-2 text-xs text-fg-soft">{preset.description}</p>
-                                            )}
-                                            <p className="mt-1 text-[10px] text-fg-soft">
-                                                {t('presets.parameterCount', {
-                                                    count: Object.keys(preset.param_map ?? {}).length
-                                                })}
-                                            </p>
-                                        </div>
+                                        {isThumbnailFormat(view) ? (
+                                            <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-left text-[10px] text-white">
+                                                {preset.title}
+                                            </span>
+                                        ) : (
+                                            <div className="p-2">
+                                                <p className="truncate text-sm text-fg-strong">{preset.title}</p>
+                                                {preset.description && (
+                                                    <p className="line-clamp-2 text-xs text-fg-soft">{preset.description}</p>
+                                                )}
+                                                <p className="mt-1 text-[10px] text-fg-soft">
+                                                    {t('presets.parameterCount', {
+                                                        count: Object.keys(preset.param_map ?? {}).length
+                                                    })}
+                                                </p>
+                                            </div>
+                                        )}
                                     </button>
-                                    {canManage && (
-                                        <div className="flex justify-end gap-1 border-t border-subtle px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                                    {canManage && !isThumbnailFormat(view) && (
+                                        <div className="flex justify-end gap-1 border-t border-subtle px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                                             <IconButton
                                                 label={t('common.duplicate')}
                                                 onClick={() => void duplicate(preset.title)}
@@ -345,15 +382,12 @@ export function PresetsBrowser() {
                 }
                 confirmLabel={t('common.delete')}
                 destructive
-                onConfirm={async () => {
-                    if (pendingDelete) {
-                        await api.post('DeletePreset', { preset: pendingDelete });
-                        if (pendingDelete === selected) {
-                            setSelected(null);
-                        }
-                        await refresh();
-                    }
+                onConfirm={() => {
+                    const title = pendingDelete;
                     setPendingDelete(null);
+                    if (title) {
+                        void deletePresets([title]);
+                    }
                 }}
                 onCancel={() => setPendingDelete(null)}
             />
@@ -371,6 +405,7 @@ export function PresetsBrowser() {
                 onCancel={() => setPendingBulkDelete(false)}
             />
 
+            {flash.node}
             {contextMenu.menu}
         </div>
     );

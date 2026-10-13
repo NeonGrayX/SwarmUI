@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { AlertTriangle, ChevronDown, Loader2, Square } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { useParamStore } from '@/params/store';
@@ -113,24 +113,42 @@ function InputErrorNotice(props: { issue: GenIssue }) {
     );
 }
 
-/** Generate, plus a menu holding the run variants and the interrupt actions. */
+/** Generate, plus a menu holding the run variants and the interrupt actions.
+ *
+ * Stays pressable while a run is going: each press queues another run behind it, as the legacy
+ * Generate button does. Alt+click interrupts this session's runs first (generatehandler.js
+ * doGenerateButton). */
 function GenerateSplitButton(props: { running: boolean; forever: boolean; onGenerate: () => void }) {
     const { t } = useTranslation();
     const setForever = useGenerateStore(s => s.setForever);
     const clearBatch = useGenerateStore(s => s.clearBatch);
     const interrupt = useGenerateStore(s => s.interrupt);
+    const { onGenerate } = props;
+
+    /** Waits for the interrupt to reach the server, so it cannot catch the run that replaces it. */
+    const interruptAndGenerate = useCallback(async () => {
+        await interrupt(false);
+        onGenerate();
+    }, [interrupt, onGenerate]);
 
     return (
         <div className="flex items-stretch rounded overflow-hidden">
             <button
                 type="button"
-                onClick={props.onGenerate}
-                disabled={props.running}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium disabled:opacity-60 sm:py-1.5"
+                onClick={e => {
+                    if (e.altKey) {
+                        void interruptAndGenerate();
+                    }
+                    else {
+                        onGenerate();
+                    }
+                }}
+                title={props.running ? t('generate.queueHint') : undefined}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium sm:py-1.5"
                 style={{ background: 'var(--emphasis)', color: 'var(--sw-accent-fg)' }}
             >
                 {props.running && <Loader2 size={14} className="animate-spin" aria-hidden />}
-                {props.running ? t('generate.generating') : t('generate.generate')}
+                {t('generate.generate')}
             </button>
             <Popover.Root>
                 <Popover.Trigger asChild>
@@ -164,6 +182,10 @@ function GenerateSplitButton(props: { running: boolean; forever: boolean; onGene
                         />
                         <MenuItem label={t('generate.menu.interruptSession')} onClick={() => interrupt(false)} />
                         <MenuItem label={t('generate.menu.interruptAll')} onClick={() => interrupt(true)} />
+                        <MenuItem
+                            label={t('generate.menu.interruptAndGenerate')}
+                            onClick={() => void interruptAndGenerate()}
+                        />
                         <MenuItem label={t('generate.menu.clearBatch')} onClick={clearBatch} />
                     </Popover.Content>
                 </Popover.Portal>

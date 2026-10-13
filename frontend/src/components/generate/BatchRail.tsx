@@ -1,9 +1,16 @@
-import { Settings2, X } from 'lucide-react';
+import { memo, useCallback, useEffect, useRef, type MouseEvent } from 'react';
+import { Settings2, Star, X } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { imageUrl, useGenerateStore } from '@/generate/store';
 import type { BatchItem } from '@/generate/types';
+import { isImageStarred } from '@/library/types';
 import { OutputThumbnail } from '../ui/OutputMedia';
+import { useContextMenu, type LongPressHandlers, type MenuAction } from '../ui/ContextMenu';
 import { DisconnectedNotice } from './DisconnectedNotice';
+import { useBatchViewStore } from './batchView';
+import { BatchViewer } from './BatchViewer';
+import { startImageDrag } from './imageDrag';
+import { useBatchItemActions } from './useBatchItemActions';
 import { useTranslation } from '@/i18n';
 
 /** The batch strip: one tile per image in the run, with live progress. */
@@ -17,11 +24,62 @@ export function BatchRail() {
     const setAutoSwap = useGenerateStore(s => s.setAutoSwapToImages);
     const autoClear = useGenerateStore(s => s.autoClearBatch);
     const setAutoClear = useGenerateStore(s => s.setAutoClearBatch);
+    const setViewing = useBatchViewStore(s => s.setViewing);
+    const contextMenu = useContextMenu();
+    const itemActions = useBatchItemActions();
+    const { notice, setNotice } = itemActions;
 
     const visible = batch.filter(item => item.status !== 'discarded');
 
+    /** A click on the tile already on the canvas opens it full-screen, as in the legacy UI. */
+    const onSelect = useCallback(
+        (id: string) => {
+            const state = useGenerateStore.getState();
+            if (state.selected === id) {
+                // A slot with nothing to show yet has nothing to open.
+                if (state.batch.some(item => item.id === id && item.src)) {
+                    setViewing(id);
+                }
+            }
+            else {
+                select(id);
+            }
+        },
+        [select, setViewing]
+    );
+
+    // The tiles get one stable handler between them, so a progress tick on one slot re-renders
+    // that tile alone; the menu itself is built from whatever the actions are when it opens.
+    const menuFor = useRef<(item: BatchItem) => MenuAction[]>(() => []);
+    menuFor.current = (item: BatchItem) =>
+        itemActions.actionsFor(item, { inRail: true }).map(action => ({
+            label: action.label,
+            destructive: action.destructive,
+            separated: action.key === 'delete' || action.key === 'removefrombatchview',
+            onSelect: () => action.run()
+        }));
+    const { open: openMenu, touch } = contextMenu;
+    const onContextMenu = useCallback(
+        (event: MouseEvent, item: BatchItem) => {
+            // Shift or Ctrl leaves the browser's own menu, as the legacy UI does.
+            if (event.shiftKey || event.ctrlKey) {
+                return;
+            }
+            openMenu(event, menuFor.current(item));
+        },
+        [openMenu]
+    );
+    const longPress = useCallback((item: BatchItem) => touch(() => menuFor.current(item)), [touch]);
+
+    useEffect(() => {
+        if (notice) {
+            const timer = setTimeout(() => setNotice(null), 4000);
+            return () => clearTimeout(timer);
+        }
+    }, [notice, setNotice]);
+
     return (
-        <div className="flex h-full flex-col">
+        <div className="relative flex h-full flex-col" data-batch-nav="">
             <div className="flex shrink-0 items-center gap-1 border-b border-subtle px-2 py-1.5">
                 <h2 className="text-xs font-medium text-fg-strong">{t('batch.title')}</h2>
                 {visible.length > 0 && <span className="text-xs text-fg-soft">{visible.length}</span>}
@@ -85,12 +143,26 @@ export function BatchRail() {
                                 key={item.id}
                                 item={item}
                                 active={item.id === selected}
-                                onSelect={() => select(item.id)}
+                                onSelect={onSelect}
+                                onContextMenu={onContextMenu}
+                                longPress={longPress}
                             />
                         ))}
                     </div>
                 )}
             </div>
+
+            {notice && (
+                <p
+                    role="status"
+                    className="absolute inset-x-2 bottom-2 z-10 rounded border border-default bg-surface px-2 py-1 text-xs text-fg-soft shadow-lg"
+                >
+                    {notice}
+                </p>
+            )}
+            {contextMenu.menu}
+            {itemActions.dialogs}
+            <BatchViewer actionsFor={itemActions.actionsFor} />
         </div>
     );
 }
@@ -112,17 +184,31 @@ function outcomeKey(item: BatchItem): string | null {
     }
 }
 
-function BatchTile(props: { item: BatchItem; active: boolean; onSelect: () => void }) {
+/** One slot. Memoized, with handlers that take the item rather than closing over it, so that a
+ *  progress tick re-renders only the slot that moved. */
+const BatchTile = memo(function BatchTile(props: {
+    item: BatchItem;
+    active: boolean;
+    onSelect: (id: string) => void;
+    onContextMenu: (event: MouseEvent, item: BatchItem) => void;
+    longPress: (item: BatchItem) => LongPressHandlers;
+}) {
     const { t } = useTranslation();
     const { item } = props;
     const src = imageUrl(item.src);
     const percent = Math.round((item.overallPercent ?? 0) * 100);
     const outcome = outcomeKey(item);
+    const finished = Boolean(src) && !item.isPreview;
+    const starred = finished && isImageStarred(item.metadata);
 
     return (
         <button
             type="button"
-            onClick={props.onSelect}
+            onClick={() => props.onSelect(item.id)}
+            onContextMenu={event => props.onContextMenu(event, item)}
+            {...props.longPress(item)}
+            draggable={finished}
+            onDragStart={finished ? event => startImageDrag(event, { url: src!, metadata: item.metadata }) : undefined}
             aria-current={props.active ? 'true' : undefined}
             title={
                 item.error ??
@@ -163,9 +249,19 @@ function BatchTile(props: { item: BatchItem; active: boolean; onSelect: () => vo
                     style={{ width: `${percent}%`, background: 'var(--emphasis)' }}
                 />
             )}
+
+            {starred && (
+                <Star
+                    size={12}
+                    fill="currentColor"
+                    className="absolute right-1 top-1 drop-shadow"
+                    style={{ color: 'var(--star)' }}
+                    aria-hidden
+                />
+            )}
         </button>
     );
-}
+});
 
 function Toggle(props: { label: string; checked: boolean; onChange: (on: boolean) => void }) {
     return (

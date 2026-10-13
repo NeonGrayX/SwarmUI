@@ -50,7 +50,7 @@ export function validateGenInput(
         if (installed.length > 0 && !installed.includes(model)) {
             return {
                 paramId: 'model',
-                message: `Model "${model}" is not on this server. Pick a model that is installed.`
+                message: t('validate.modelNotInstalled', { model })
             };
         }
     }

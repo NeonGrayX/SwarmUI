@@ -8,35 +8,19 @@ export function Splitter(props: {
     /** Which side grows when the value increases. */
     invert?: boolean;
 }) {
-    const dragging = useRef(false);
-    const lastX = useRef(0);
-
-    const onPointerMove = useCallback(
-        (e: PointerEvent) => {
-            if (!dragging.current) {
-                return;
-            }
-            const delta = e.clientX - lastX.current;
-            lastX.current = e.clientX;
-            props.onResize(props.invert ? -delta : delta);
-        },
-        [props]
-    );
-
-    const onPointerUp = useCallback(() => {
-        dragging.current = false;
+    const lastX = useRef<number | null>(null);
+    /** Ends a drag, however it ended - released, cancelled by the browser, or cut short by the
+     *  handle unmounting - so the page is never left unselectable with a resize cursor. */
+    const endDrag = useCallback(() => {
+        if (lastX.current === null) {
+            return;
+        }
+        lastX.current = null;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
     }, []);
 
-    useEffect(() => {
-        window.addEventListener('pointermove', onPointerMove);
-        window.addEventListener('pointerup', onPointerUp);
-        return () => {
-            window.removeEventListener('pointermove', onPointerMove);
-            window.removeEventListener('pointerup', onPointerUp);
-        };
-    }, [onPointerMove, onPointerUp]);
+    useEffect(() => endDrag, [endDrag]);
 
     return (
         <div
@@ -45,11 +29,27 @@ export function Splitter(props: {
             aria-label={props.label}
             tabIndex={0}
             onPointerDown={e => {
-                dragging.current = true;
+                if (e.button !== 0) {
+                    return;
+                }
+                // Capture keeps the move/up events coming to this handle even when the pointer
+                // leaves it - over an iframe, or outside the window - so no global listeners.
+                e.currentTarget.setPointerCapture(e.pointerId);
                 lastX.current = e.clientX;
                 document.body.style.cursor = 'col-resize';
                 document.body.style.userSelect = 'none';
             }}
+            onPointerMove={e => {
+                if (lastX.current === null) {
+                    return;
+                }
+                const delta = e.clientX - lastX.current;
+                lastX.current = e.clientX;
+                props.onResize(props.invert ? -delta : delta);
+            }}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            onLostPointerCapture={endDrag}
             onKeyDown={e => {
                 const step = e.shiftKey ? 40 : 12;
                 if (e.key === 'ArrowLeft') {
@@ -61,7 +61,7 @@ export function Splitter(props: {
                     props.onResize(props.invert ? -step : step);
                 }
             }}
-            className="group relative w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-[var(--emphasis-soft)] focus-visible:bg-[var(--emphasis)]"
+            className="group relative w-1 shrink-0 touch-none cursor-col-resize bg-transparent hover:bg-[var(--emphasis-soft)] focus-visible:bg-[var(--emphasis)]"
         >
             <span className="absolute inset-y-0 -left-1 -right-1" />
         </div>

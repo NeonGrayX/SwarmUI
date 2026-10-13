@@ -49,6 +49,19 @@ export interface StartOptions {
      *  Mirrors SimpleTabGenerateHandler in the existing interface, which turns the model check off
      *  and sends `(none)` (simpletab.js:getGenInput). */
     modelOptional?: boolean;
+    /** For "Generate Forever": when the seed and variation seed are both fixed, a run whose input
+     *  matches the previous one would only reproduce the same image, so it is skipped rather than
+     *  sent (generatecontrols.js doGenForeverOnce). */
+    skipRepeatWithFixedSeed?: boolean;
+}
+
+/** The input of the last run sent by a `skipRepeatWithFixedSeed` caller. */
+let lastRepeatInput: string | null = null;
+
+/** Forgets the last repeat-checked input, so a fresh "Generate Forever" session always sends its
+ *  first run even when nothing changed since the previous session. */
+export function resetRepeatSkip(): void {
+    lastRepeatInput = null;
 }
 
 /** Starts a run, or records why it could not start. Reads the param store at call time so the
@@ -57,6 +70,7 @@ export function useStartGenerate(options: StartOptions = {}): () => void {
     const schema = useParamSchema();
     const buildInput = useGenInput();
     const modelOptional = options.modelOptional ?? false;
+    const skipRepeat = options.skipRepeatWithFixedSeed ?? false;
     return useCallback(() => {
         const input = buildInput();
         applyEditorOverrides(input, schema);
@@ -70,6 +84,15 @@ export function useStartGenerate(options: StartOptions = {}): () => void {
             store.fail(issue);
             return;
         }
+        // An absent variation seed counts as fixed, as it does in the legacy check.
+        const fixedVariation = input.variationseed === undefined || Number(input.variationseed) !== -1;
+        if (skipRepeat && Number(input.seed ?? -1) !== -1 && fixedVariation) {
+            const serialized = JSON.stringify({ images, input });
+            if (serialized === lastRepeatInput) {
+                return;
+            }
+            lastRepeatInput = serialized;
+        }
         store.start(images, input);
-    }, [schema, buildInput, modelOptional]);
+    }, [schema, buildInput, modelOptional, skipRepeat]);
 }

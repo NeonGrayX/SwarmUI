@@ -3,6 +3,7 @@ import { Plus, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { api } from '@/api/client';
+import { queryKeys } from '@/api/hooks';
 import { usePermission } from '@/api/permissions';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { BackendCard, type BackendSaveInput } from '@/components/server/BackendCard';
@@ -27,9 +28,18 @@ export function BackendsPage() {
     const [pendingAdd, setPendingAdd] = useState<BackendType | null>(null);
     const [showAdvancedTypes, setShowAdvancedTypes] = useState(false);
     const [saveErrors, setSaveErrors] = useState<Record<number, string>>({});
+    /** Requests in flight per backend id, so a card's buttons lock until its last one settles and
+     *  a double click cannot send the same toggle/delete/save twice. */
+    const [busy, setBusy] = useState<Record<number, number>>({});
+    const markBusy = (id: number, delta: 1 | -1) =>
+        setBusy(b => {
+            const next = (b[id] ?? 0) + delta;
+            const { [id]: _old, ...rest } = b;
+            return next > 0 ? { ...rest, [id]: next } : rest;
+        });
 
     const backends = useQuery({
-        queryKey: ['backends'],
+        queryKey: queryKeys.backends(true),
         queryFn: () => api.post<Record<string, Backend>>('ListBackends', { full_data: true }),
         refetchInterval: 5000
     });
@@ -48,7 +58,8 @@ export function BackendsPage() {
         refetchInterval: 30000
     });
 
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: ['backends'] });
+    // By prefix, so every ListBackends variant (full_data or not, other pages' copies) refreshes.
+    const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.backendsAll });
     // Every one of these can be refused by the server — Program.LockSettings alone rejects add,
     // delete, edit and restart — so the refusal is surfaced rather than swallowed, or a locked
     // server looks like a dead button. (Per-backend save errors render inside the card.)
@@ -80,11 +91,15 @@ export function BackendsPage() {
             }
             return api.post('ToggleBackend', { backend_id: backend.id, enabled: true });
         },
+        onMutate: backend => markBusy(backend.id, 1),
+        onSettled: (_data, _error, backend) => markBusy(backend.id, -1),
         onSuccess: succeed,
         onError: failWith('backends.error.toggle')
     });
     const remove = useMutation({
         mutationFn: (id: number) => api.post('DeleteBackend', { backend_id: id }),
+        onMutate: id => markBusy(id, 1),
+        onSettled: (_data, _error, id) => markBusy(id, -1),
         onSuccess: succeed,
         onError: failWith('backends.error.delete')
     });
@@ -95,16 +110,29 @@ export function BackendsPage() {
     });
     const restart = useMutation({
         mutationFn: (backend: string) => api.post('RestartBackends', { backend }),
+        onMutate: backend => {
+            if (backend !== 'all') {
+                markBusy(Number(backend), 1);
+            }
+        },
+        onSettled: (_data, _error, backend) => {
+            if (backend !== 'all') {
+                markBusy(Number(backend), -1);
+            }
+        },
         onSuccess: succeed,
         onError: failWith('backends.error.restart')
     });
     const edit = useMutation({
         mutationFn: (input: BackendSaveInput) => api.post('EditBackend', input),
-        onMutate: (input) =>
+        onMutate: input => {
+            markBusy(input.backend_id, 1);
             setSaveErrors(e => {
                 const { [input.backend_id]: _dropped, ...rest } = e;
                 return rest;
-            }),
+            });
+        },
+        onSettled: (_data, _error, input) => markBusy(input.backend_id, -1),
         onError: (error, input) =>
             setSaveErrors(e => ({
                 ...e,
@@ -239,9 +267,11 @@ export function BackendsPage() {
                                         ? backendLogTarget(logTypes.data?.types_available ?? [], backend)
                                         : null
                                 }
-                                saving={edit.isPending && edit.variables?.backend_id === backend.id}
+                                busy={(busy[backend.id] ?? 0) > 0 || (restart.isPending && restart.variables === 'all')}
                                 saveError={saveErrors[backend.id] ?? null}
-                                onSave={input => edit.mutate(input)}
+                                onSave={async input => {
+                                    await edit.mutateAsync(input);
+                                }}
                                 onToggle={() => toggle.mutate(backend)}
                                 onRestart={() => setPendingRestart(backend.id)}
                                 onDelete={() => setPendingDelete(backend.id)}

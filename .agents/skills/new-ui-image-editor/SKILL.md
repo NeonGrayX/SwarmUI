@@ -30,8 +30,11 @@ option bar are ordinary UI and benefit from every React affordance.
   space by offset / display size / rotation. `childLayers` are live buffers for in-progress
   strokes. Never replace `layer.canvas` with a new element - the layer panel shows that exact
   element as its live thumbnail.
-- `history.ts` - undo entries. `layer_canvas_edit` holds a full-resolution copy, which is why the
-  stack is bounded.
+- `history.ts` - undo entries. `layer_canvas_edit` holds a full-resolution copy (plus the layer's
+  `hasAnyContent`, which the mask export depends on), which is why the stack is bounded. Redo
+  needs no separate model: `HistoryEntry.undo()` returns the inverse entry, which goes on
+  `redoHistory`, and redoing is undoing that. Any new entry empties the redo stack, and closing
+  the editor (`store.close`) clears both.
 - `store.ts` - the zustand store: open/closed, plus `useEditorVersion()` and `editorOverrides()`.
 - `types.ts` - `ToolOption` descriptors, `pressureOf`.
 - `color.ts` - hex/RGB/greyscale conversions.
@@ -59,7 +62,13 @@ bar renders them once for every tool. This is what makes the controls translated
 keyboard-reachable without each tool arranging for that itself.
 
 Lifecycle hooks: `setActive` / `setInactive`, `onLayerChanged(previous, newLayer)`,
-`onDocumentReset`, `onBeforeHistoryUndo`, `draw`, and the pointer handlers.
+`onDocumentReset`, `onBeforeHistoryUndo` (also runs before a redo), `onDetach` (the editor is
+closing - cancel background requests), `draw`, and the pointer handlers.
+
+A tool can lose control mid-press: Alt borrows the General tool, and a hotkey switches tools. The
+engine then delivers a synthetic release (`onPointerUp` + `onGlobalPointerUp`, with the press's
+button) to the outgoing tool, so a stroke is committed rather than left open. Tools still gate
+their move handlers on `engine.pointerDown`, so stale "in progress" state can never paint on hover.
 
 - `isMaskOnly` hides the tool unless the active layer is a mask.
 - `isTempTool` marks a sub-tool with no toolbar button (the eyedropper); override `optionsOwner`
@@ -69,7 +78,9 @@ Lifecycle hooks: `setActive` / `setInactive`, `onLayerChanged(previous, newLayer
 
 ### React (`frontend/src/components/editor/`)
 
-`ImageEditor.tsx` mounts the engine (`engine.attach(host)` returns the disposer), renders the
+`ImageEditor.tsx` mounts the engine (`engine.attach(host, root)` returns the disposer; `root` is the
+editor's whole UI and scopes the keyboard shortcuts to key presses inside it or with nothing
+focused - Alt and window blur stay global), renders the
 chrome, and supplies `EditorHost` - the services the engine cannot reach itself: backend feature
 flags, the current generation input, a one-off generation runner, notices, and prompt appends.
 

@@ -150,6 +150,18 @@ function registerAlt(name: string, copyFrom: string): void {
 
 const none: Completer = () => [];
 
+/** The prefix a bracketed tag as actually typed belongs to, eg `random[2]` to the `random[2-4]`
+ *  registered as its example. Null when the name has no brackets, or no tag of that name takes any. */
+function bracketedPrefix(name: string): PromptPrefix | null {
+    const bracket = name.indexOf('[');
+    if (bracket <= 0) {
+        return null;
+    }
+    const base = name.substring(0, bracket + 1);
+    const found = Object.entries(PREFIXES).find(([registered]) => registered.startsWith(base));
+    return found ? found[1] : null;
+}
+
 register('random', 'Select from a set of random words to include', () =>
     hints(
         'Specify a comma-separated list of words to choose from, like "<random:cat,dog,elephant>".',
@@ -399,7 +411,7 @@ export class PromptCompleter {
             return { suggestions, waiting: false };
         }
         const name = content.substring(0, colon);
-        const prefix = PREFIXES[name];
+        const prefix = PREFIXES[name] ?? bracketedPrefix(name);
         if (!prefix) {
             return { suggestions: [], waiting: false };
         }

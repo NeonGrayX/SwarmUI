@@ -51,9 +51,18 @@ class LoginHandler {
             data ??= {};
             if (data.success) {
                 this.showMessage(this.messageLoginSuccess.get());
+                // The new UI (/ui) sends users here with a same-site return path, so they land back where they came from.
+                let target = './';
+                let returnPath = new URLSearchParams(window.location.search).get('return');
+                if (returnPath) {
+                    let returnUrl = new URL(returnPath, window.location.origin);
+                    if (returnUrl.origin == window.location.origin) {
+                        target = returnUrl.href;
+                    }
+                }
                 setTimeout(() => {
-                    this.loginErrorBlock.innerHTML = `<a href="./">(Click here if you haven't already been redirected)</a>`;
-                    window.location.href = './';
+                    this.loginErrorBlock.innerHTML = `<a href="${escapeHtml(target)}">(Click here if you haven't already been redirected)</a>`;
+                    window.location.href = target;
                 }, 1000);
                 return;
             }

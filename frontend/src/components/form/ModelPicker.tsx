@@ -87,8 +87,11 @@ export function ModelPicker(props: {
      *  a sentinel instead - VAE defaults to the literal "None" (T2IParamTypes.cs:692) - and that
      *  is not a file, so it must not be read as a model this server is missing. */
     emptyValue?: string;
+    /** Choices the param offers that are not files, eg VAE's "Automatic" (T2IParamTypes.cs:554).
+     *  Shown as themselves, and offered beside the clear button. */
+    sentinels?: string[];
 }) {
-    const { t } = useTranslation();
+    const { t, tDynamic } = useTranslation();
     const [open, setOpen] = useState(false);
     // Metadata is fetched from the first open onward: closing must not drop it, or every reopen
     // would flash empty thumbnails.
@@ -97,7 +100,9 @@ export function ModelPicker(props: {
     const noun = props.noun ?? subtypeNoun(props.subtype);
 
     const empty = props.emptyValue ?? '';
-    const hasValue = props.value !== '' && props.value !== empty;
+    const sentinels = props.sentinels ?? [];
+    const isSentinel = props.value !== empty && sentinels.includes(props.value);
+    const hasValue = props.value !== '' && props.value !== empty && !isSentinel;
     const option = hasValue ? catalog.byName.get(props.value) : undefined;
     // Only a loaded list can prove a name wrong: before the schema arrives every value looks
     // unknown, and a flash of "missing" on a perfectly good model is worse than saying nothing.
@@ -126,10 +131,12 @@ export function ModelPicker(props: {
                     ].join(' ')}
                 >
                     <ModelThumb option={option} size={props.compact ? 'xs' : 'sm'} />
-                    <span className={['min-w-0 flex-1 truncate', hasValue ? '' : 'text-fg-soft'].join(' ')}>
+                    <span className={['min-w-0 flex-1 truncate', hasValue || isSentinel ? '' : 'text-fg-soft'].join(' ')}>
                         {hasValue
                             ? (option?.title ?? props.value)
-                            : catalog.options.length === 0
+                            : isSentinel
+                              ? tDynamic(props.value)
+                              : catalog.options.length === 0
                               ? t('modelPicker.noneInstalled', { noun })
                               : t('modelPicker.noneSelected')}
                     </span>
@@ -156,13 +163,18 @@ export function ModelPicker(props: {
                     setOpen(false);
                 }}
                 onClear={
-                    hasValue
+                    hasValue || isSentinel
                         ? () => {
                               props.onChange(empty);
                               setOpen(false);
                           }
                         : undefined
                 }
+                sentinels={sentinels.filter(value => value !== empty && value !== props.value)}
+                onPickSentinel={value => {
+                    props.onChange(value);
+                    setOpen(false);
+                }}
             />
         </PickerPopover>
     );
@@ -177,9 +189,12 @@ export function ModelOptionList(props: {
     onPick: (option: ModelOption) => void;
     /** Present for single-select: renders the row that clears the value. */
     onClear?: () => void;
+    /** Non-file choices to offer beside the clear button. */
+    sentinels?: string[];
+    onPickSentinel?: (value: string) => void;
     noun: string;
 }) {
-    const { t } = useTranslation();
+    const { t, tDynamic } = useTranslation();
     const [search, setSearch] = useState('');
     const [arch, setArch] = useState('all');
     const [folder, setFolder] = useState('all');
@@ -410,6 +425,16 @@ export function ModelOptionList(props: {
                         {t('modelPicker.clearSelection')}
                     </button>
                 )}
+                {props.sentinels?.map(value => (
+                    <button
+                        key={value}
+                        type="button"
+                        onClick={() => props.onPickSentinel?.(value)}
+                        className="rounded px-1.5 py-0.5 hover:bg-[var(--sw-hover)] hover:text-fg"
+                    >
+                        {tDynamic(value)}
+                    </button>
+                ))}
             </div>
         </Command>
     );

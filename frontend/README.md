@@ -17,7 +17,8 @@ npm run dev          # http://localhost:7802/ui/
 ```
 
 Requires Swarm running on `http://localhost:7801` (override with `SWARM_SERVER=...`). Vite proxies
-`/API`, `/View`, `/Output`, `/Audio`, `/ViewSpecial` and `/ExtensionFile` to it.
+`/API`, `/View`, `/Output`, `/Audio`, `/ViewSpecial`, `/ExtensionFile` and `/Text2Image` (scraped by the Server Info, Extensions
+and Account pages) to it.
 
 **Production** — build into the server's static files:
 

@@ -164,9 +164,10 @@ function JobRow(props: { job: Job; onNavigate?: () => void }) {
                     <button
                         type="button"
                         onClick={() => cancel(job.id)}
-                        className="shrink-0 rounded px-1.5 py-0.5 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)]"
+                        disabled={job.cancelling}
+                        className="shrink-0 rounded px-1.5 py-0.5 text-xs text-fg-soft hover:text-fg hover:bg-[var(--sw-hover)] disabled:opacity-60"
                     >
-                        {t('common.cancel')}
+                        {job.cancelling ? t('jobs.cancelling') : t('common.cancel')}
                     </button>
                 ) : (
                     <button

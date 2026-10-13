@@ -7,11 +7,13 @@
  *   - it isn't advanced-and-hidden (advanced params still show once altered)
  *   - if `depend_non_default` is set, the named param is itself non-default
  *   - it isn't `suppressed` by a part of the UI that supplies it directly
+ *   - it isn't a resolution control the aspect ratio makes moot: width and height show only at a
+ *     Custom ratio, side length only at a named one (resTrick, params.js:603)
  */
 
 import type { ParamSchema } from '@/api/types';
 import type { GroupNode, NormalizedSchema } from './schema';
-import { isAltered, type ParamValue } from './store';
+import { isAltered, valueOf, type ParamValue } from './store';
 
 export type FilterMode = 'basic' | 'modified' | 'advanced';
 
@@ -68,27 +70,74 @@ function matchesSearch(param: ParamSchema, schema: NormalizedSchema, query: stri
     return haystack.includes(query);
 }
 
+/** Whether any group above a param has a switch that is off. */
+export function isGroupSwitchedOff(
+    param: ParamSchema,
+    schema: NormalizedSchema,
+    groupToggles: Record<string, boolean>
+): boolean {
+    let group = param.group ? schema.groupsById.get(param.group) : undefined;
+    while (group) {
+        if (group.toggles && groupToggles[group.id] !== true) {
+            return true;
+        }
+        group = group.parent ? schema.groupsById.get(group.parent) : undefined;
+    }
+    return false;
+}
+
+/** The params moved off their default. A switched-off group, at any level above, suppresses its
+ *  descendants' altered state. */
+export function computeAltered(
+    schema: NormalizedSchema,
+    values: Record<string, ParamValue>,
+    toggles: Record<string, boolean>,
+    groupToggles: Record<string, boolean>
+): Set<string> {
+    const altered = new Set<string>();
+    for (const param of schema.params) {
+        if (isAltered(param, values, toggles) && !isGroupSwitchedOff(param, schema, groupToggles)) {
+            altered.add(param.id);
+        }
+    }
+    return altered;
+}
+
+/** Which resolution controls the aspect ratio hides, or null when there is no aspect ratio on show
+ *  to stand in for them. */
+function aspectHides(schema: NormalizedSchema, values: Record<string, ParamValue>): Set<string> | null {
+    const aspect = schema.byId.get('aspectratio');
+    if (!aspect?.visible) {
+        return null;
+    }
+    return valueOf(aspect, values) === 'Custom' ? new Set(['sidelength']) : new Set(['width', 'height']);
+}
+
+/** Everything about the store that the visibility result depends on, as one string. Lets a caller
+ *  subscribe to this rather than to every value, so typing a prompt - which changes a value but
+ *  rarely what is altered - does not recompute the panel. */
+export function visibilitySignature(
+    schema: NormalizedSchema,
+    values: Record<string, ParamValue>,
+    toggles: Record<string, boolean>,
+    groupToggles: Record<string, boolean>
+): string {
+    const altered = [...computeAltered(schema, values, toggles, groupToggles)].join(',');
+    const aspect = schema.byId.get('aspectratio');
+    return `${altered}|${aspect ? valueOf(aspect, values) === 'Custom' : ''}`;
+}
+
 export function computeVisibility(input: VisibilityInput): VisibilityResult {
     const { schema, values, toggles, groupToggles, supportedFeatures, mode } = input;
     const query = input.search.trim().toLowerCase();
 
     const visible = new Set<string>();
     const unsupported = new Set<string>();
-    const altered = new Set<string>();
     let advancedHiddenCount = 0;
 
     // Pass 1: altered state, needed before visibility because advanced params stay visible once set.
-    for (const param of schema.params) {
-        let paramAltered = isAltered(param, values, toggles);
-        // A group toggle that is off suppresses its children's altered state.
-        const group = param.group ? schema.groupsById.get(param.group) : undefined;
-        if (group?.toggles && groupToggles[group.id] !== true) {
-            paramAltered = false;
-        }
-        if (paramAltered) {
-            altered.add(param.id);
-        }
-    }
+    const altered = computeAltered(schema, values, toggles, groupToggles);
+    const resolutionHidden = aspectHides(schema, values);
 
     // Pass 2: visibility.
     for (const param of schema.params) {
@@ -100,13 +149,15 @@ export function computeVisibility(input: VisibilityInput): VisibilityResult {
         const filterShow = matchesSearch(param, schema, query);
         const advanced = isAdvanced(param, schema);
 
-        // Counts only param-level `advanced`, not group-inherited, which is what the
-        // "Advanced (n)" chip is offering to reveal.
-        if (param.advanced && supported && filterShow) {
+        let show = supported && param.visible && filterShow && input.suppressed?.has(param.id) !== true;
+        if (show && resolutionHidden?.has(param.id)) {
+            show = false;
+        }
+        // Counts only param-level `advanced`, not group-inherited, and only those the basic view
+        // would hide - an altered one shows anyway, so the "Advanced (n)" chip is not revealing it.
+        if (show && param.advanced && !paramAltered) {
             advancedHiddenCount++;
         }
-
-        let show = supported && param.visible && filterShow && input.suppressed?.has(param.id) !== true;
         if (show && advanced && mode !== 'advanced' && !paramAltered) {
             show = false;
         }

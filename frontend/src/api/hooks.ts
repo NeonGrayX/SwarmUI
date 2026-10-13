@@ -3,15 +3,26 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { api } from './client';
 import type { SettingsTree } from '@/settings/types';
-import type { CurrentStatus, ListT2IParamsResponse, SessionData } from './types';
+import type { CurrentStatus, ListT2IParamsResponse, SessionData, ThemeInfo } from './types';
 
 export const queryKeys = {
     session: ['session'] as const,
     t2iParams: ['t2i-params'] as const,
     currentStatus: ['current-status'] as const,
     userSettings: ['user-settings'] as const,
-    serverSettings: ['server-settings'] as const
+    serverSettings: ['server-settings'] as const,
+    /** ListBackends, keyed by its body: `full_data` changes the response shape, so the two must
+     *  never share a cache entry. Invalidate `backendsAll` to refresh both. */
+    backends: (fullData = false) => ['backends', { full_data: fullData }] as const,
+    backendsAll: ['backends'] as const
 };
+
+/** GetUserSettings' response (BasicAPIFeatures.GetUserSettings): the settings tree, plus the
+ *  server's registered themes. */
+export interface UserSettingsResponse {
+    settings: SettingsTree;
+    themes?: Record<string, ThemeInfo>;
+}
 
 /** Establishes the API session. Everything else depends on this resolving. */
 export function useSession(): UseQueryResult<SessionData> {
@@ -54,10 +65,10 @@ export function useCurrentStatus(enabled = true): UseQueryResult<CurrentStatus> 
 }
 
 /** The user's own settings tree, backing both the Preferences screen and the command palette. */
-export function useUserSettings(enabled = true): UseQueryResult<{ settings: SettingsTree }> {
+export function useUserSettings(enabled = true): UseQueryResult<UserSettingsResponse> {
     return useQuery({
         queryKey: queryKeys.userSettings,
-        queryFn: () => api.post<{ settings: SettingsTree }>('GetUserSettings'),
+        queryFn: () => api.post<UserSettingsResponse>('GetUserSettings'),
         staleTime: 5 * 60 * 1000,
         enabled
     });

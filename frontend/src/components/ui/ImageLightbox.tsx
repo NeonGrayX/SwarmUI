@@ -1,6 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Info, X } from 'lucide-react';
+import { useUserSetting } from '@/settings/useUserSetting';
+import { MetadataView } from './MetadataView';
 import { OutputPlayer, outputKind } from './OutputMedia';
 import { ZoomableImage } from './ZoomableImage';
 import { useTranslation } from '@/i18n';
@@ -22,10 +24,19 @@ export function ImageLightbox(props: {
     onPrev?: () => void;
     onNext?: () => void;
     onClose: () => void;
+    /** The image's metadata. When given (even as null), a panel beside the image can show it, open
+     *  or not by default according to the `ui.defaulthidemetadatainfullview` user setting. */
+    metadata?: string | null;
+    /** Extra header controls, placed before the close button. */
+    actions?: ReactNode;
 }) {
     const { t } = useTranslation();
     const { onClose } = props;
     const kind = outputKind(props.src);
+    const hideMetadata = useUserSetting<boolean>('ui.defaulthidemetadatainfullview', false) === true;
+    const [metadataOpen, setMetadataOpen] = useState<boolean | null>(null);
+    const hasMetadata = props.metadata !== undefined;
+    const showMetadata = hasMetadata && (metadataOpen ?? !hideMetadata);
 
     // Captured at the document, ahead of every other Escape handler in the page, so closing the
     // viewer leaves the detail panel it was opened from open behind it.
@@ -58,62 +69,91 @@ export function ImageLightbox(props: {
                         {t('viewer.position', { index: props.position.index, total: props.position.total })}
                     </span>
                 )}
+                {props.actions}
+                {hasMetadata && (
+                    <ViewerButton
+                        label={t('canvas.imageMetadata')}
+                        pressed={showMetadata}
+                        className="hidden md:block"
+                        onClick={() => setMetadataOpen(!showMetadata)}
+                    >
+                        <Info size={18} aria-hidden />
+                    </ViewerButton>
+                )}
                 <ViewerButton label={t('common.close')} onClick={onClose}>
                     <X size={18} aria-hidden />
                 </ViewerButton>
             </div>
 
-            {/* The margin the image viewport leaves around itself dismisses too, so every dark
-                pixel that is not a control behaves the same way. */}
-            <div
-                className="relative min-h-0 flex-1"
-                onClick={e => e.target === e.currentTarget && onClose()}
-            >
-                {kind === 'image' ? (
-                    <ZoomableImage
-                        src={props.src}
-                        alt={props.alt}
-                        resetKey={props.src}
-                        autoFocus
-                        onPrev={props.onPrev}
-                        onNext={props.onNext}
-                        onBackdropClick={onClose}
-                    />
-                ) : (
-                    // Held clear of the step columns either side, so the player's own controls are
-                    // never buried under one of them.
-                    <div
-                        className="flex h-full items-center justify-center px-[clamp(4rem,16vw,20rem)] py-4"
-                        onClick={e => e.target === e.currentTarget && onClose()}
-                    >
-                        <OutputPlayer src={props.src} label={props.alt} />
-                    </div>
-                )}
+            <div className="flex min-h-0 flex-1">
+                {/* The margin the image viewport leaves around itself dismisses too, so every dark
+                    pixel that is not a control behaves the same way. */}
+                <div
+                    className="relative min-h-0 min-w-0 flex-1"
+                    onClick={e => e.target === e.currentTarget && onClose()}
+                >
+                    {kind === 'image' ? (
+                        <ZoomableImage
+                            src={props.src}
+                            alt={props.alt}
+                            resetKey={props.src}
+                            autoFocus
+                            onPrev={props.onPrev}
+                            onNext={props.onNext}
+                            onBackdropClick={onClose}
+                        />
+                    ) : (
+                        // Held clear of the step columns either side, so the player's own controls are
+                        // never buried under one of them.
+                        <div
+                            className="flex h-full items-center justify-center px-[clamp(4rem,16vw,20rem)] py-4"
+                            onClick={e => e.target === e.currentTarget && onClose()}
+                        >
+                            <OutputPlayer src={props.src} label={props.alt} />
+                        </div>
+                    )}
 
-                {/* Sat outside the image's own viewport, so a click on one never lands on the pan
-                    handler underneath it. */}
-                <div className="pointer-events-none absolute inset-0 flex justify-between">
-                    <StepColumn label={t('viewer.previous')} onClick={props.onPrev}>
-                        <ChevronLeft size={28} aria-hidden />
-                    </StepColumn>
-                    <StepColumn label={t('viewer.next')} onClick={props.onNext}>
-                        <ChevronRight size={28} aria-hidden />
-                    </StepColumn>
+                    {/* Sat outside the image's own viewport, so a click on one never lands on the pan
+                        handler underneath it. */}
+                    <div className="pointer-events-none absolute inset-0 flex justify-between">
+                        <StepColumn label={t('viewer.previous')} onClick={props.onPrev}>
+                            <ChevronLeft size={28} aria-hidden />
+                        </StepColumn>
+                        <StepColumn label={t('viewer.next')} onClick={props.onNext}>
+                            <ChevronRight size={28} aria-hidden />
+                        </StepColumn>
+                    </div>
                 </div>
+
+                {showMetadata && (
+                    <aside
+                        aria-label={t('canvas.metadata')}
+                        className="hidden w-80 shrink-0 overflow-y-auto border-l border-default bg-surface p-3 text-fg md:block"
+                    >
+                        <MetadataView metadata={props.metadata} empty={t('canvas.noMetadata')} />
+                    </aside>
+                )}
             </div>
         </div>,
         document.body
     );
 }
 
-function ViewerButton(props: { label: string; onClick: () => void; children: React.ReactNode }) {
+function ViewerButton(props: {
+    label: string;
+    onClick: () => void;
+    pressed?: boolean;
+    className?: string;
+    children: React.ReactNode;
+}) {
     return (
         <button
             type="button"
             onClick={props.onClick}
             title={props.label}
             aria-label={props.label}
-            className="rounded p-1.5 text-white/70 hover:bg-white/10 hover:text-white"
+            aria-pressed={props.pressed}
+            className={`rounded p-1.5 text-white/70 hover:bg-white/10 hover:text-white ${props.className ?? ''}`}
         >
             {props.children}
         </button>

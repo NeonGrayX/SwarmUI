@@ -125,7 +125,7 @@ export function formatTime(seconds: number): string {
 interface AudioProbe extends HTMLVideoElement {
     audioTracks?: { length: number };
     mozHasAudio?: boolean;
-    webkitAudioDecodedByteCount?: number;
+    captureStream?: () => MediaStream;
 }
 
 export function hasAudioTrack(video: HTMLVideoElement): boolean {
@@ -139,9 +139,24 @@ export function hasAudioTrack(video: HTMLVideoElement): boolean {
     if (typeof probe.mozHasAudio === 'boolean') {
         return probe.mozHasAudio;
     }
-    if (typeof probe.webkitAudioDecodedByteCount === 'number') {
-        return probe.webkitAudioDecodedByteCount > 0;
+    // Chrome's answer. The stream's tracks mirror the element's once metadata is in, and the probe
+    // is stopped straight away so it holds nothing open. Some sources refuse capture (a
+    // cross-origin video throws), which is just an unknown.
+    if (typeof probe.captureStream === 'function') {
+        try {
+            const stream = probe.captureStream();
+            const audible = stream.getAudioTracks().length > 0;
+            for (const track of stream.getTracks()) {
+                track.stop();
+            }
+            return audible;
+        }
+        catch {
+            return true;
+        }
     }
+    // `webkitAudioDecodedByteCount` is deliberately not consulted: with `preload="metadata"`
+    // nothing has been decoded yet, so its zero is as true of a video with sound as without.
     return true;
 }
 

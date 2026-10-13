@@ -10,6 +10,7 @@ import {
     type ExtensionTag,
     type InstalledExtension
 } from '@/server/legacyExtensions';
+import { forgetLegacyPage } from '@/server/legacyInfo';
 import { useTranslation } from '@/i18n';
 
 const INPUT =
@@ -173,7 +174,10 @@ export function ExtensionsPage() {
 
                 <button
                     type="button"
-                    onClick={() => extensions.refetch()}
+                    onClick={() => {
+                        forgetLegacyPage();
+                        extensions.refetch();
+                    }}
                     disabled={extensions.isFetching}
                     className="flex items-center gap-1.5 rounded border border-default px-2 py-1 text-xs text-fg-soft hover:bg-[var(--sw-hover)] hover:text-fg disabled:opacity-50"
                 >

@@ -15,6 +15,9 @@ export class MoveTool extends EditorTool {
      *  position rather than from wherever the constraint had parked the layer. */
     private moveX = 0;
     private moveY = 0;
+    /** Whether this drag has put its undo entry down yet. Deferred to the first move that actually
+     *  shifts the layer, so a click that goes nowhere leaves nothing on the stack to undo. */
+    private recorded = false;
 
     constructor(engine: ImageEditorEngine) {
         super(engine, 'move', Move, 'editor.tool.move', 'editor.tool.moveDesc', 'm');
@@ -29,7 +32,7 @@ export class MoveTool extends EditorTool {
         this.startY = layer.offsetY;
         this.moveX = 0;
         this.moveY = 0;
-        layer.savePositions();
+        this.recorded = false;
     }
 
     onGlobalPointerMove(e: PointerEvent): boolean {
@@ -60,12 +63,21 @@ export class MoveTool extends EditorTool {
             }
         }
 
-        layer.offsetX = this.startX + actualX;
-        layer.offsetY = this.startY + actualY;
+        let nextX = this.startX + actualX;
+        let nextY = this.startY + actualY;
         if (e.ctrlKey) {
-            layer.offsetX = Math.round(layer.offsetX / SNAP) * SNAP;
-            layer.offsetY = Math.round(layer.offsetY / SNAP) * SNAP;
+            nextX = Math.round(nextX / SNAP) * SNAP;
+            nextY = Math.round(nextY / SNAP) * SNAP;
         }
+        if (nextX === layer.offsetX && nextY === layer.offsetY) {
+            return false;
+        }
+        if (!this.recorded) {
+            layer.savePositions();
+            this.recorded = true;
+        }
+        layer.offsetX = nextX;
+        layer.offsetY = nextY;
         engine.markChanged();
         return true;
     }

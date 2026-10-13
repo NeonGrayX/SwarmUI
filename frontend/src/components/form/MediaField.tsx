@@ -17,6 +17,7 @@ import {
     type MediaMeta
 } from '@/params/media';
 import type { ControlProps } from './controls';
+import { droppedFiles } from '../generate/imageDrag';
 import { t as translate, useTranslation } from '@/i18n';
 
 const NO_META: MediaMeta[] = [];
@@ -114,7 +115,8 @@ export function MediaField(props: ControlProps & { emptyLabel?: string }) {
     function onDrop(event: React.DragEvent): void {
         event.preventDefault();
         setDragging(false);
-        void addFiles(event.dataTransfer?.files);
+        // Gallery images dragged from the batch or canvas arrive as a URL rather than a file.
+        void droppedFiles(event.dataTransfer).then(addFiles);
     }
 
     return (

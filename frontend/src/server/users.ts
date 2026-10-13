@@ -54,7 +54,13 @@ export const WILDCARD_PERMISSION = '*';
 
 /** The settings key holding a user's role ids. Edited through a dedicated control rather than the
  *  generic settings form, so it is hidden from the tree the form is handed. */
-export const ROLES_SETTING_KEY = 'Roles';
+export const ROLES_SETTING_KEY = 'roles';
+
+/** The actual key the roles entry sits under. AutoConfiguration lowercases field ids, but match
+ *  case-insensitively so a casing change server-side can't silently hide (and then wipe) roles. */
+function rolesKeyIn(settings: SettingsTree): string {
+    return Object.keys(settings).find(key => key.toLowerCase() === ROLES_SETTING_KEY) ?? ROLES_SETTING_KEY;
+}
 
 /** How the settings tree serializes a List<string> (AdminAPI.AutoConfigToParamData). */
 export const LIST_SEPARATOR = ' || ';
@@ -173,7 +179,7 @@ export function groupPermissions(
 /** Reads a user's role ids out of their settings tree. Stored as a List<string>, so it arrives
  *  joined by LIST_SEPARATOR (or as a real array once we have edited it locally). */
 export function rolesFromSettings(settings: SettingsTree): string[] {
-    const value = settings[ROLES_SETTING_KEY]?.value;
+    const value = settings[rolesKeyIn(settings)]?.value;
     if (Array.isArray(value)) {
         return value.map(String);
     }
@@ -185,6 +191,7 @@ export function rolesFromSettings(settings: SettingsTree): string[] {
 
 /** The settings tree minus the role list, which gets its own editor above the form. */
 export function settingsWithoutRoles(settings: SettingsTree): SettingsTree {
-    const { [ROLES_SETTING_KEY]: _roles, ...rest } = settings;
+    const rest = { ...settings };
+    delete rest[rolesKeyIn(settings)];
     return rest;
 }

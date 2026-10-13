@@ -143,13 +143,39 @@ export function parseLegacyServerInfo(html: string): LegacyServerInfo {
     };
 }
 
-/** The legacy page's markup. Shared with legacyExtensions, which reads a different corner of it. */
-export async function fetchLegacyPage(): Promise<string> {
-    const response = await fetch(LEGACY_PAGE, { credentials: 'same-origin' });
-    if (!response.ok) {
-        throw new Error(`The legacy interface returned HTTP ${response.status}.`);
+/** How long one fetch of the legacy page serves every reader. The page is heavy to render, and
+ *  the Server Info and Extensions screens each want it; visiting one then the other should cost
+ *  one render, not two. Short enough that a deliberate refresh soon sees fresh markup. */
+const LEGACY_PAGE_TTL_MS = 30_000;
+
+let legacyPageCache: { promise: Promise<string>; at: number } | null = null;
+
+/** Drops the shared copy, so the next read fetches the page afresh (a manual reload). */
+export function forgetLegacyPage(): void {
+    legacyPageCache = null;
+}
+
+/** The legacy page's markup. Shared with legacyExtensions, which reads a different corner of it.
+ *  Concurrent and recent callers share one request; a failed one is not cached. */
+export function fetchLegacyPage(): Promise<string> {
+    if (legacyPageCache && Date.now() - legacyPageCache.at < LEGACY_PAGE_TTL_MS) {
+        return legacyPageCache.promise;
     }
-    return response.text();
+    const promise = (async () => {
+        const response = await fetch(LEGACY_PAGE, { credentials: 'same-origin' });
+        if (!response.ok) {
+            throw new Error(`The legacy interface returned HTTP ${response.status}.`);
+        }
+        return response.text();
+    })();
+    const entry = { promise, at: Date.now() };
+    legacyPageCache = entry;
+    promise.catch(() => {
+        if (legacyPageCache === entry) {
+            legacyPageCache = null;
+        }
+    });
+    return promise;
 }
 
 export async function fetchLegacyServerInfo(): Promise<LegacyServerInfo> {

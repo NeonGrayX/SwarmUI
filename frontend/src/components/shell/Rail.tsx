@@ -1,7 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { usePermitted } from '@/api/permissions';
-import { SECTIONS, defaultDestination, type SectionId } from '@/nav/destinations';
+import { DESTINATIONS, SECTIONS, defaultDestination, type SectionId } from '@/nav/destinations';
 import { useTranslation } from '@/i18n';
 
 /** The always-visible primary navigation: level one of the IA, which never scrolls away and never
@@ -9,6 +9,7 @@ import { useTranslation } from '@/i18n';
 export function Rail() {
     const { t } = useTranslation();
     const sections = usePermitted(SECTIONS);
+    const destinations = usePermitted(DESTINATIONS);
     const activeSection = useActiveSection();
 
     return (
@@ -19,7 +20,7 @@ export function Rail() {
                 style={{ width: 'var(--sw-rail-width)' }}
             >
                 {sections.map(section => {
-                    const target = defaultDestination(section.id);
+                    const target = defaultDestination(section.id, destinations);
                     if (!target) {
                         return null;
                     }

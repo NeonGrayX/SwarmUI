@@ -161,6 +161,9 @@ export function cleanDynamicTable(keys: Messages | undefined): Messages {
     return Object.fromEntries(Object.entries(keys ?? {}).filter(([, value]) => value));
 }
 
+/** Bumped by every `setLanguage` call; a load that finishes under an older token is discarded. */
+let languageToken = 0;
+
 export const useI18nStore = create<I18nState>((set, get) => ({
     language: DEFAULT_LANGUAGE,
     ready: true,
@@ -168,14 +171,34 @@ export const useI18nStore = create<I18nState>((set, get) => ({
 
     setLanguage: async (code: string) => {
         const target = normalizeLanguage(code) ?? DEFAULT_LANGUAGE;
+        // Only the latest switch may install its table: picking two languages in quick succession
+        // must not let the slower chunk land last and win.
+        const token = ++languageToken;
         set({ ready: false });
-        activeMessages = await loadMessages(target);
-        // Server-supplied text stays in whatever the previous language resolved it to until the
-        // new table arrives, which is a beat later and only affects parameter names.
-        activeDynamic = {};
-        applyDocumentLanguage(target);
-        writeCookie(LANGUAGE_COOKIE, target, COOKIE_DAYS);
-        set(state => ({ language: target, ready: true, revision: state.revision + 1 }));
+        let messages = ENGLISH;
+        let language = target;
+        try {
+            messages = await loadMessages(target);
+        }
+        catch (e) {
+            // A chunk that failed to load (offline, or a rebuilt server) leaves the UI in English
+            // rather than stuck not-ready forever.
+            console.warn(`[i18n] Failed to load language '${target}', falling back to English`, e);
+            language = DEFAULT_LANGUAGE;
+        }
+        finally {
+            if (token === languageToken) {
+                activeMessages = messages;
+                // Server-supplied text stays in whatever the previous language resolved it to until
+                // the new table arrives, which is a beat later and only affects parameter names.
+                activeDynamic = {};
+                applyDocumentLanguage(language);
+                if (language === target) {
+                    writeCookie(LANGUAGE_COOKIE, target, COOKIE_DAYS);
+                }
+                set(state => ({ language, ready: true, revision: state.revision + 1 }));
+            }
+        }
     },
 
     setDynamic: (language: string, table: Messages) => {
@@ -209,6 +232,16 @@ export async function bootstrapI18n(): Promise<void> {
         useI18nStore.setState({ language: target });
         return;
     }
-    activeMessages = await loadMessages(target);
+    try {
+        activeMessages = await loadMessages(target);
+    }
+    catch (e) {
+        // Render in English rather than not at all; the cookie still names the choice, so the next
+        // load tries again.
+        console.warn(`[i18n] Failed to load language '${target}', falling back to English`, e);
+        applyDocumentLanguage(DEFAULT_LANGUAGE);
+        useI18nStore.setState({ language: DEFAULT_LANGUAGE });
+        return;
+    }
     useI18nStore.setState(state => ({ language: target, ready: true, revision: state.revision + 1 }));
 }

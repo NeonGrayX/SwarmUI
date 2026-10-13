@@ -1,21 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Loader2, Star, Trash2, X } from 'lucide-react';
+import { Download, FolderOpen, Loader2, Star, Trash2, X } from 'lucide-react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '@/api/client';
 import { useDeleteImage, useImages, useToggleImageStar } from '@/library/hooks';
 import {
     imageOutPrefix,
     imageSearchText,
-    isImageStarred,
+    isEntryStarred,
     type ImageEntry,
-    type ImageSortMode,
-    type ViewMode
+    type ImageSortMode
 } from '@/library/types';
 import { usePermission } from '@/api/permissions';
 import { useSession } from '@/api/hooks';
 import { useReuseParameters } from '@/params/reuse';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
 import { useUserSetting } from '@/settings/useUserSetting';
-import { BrowserToolbar, EmptyState, FolderPane, IMAGE_SORTS, StarButton } from './BrowserChrome';
+import {
+    BrowserToolbar,
+    EmptyState,
+    FolderPane,
+    IMAGE_SORTS,
+    StarButton,
+    formatGridClass,
+    isThumbnailFormat,
+    useBrowserFormat,
+    useFlash
+} from './BrowserChrome';
 import { DetailSheet } from '../ui/DetailSheet';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -48,6 +59,12 @@ function joinPath(folder: string, src: string): string {
     return folder ? `${folder}/${src}` : src;
 }
 
+/** A path as a URL path: every segment percent-encoded, so a `#`, `?` or `%` in a file or folder
+ *  name reaches the server as part of the name rather than ending the path. */
+function encodePath(path: string): string {
+    return path.split('/').map(encodeURIComponent).join('/');
+}
+
 /** Saves an image to disk. The view route is same-origin, so `download` is honored and the tab
  *  stays where it is rather than navigating to the image. */
 function downloadImage(url: string, src: string): void {
@@ -76,7 +93,7 @@ export function HistoryBrowser() {
     const routeSearch = useSearch({ strict: false }) as { search?: string };
     const [path, setPath] = useState('');
     const [search, setSearch] = useState(routeSearch.search ?? '');
-    const [view, setView] = useState<ViewMode>('grid');
+    const [view, setView] = useBrowserFormat('history');
     // Date sort, unreversed: the server's date order is the default the history screen opens with,
     // and reversing it is left to the user's toggle.
     const [sort, setSort] = useState<ImageSortMode>('Date');
@@ -89,7 +106,7 @@ export function HistoryBrowser() {
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
     const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
 
-    const [flash, setFlash] = useState<string | null>(null);
+    const flash = useFlash();
 
     const images = useImages(path, sort, reverse, depth);
     // The listing stops at MaxImagesInHistory, so a search of it alone can miss older images. Once
@@ -114,6 +131,9 @@ export function HistoryBrowser() {
     const toggleStar = useToggleImageStar();
     const deleteImage = useDeleteImage();
     const canDelete = usePermission('user_delete_image');
+    // Only does anything for a browser on the server's own machine; the server opens the folder there.
+    const canOpenFolder = usePermission('local_image_folder');
+    const queryClient = useQueryClient();
     const session = useSession();
     const navigate = useNavigate();
     const reuseParameters = useReuseParameters();
@@ -121,7 +141,7 @@ export function HistoryBrowser() {
     const contextMenu = useContextMenu();
     const videoEditor = useVideoEditor();
     const prefix = imageOutPrefix(session.data?.user_id, session.data?.output_append_user);
-    const urlForPath = (full: string) => `/${prefix}/${full}`;
+    const urlForPath = (full: string) => `/${encodePath(prefix)}/${encodePath(full)}`;
     // ListImages returns `src` relative to the *requested path*, not to the output root, so the
     // current folder has to be joined back on. At root that is a no-op.
     const urlFor = (src: string) => urlForPath(joinPath(path, src));
@@ -130,11 +150,13 @@ export function HistoryBrowser() {
     // Every entry carries its whole generation metadata as a JSON string, and all the listing
     // wants from it is the star. Parsed once per listing here rather than once per card per
     // render, which on a folder of a few thousand images was megabytes of JSON per keystroke.
+    // Each entry is parsed at most once (isEntryStarred caches per entry), so a listing that
+    // changes by one starred or deleted image does not re-read all the others.
     const starredSrcs = useMemo(
-        () => new Set(files.filter(file => isImageStarred(file.metadata)).map(file => file.src)),
+        () => new Set(files.filter(isEntryStarred).map(file => file.src)),
         [files]
     );
-    // Built once per listing, and only while searching: it means parsing every entry's metadata.
+    // Built only while searching: it means parsing every entry's metadata, once per entry.
     const searching = query !== '';
     const searchIndex = useMemo(
         () => (searching ? new Map(files.map(file => [file.src, imageSearchText(file)])) : null),
@@ -145,10 +167,13 @@ export function HistoryBrowser() {
         return searchIndex ? files.filter(file => searchIndex.get(file.src)?.includes(needle)) : files;
     }, [files, searchIndex, query]);
 
-    // An output folder is routinely thousands of images; draw it as it is scrolled through.
-    const shown = useIncremental(filtered);
+    // An output folder is routinely thousands of images; draw it as it is scrolled through. Only
+    // another listing starts over from the top - a star or a delete leaves the scroll alone.
+    const shown = useIncremental(filtered, 120, `${path}\n${query}\n${sort}\n${reverse}\n${depth}`);
 
-    const ids = useMemo(() => filtered.map(file => file.src), [filtered]);
+    // Keyed by the path from the output root, not the folder-relative `src`: the same `src` in
+    // another folder is another image, and must not inherit this one's checkbox.
+    const ids = useMemo(() => filtered.map(file => joinPath(path, file.src)), [filtered, path]);
     const selection = useSelection(ids);
 
     // The sheet shows the image that was last clicked, whatever folder the tree has moved on to
@@ -160,7 +185,7 @@ export function HistoryBrowser() {
         }
         const fresh = files.find(file => joinPath(path, file.src) === selected.full);
         return fresh
-            ? { ...selected, entry: fresh, starred: isImageStarred(fresh.metadata) }
+            ? { ...selected, entry: fresh, starred: isEntryStarred(fresh) }
             : selected;
     }, [selected, files, path]);
 
@@ -179,21 +204,13 @@ export function HistoryBrowser() {
         }
     }, [selected]);
 
-    // Failures are worth saying out loud; successes leave for the Generate screen and speak for
-    // themselves there.
-    useEffect(() => {
-        if (flash) {
-            const timer = setTimeout(() => setFlash(null), 5000);
-            return () => clearTimeout(timer);
-        }
-    }, [flash]);
 
     /** Pairs an entry with the folder it was listed in, for anything that outlives the listing. */
     function pin(entry: ImageEntry): PinnedImage {
         return {
             entry,
             full: joinPath(path, entry.src),
-            starred: isImageStarred(entry.metadata)
+            starred: isEntryStarred(entry)
         };
     }
 
@@ -202,7 +219,8 @@ export function HistoryBrowser() {
     function star(full: string): void {
         toggleStar.mutate({ path: full }, {
             onSuccess: () => setSelected(current =>
-                current && current.full === full ? { ...current, starred: !current.starred } : current)
+                current && current.full === full ? { ...current, starred: !current.starred } : current),
+            onError: error => flash.error(error, t('library.starFailed'))
         });
     }
 
@@ -221,7 +239,7 @@ export function HistoryBrowser() {
             navigate({ to: '/generate' });
         }
         catch (error: unknown) {
-            setFlash(error instanceof Error ? error.message : t('history.reuseFailed'));
+            flash.error(error, t('history.reuseFailed'));
         }
     }
 
@@ -238,7 +256,7 @@ export function HistoryBrowser() {
             await mediaParam.set('initimage', urlForPath(image.full));
         }
         catch (error: unknown) {
-            setFlash(error instanceof Error ? error.message : t('history.initImageFailed'));
+            flash.error(error, t('history.initImageFailed'));
             return;
         }
         navigate({ to: '/generate' });
@@ -246,16 +264,32 @@ export function HistoryBrowser() {
 
     /** Saves every selected image, oldest-listed first. */
     async function downloadSelected(): Promise<void> {
-        for (const src of selection.ids) {
-            downloadImage(urlFor(src), src);
+        for (const full of selection.ids) {
+            downloadImage(urlForPath(full), full);
             await delay(200);
         }
+    }
+
+    /** Has the server open the folder holding an image, in its own file manager. */
+    async function openFolder(full: string): Promise<void> {
+        try {
+            await api.post('OpenImageFolder', { path: full });
+        }
+        catch (error: unknown) {
+            flash.error(error, t('history.openFolderFailed'));
+        }
+    }
+
+    function deleteOne(full: string): void {
+        deleteImage.mutate({ path: full }, { onError: error => flash.error(error, t('history.deleteFailed')) });
+        // Only the sheet showing *that* image closes; another one stays put.
+        setSelected(current => (current?.full === full ? null : current));
     }
 
     /** Deletes every selected image. One request per file - the API has no batch form - so a
      *  failure part-way leaves the earlier deletions done, which the refreshed list shows. */
     async function deleteSelected(): Promise<void> {
-        const targets = selection.ids.map(src => joinPath(path, src));
+        const targets = selection.ids;
         if (selected && targets.includes(selected.full)) {
             setSelected(null);
         }
@@ -266,7 +300,7 @@ export function HistoryBrowser() {
             }
         }
         catch (error: unknown) {
-            setFlash(error instanceof Error ? error.message : t('history.bulkDeleteFailed'));
+            flash.error(error, t('history.bulkDeleteFailed'));
         }
     }
 
@@ -279,9 +313,12 @@ export function HistoryBrowser() {
                 label: image.starred ? t('common.unstar') : t('common.star'),
                 onSelect: () => star(image.full)
             },
-            { label: t('common.download'), onSelect: () => downloadImage(urlFor(entry.src), entry.src) },
-            { label: t('history.reuseParameters'), separated: true, onSelect: () => reuse(entry) }
+            { label: t('common.download'), onSelect: () => downloadImage(urlFor(entry.src), entry.src) }
         ];
+        if (canOpenFolder) {
+            actions.push({ label: t('history.openFolder'), onSelect: () => void openFolder(image.full) });
+        }
+        actions.push({ label: t('history.reuseParameters'), separated: true, onSelect: () => reuse(entry) });
         if (mediaParam.available('initimage')) {
             actions.push({ label: t('history.useAsInit'), onSelect: () => void useAsInit(image) });
         }
@@ -304,7 +341,7 @@ export function HistoryBrowser() {
 
     return (
         <div className="relative flex h-full min-h-0 flex-col md:flex-row">
-            <FolderPane folders={images.data?.folders} path={path} onNavigate={setPath} />
+            <FolderPane folders={images.data?.folders} path={path} depth={depth} onNavigate={setPath} />
 
             <div className="flex min-w-0 flex-1 flex-col">
                 <BrowserToolbar
@@ -321,6 +358,8 @@ export function HistoryBrowser() {
                     onDepth={setDepth}
                     count={filtered.length}
                     total={files.length}
+                    onRefresh={() => void queryClient.invalidateQueries({ queryKey: ['images'] })}
+                    refreshing={images.isFetching}
                 >
                     {deepSearching && (
                         <span className="flex items-center gap-1 text-xs text-fg-soft">
@@ -371,52 +410,61 @@ export function HistoryBrowser() {
                             }
                             hint={searching ? undefined : t('history.noImagesHint')}
                         />
-                    ) : view === 'grid' ? (
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
-                            {shown.visible.map(file => (
-                                <div
-                                    key={file.src}
-                                    onContextMenu={event => contextMenu.open(event, actionsFor(file))}
-                                    {...contextMenu.touch(() => actionsFor(file))}
-                                    className={[
-                                        'group relative aspect-square overflow-hidden rounded border bg-surface-sunken',
-                                        selection.isSelected(file.src)
-                                            ? 'border-[var(--emphasis)]'
-                                            : 'border-default'
-                                    ].join(' ')}
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={event => selection.click(event, file.src, () => setSelected(pin(file)))}
-                                        title={`${file.src}\n${t('browser.rightClickForActions')}`}
-                                        className="block h-full w-full"
+                    ) : view !== 'list' ? (
+                        <div className={formatGridClass(view)}>
+                            {shown.visible.map(file => {
+                                const full = joinPath(path, file.src);
+                                return (
+                                    <div
+                                        key={file.src}
+                                        onContextMenu={event => contextMenu.open(event, actionsFor(file))}
+                                        {...contextMenu.touch(() => actionsFor(file))}
+                                        className={[
+                                            'group relative aspect-square overflow-hidden rounded border bg-surface-sunken',
+                                            selection.isSelected(full)
+                                                ? 'border-[var(--emphasis)]'
+                                                : 'border-default'
+                                        ].join(' ')}
                                     >
-                                        <OutputThumbnail
-                                            src={urlFor(file.src)}
-                                            alt={file.src}
-                                            className="h-full w-full object-cover"
-                                        />
-                                        <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-left text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-                                            {file.src.split('/').pop()}
+                                        <button
+                                            type="button"
+                                            onClick={event => selection.click(event, full, () => setSelected(pin(file)))}
+                                            title={`${file.src}\n${t('browser.rightClickForActions')}`}
+                                            className="block h-full w-full"
+                                        >
+                                            <OutputThumbnail
+                                                src={urlFor(file.src)}
+                                                alt={file.src}
+                                                className="h-full w-full object-cover"
+                                            />
+                                            <span
+                                                className={[
+                                                    'absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-left text-[10px] text-white',
+                                                    // Card formats keep the name on screen; thumbnails show it on hover.
+                                                    isThumbnailFormat(view) ? 'opacity-0 transition-opacity group-hover:opacity-100' : ''
+                                                ].join(' ')}
+                                            >
+                                                {file.src.split('/').pop()}
+                                            </span>
+                                        </button>
+                                        <span className="absolute left-1.5 top-1.5">
+                                            <SelectionCheckbox
+                                                overlay
+                                                checked={selection.isSelected(full)}
+                                                onToggle={() => selection.toggle(full)}
+                                                label={t('browser.selectEntry', { name: file.src })}
+                                            />
                                         </span>
-                                    </button>
-                                    <span className="absolute left-1.5 top-1.5">
-                                        <SelectionCheckbox
-                                            overlay
-                                            checked={selection.isSelected(file.src)}
-                                            onToggle={() => selection.toggle(file.src)}
-                                            label={t('browser.selectEntry', { name: file.src })}
-                                        />
-                                    </span>
-                                    <span className="absolute right-1.5 top-1.5">
-                                        <StarButton
-                                            starred={starredSrcs.has(file.src)}
-                                            variant="overlay"
-                                            onClick={() => star(joinPath(path, file.src))}
-                                        />
-                                    </span>
-                                </div>
-                            ))}
+                                        <span className="absolute right-1.5 top-1.5">
+                                            <StarButton
+                                                starred={starredSrcs.has(file.src)}
+                                                variant="overlay"
+                                                onClick={() => star(full)}
+                                            />
+                                        </span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     ) : (
                         <ul className="divide-y divide-[var(--light-border)]">
@@ -428,8 +476,8 @@ export function HistoryBrowser() {
                                     className="group flex items-center gap-3"
                                 >
                                     <SelectionCheckbox
-                                        checked={selection.isSelected(file.src)}
-                                        onToggle={() => selection.toggle(file.src)}
+                                        checked={selection.isSelected(joinPath(path, file.src))}
+                                        onToggle={() => selection.toggle(joinPath(path, file.src))}
                                         label={t('browser.selectEntry', { name: file.src })}
                                     />
                                     <StarButton
@@ -439,7 +487,9 @@ export function HistoryBrowser() {
                                     />
                                     <button
                                         type="button"
-                                        onClick={event => selection.click(event, file.src, () => setSelected(pin(file)))}
+                                        onClick={event =>
+                                            selection.click(event, joinPath(path, file.src), () => setSelected(pin(file)))
+                                        }
                                         title={`${file.src}\n${t('browser.rightClickForActions')}`}
                                         className="flex min-w-0 flex-1 items-center gap-3 py-1.5 text-left"
                                     >
@@ -474,6 +524,7 @@ export function HistoryBrowser() {
                     }
                     onStar={() => star(detail.full)}
                     onDownload={() => downloadImage(urlForPath(detail.full), detail.entry.src)}
+                    onOpenFolder={canOpenFolder ? () => void openFolder(detail.full) : undefined}
                     onReuse={() => reuse(detail.entry)}
                     onUseAsInit={() => void useAsInit(detail)}
                     onDelete={() => setPendingDelete(detail.full)}
@@ -507,9 +558,7 @@ export function HistoryBrowser() {
                 destructive
                 onConfirm={() => {
                     if (pendingDelete) {
-                        deleteImage.mutate({ path: pendingDelete });
-                        // Only the sheet showing *that* image closes; another one stays put.
-                        setSelected(current => (current?.full === pendingDelete ? null : current));
+                        deleteOne(pendingDelete);
                     }
                     setPendingDelete(null);
                 }}
@@ -529,14 +578,7 @@ export function HistoryBrowser() {
                 onCancel={() => setPendingBulkDelete(false)}
             />
 
-            {flash && (
-                <p
-                    role="status"
-                    className="absolute bottom-3 right-3 z-40 max-w-96 rounded border border-default bg-surface px-2 py-1 text-xs text-fg-soft shadow-lg"
-                >
-                    {flash}
-                </p>
-            )}
+            {flash.node}
 
             {contextMenu.menu}
             {videoEditor.dialog}
@@ -554,6 +596,8 @@ function ImageSheet(props: {
     onEditVideo?: () => void;
     onStar: () => void;
     onDownload: () => void;
+    /** Only for a user allowed to have the server open its own folders. */
+    onOpenFolder?: () => void;
     onReuse: () => void;
     onUseAsInit: () => void;
     onDelete: () => void;
@@ -578,6 +622,11 @@ function ImageSheet(props: {
                 <SheetIcon label={t('common.download')} onClick={props.onDownload}>
                     <Download size={15} aria-hidden />
                 </SheetIcon>
+                {props.onOpenFolder && (
+                    <SheetIcon label={t('history.openFolder')} onClick={props.onOpenFolder}>
+                        <FolderOpen size={15} aria-hidden />
+                    </SheetIcon>
+                )}
                 {props.canDelete && (
                     <SheetIcon label={t('history.deleteImage')} onClick={props.onDelete} color="var(--backend-errored)">
                         <Trash2 size={15} aria-hidden />
