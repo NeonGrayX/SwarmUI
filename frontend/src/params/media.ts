@@ -165,7 +165,9 @@ export async function urlToDataUrl(url: string): Promise<string> {
     });
 }
 
-/** "16:9"-style description of a resolution. Ported from describeAspectRatio (site.js:1328). */
+/** "16:9"-style description of a resolution. Ported from describeAspectRatio (site.js:1345).
+ *  Only the denominators people actually use are tried, so an odd size reads as `1.37:1` rather
+ *  than as a technically-exact `37:27`. */
 export function describeAspectRatio(width: number, height: number): string {
     const wh = width / height;
     const hw = height / width;
@@ -179,7 +181,7 @@ export function describeAspectRatio(width: number, height: number): string {
     if (round(hw) % 1 === 0) {
         return `1:${Math.round(hw)}`;
     }
-    for (let i = 2; i < 50; i++) {
+    for (const i of [2, 3, 4, 9]) {
         if (round(wh * i) % 1 === 0) {
             return `${Math.round(wh * i)}:${i}`;
         }

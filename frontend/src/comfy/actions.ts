@@ -7,9 +7,9 @@
 import { useCallback } from 'react';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { api } from '@/api/client';
-import { useSession, useT2IParams, useUserSettings } from '@/api/hooks';
-import { usePermission } from '@/api/permissions';
+import { useSession, useT2IParams } from '@/api/hooks';
 import { cleanModelName } from '@/params/schema';
+import { useUserSetting } from '@/settings/useUserSetting';
 import { fetchObjectInfo, graphToPrompt, type ComfyGraph, type ComfyPrompt } from './bridge';
 import { buildComfyParams, type ComfyWorkflowInput } from './params';
 import { fetchSavedWorkflow, savedWorkflowInput, type SavedWorkflowData } from './saved';
@@ -79,13 +79,11 @@ export function useSavedWorkflow(name: string | null): UseQueryResult<SavedWorkf
 export function useComfyBuilder(): (requireSave: boolean) => Promise<ComfyBuildResult> {
     const session = useSession();
     const params = useT2IParams(session.isSuccess);
-    const canReadUserSettings = usePermission('read_user_settings');
-    const settings = useUserSettings(session.isSuccess && canReadUserSettings);
+    const resetBatchSizeToOne = useUserSetting<boolean>('ResetBatchSizeToOne', false) === true;
     const objectInfo = useComfyObjectInfo(session.isSuccess);
 
     const knownParamIds = params.data?.list;
     const checkpoints = params.data?.models['Stable-Diffusion'];
-    const resetBatchSizeToOne = settings.data?.settings.ResetBatchSizeToOne?.value === true;
     const objectInfoData = objectInfo.data;
 
     return useCallback(

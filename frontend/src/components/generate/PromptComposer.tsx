@@ -5,6 +5,7 @@ import { useParamStore } from '@/params/store';
 import { useStartGenerate } from '@/generate/start';
 import { GenerateActions } from './GenerateActions';
 import { PromptAttachments } from './PromptAttachments';
+import { PromptTextarea } from '@/components/form/PromptTextarea';
 import { useTranslation } from '@/i18n';
 
 /** Debounced CLIP token count for a prompt box, via the CountTokens API. */
@@ -115,14 +116,14 @@ function PromptBox(props: {
     const { t } = useTranslation();
     return (
         <div className="relative">
-            <textarea
+            <PromptTextarea
                 ref={props.ref}
                 id={`composer-${props.id}`}
                 aria-label={props.label}
                 rows={2}
                 value={props.value}
                 placeholder={props.placeholder}
-                onChange={e => props.onChange(e.target.value)}
+                onValueChange={props.onChange}
                 onKeyDown={e => {
                     // Ctrl/Cmd-Enter generates; plain Enter inserts a newline.
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {

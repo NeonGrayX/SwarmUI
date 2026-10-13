@@ -5,6 +5,7 @@ import type { ParamValue } from '@/params/store';
 import { MediaField } from './MediaField';
 import { LoraPicker } from './LoraPicker';
 import { ModelPicker } from './ModelPicker';
+import { PromptTextarea } from './PromptTextarea';
 import { useTranslation } from '@/i18n';
 
 export interface ControlProps {
@@ -192,17 +193,21 @@ export function TextField(props: ControlProps) {
     );
 }
 
+/** Multi-line text. `prompt` view types get the prompt box hotkeys and suggestions, as they do in
+ *  the legacy UI (getHtmlForParam, src/wwwroot/js/genpage/gentab/params.js:188); `big` ones don't. */
 export function PromptField(props: ControlProps) {
-    return (
-        <textarea
-            id={props.inputId}
-            rows={3}
-            value={String(props.value ?? '')}
-            disabled={props.disabled}
-            placeholder={props.param.examples?.[0]}
-            onChange={e => props.onChange(e.target.value)}
-            className={`${INPUT_CLASS} w-full resize-y min-h-16`}
-        />
+    const shared = {
+        id: props.inputId,
+        rows: 3,
+        disabled: props.disabled,
+        placeholder: props.param.examples?.[0],
+        className: `${INPUT_CLASS} w-full resize-y min-h-16`
+    };
+    const value = String(props.value ?? '');
+    return props.param.view_type === 'prompt' ? (
+        <PromptTextarea {...shared} value={value} onValueChange={props.onChange} />
+    ) : (
+        <textarea {...shared} value={value} onChange={e => props.onChange(e.target.value)} />
     );
 }
 

@@ -156,6 +156,9 @@ export interface ModelCompatClassInfo {
     has_joint_av_latents: boolean;
     resolution_precision: number;
     vae_family: string | null;
+    /** Whether the server converts A1111/Comfy prompt syntax like `(word:1.5)` into Swarm tags for
+     *  this family, when the user's ParseAlternativePromptSyntaxes setting allows it. */
+    support_legacy_prompt_parser: boolean;
 }
 
 /** Response of the `ListT2IParams` call (src/WebAPI/T2IAPI.cs). */

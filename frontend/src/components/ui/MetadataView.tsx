@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { parseImageMetadata, type MetadataEntry } from '@/params/metadata';
 import { useParamSchema } from '@/params/schema';
+import { useUserSetting } from '@/settings/useUserSetting';
 import { useTranslation } from '@/i18n';
 
 /** An image's metadata as a readable list of labelled rows: a fixed label column, values beside
@@ -9,7 +10,11 @@ import { useTranslation } from '@/i18n';
 export function MetadataView(props: { metadata: string | null | undefined; empty: string }) {
     const { t } = useTranslation();
     const schema = useParamSchema();
-    const parsed = useMemo(() => parseImageMetadata(props.metadata, schema), [props.metadata, schema]);
+    const interpretedPromptOnTop = useUserSetting<boolean>('ui.interpretedpromptontop', false) === true;
+    const parsed = useMemo(
+        () => parseImageMetadata(props.metadata, schema, { interpretedPromptOnTop }),
+        [props.metadata, schema, interpretedPromptOnTop]
+    );
     const [showRaw, setShowRaw] = useState(false);
 
     if (!parsed) {

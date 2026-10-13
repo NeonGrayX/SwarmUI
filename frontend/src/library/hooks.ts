@@ -21,8 +21,8 @@ import type {
 export const libraryKeys = {
     models: (subtype: string, path: string, sort: SortMode, reverse: boolean, depth: number) =>
         ['models', subtype, path, sort, reverse, depth] as const,
-    images: (path: string, sort: string, reverse: boolean, depth: number) =>
-        ['images', path, sort, reverse, depth] as const,
+    images: (path: string, sort: string, reverse: boolean, depth: number, filter = '') =>
+        ['images', path, sort, reverse, depth, filter] as const,
     userData: ['user-data'] as const
 };
 
@@ -51,17 +51,32 @@ export function useModels(
     });
 }
 
+/** One folder's image listing. With a `filter`, the server does the searching: it scans up to the
+ *  user's MaxImagesScannedInHistory rather than stopping at MaxImagesInHistory, and returns only
+ *  what matches - reaching images the plain listing was cut off before. */
 export function useImages(
     path: string,
     sort: ImageSortMode,
     reverse: boolean,
-    depth: number
+    depth: number,
+    filter = '',
+    enabled = true
 ): UseQueryResult<ListImagesResponse> {
     return useQuery({
-        queryKey: libraryKeys.images(path, sort, reverse, depth),
+        queryKey: libraryKeys.images(path, sort, reverse, depth, filter),
         queryFn: () =>
-            api.post<ListImagesResponse>('ListImages', { path, depth, sortBy: sort, sortReverse: reverse }),
-        staleTime: 30_000
+            api.post<ListImagesResponse>('ListImages', {
+                path,
+                depth,
+                sortBy: sort,
+                sortReverse: reverse,
+                ...(filter ? { filter } : {})
+            }),
+        enabled,
+        staleTime: 30_000,
+        // Every search typed is its own listing of up to thousands of entries; nothing is gained
+        // by holding on to the ones the user has typed past.
+        ...(filter ? { gcTime: 30_000 } : {})
     });
 }
 

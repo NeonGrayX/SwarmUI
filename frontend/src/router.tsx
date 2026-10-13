@@ -92,6 +92,9 @@ const SEARCH_VALIDATORS: Record<string, (search: Record<string, unknown>) => Rec
             ...(backend === null ? {} : { backend })
         };
     },
+    // "Browse history" on a model, LoRA, wildcard or preset opens the history pre-searched for what
+    // used it, eg ?search=model: sdxl (see useBrowseHistory).
+    history: search => (typeof search.search === 'string' ? { search: search.search } : {}),
     // The command palette links to a single setting or parameter by id, eg ?focus=Paths.ModelRoot.
     workspace: focusSearch,
     configuration: focusSearch,

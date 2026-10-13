@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
-import { useCurrentStatus, useSession, useT2IParams } from '@/api/hooks';
+import { useSession, useT2IParams } from '@/api/hooks';
 import { useComfyWorkflowStore } from '@/comfy/store';
 import { EDITOR_OWNED_PARAMS, useEditorStore } from '@/editor/store';
+import { useSupportedFeatures } from '@/params/features';
 import { useParamSchema } from '@/params/schema';
 import { computeVisibility, type FilterMode } from '@/params/visibility';
 import { useParamStore } from '@/params/store';
 import { ParamField, ParamGroup } from './ParamGroup';
+import { SuggestedSettings } from './SuggestedSettings';
 import { useTranslation } from '@/i18n';
 
 const MODES: { id: FilterMode; labelKey: string }[] = [
@@ -20,7 +22,7 @@ export function ParamForm() {
     const { t } = useTranslation();
     const session = useSession();
     const params = useT2IParams(session.isSuccess);
-    const status = useCurrentStatus(session.isSuccess);
+    const supportedFeatures = useSupportedFeatures();
     const [search, setSearch] = useState('');
     const [mode, setMode] = useState<FilterMode>('basic');
 
@@ -28,6 +30,8 @@ export function ParamForm() {
     const toggles = useParamStore(s => s.toggles);
     const groupToggles = useParamStore(s => s.groupToggles);
     const resetAll = useParamStore(s => s.resetAll);
+    // A Comfy workflow brings its own parameters, which the suggestions know nothing about.
+    const comfyActive = useComfyWorkflowStore(s => s.active);
 
     const schema = useParamSchema();
     // The image editor supplies these itself while it is open, so the panel must not also offer
@@ -44,12 +48,12 @@ export function ParamForm() {
             values,
             toggles,
             groupToggles,
-            supportedFeatures: status.data?.supported_features ?? [],
+            supportedFeatures,
             search,
             mode,
             suppressed
         });
-    }, [schema, values, toggles, groupToggles, status.data?.supported_features, search, mode, suppressed]);
+    }, [schema, values, toggles, groupToggles, supportedFeatures, search, mode, suppressed]);
 
     if (params.isPending) {
         return <p className="p-4 text-sm text-fg-soft">{t('params.loading')}</p>;
@@ -144,6 +148,7 @@ export function ParamForm() {
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-2">
+                {!searching && !comfyActive && <SuggestedSettings schema={schema} />}
                 {visibleUngrouped.map(param => (
                     <ParamField key={param.id} param={param} visibility={visibility} />
                 ))}

@@ -49,6 +49,8 @@ export interface ModelOption {
     shortCode: string | null;
     tags: string[];
     triggerPhrase: string | null;
+    /** Base model the metadata names as the one to use it like, eg 'Pony'. */
+    usageHint: string | null;
     /** True when a backend currently has it in memory. */
     loaded: boolean;
     starred: boolean;
@@ -154,6 +156,7 @@ function buildOption(
         shortCode: compatInfoOf(schema, compatClass)?.short_code ?? null,
         tags: card?.tags ?? [],
         triggerPhrase: card?.trigger_phrase ?? null,
+        usageHint: card?.usage_hint ?? null,
         loaded: card?.loaded ?? false,
         starred: card ? starred.has(card.name) : starred.has(name),
         defaultWeight: parseWeight(card?.lora_default_weight),

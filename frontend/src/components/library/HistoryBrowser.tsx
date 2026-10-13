@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Star, Trash2, X } from 'lucide-react';
-import { useNavigate } from '@tanstack/react-router';
+import { Download, Loader2, Star, Trash2, X } from 'lucide-react';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useDeleteImage, useImages, useToggleImageStar } from '@/library/hooks';
 import {
     imageOutPrefix,
+    imageSearchText,
     isImageStarred,
     type ImageEntry,
     type ImageSortMode,
@@ -13,6 +14,7 @@ import { usePermission } from '@/api/permissions';
 import { useSession } from '@/api/hooks';
 import { useReuseParameters } from '@/params/reuse';
 import { useMediaParamAction } from '@/params/useMediaParamAction';
+import { useUserSetting } from '@/settings/useUserSetting';
 import { BrowserToolbar, EmptyState, FolderPane, IMAGE_SORTS, StarButton } from './BrowserChrome';
 import { DetailSheet } from '../ui/DetailSheet';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
@@ -70,8 +72,10 @@ function delay(ms: number): Promise<void> {
  * differs: it already sends fully-prefixed paths. */
 export function HistoryBrowser() {
     const { t } = useTranslation();
+    // ?search= arrives from a "Browse history" action elsewhere in the Library, eg `model: sdxl`.
+    const routeSearch = useSearch({ strict: false }) as { search?: string };
     const [path, setPath] = useState('');
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = useState(routeSearch.search ?? '');
     const [view, setView] = useState<ViewMode>('grid');
     // Date sort, unreversed: the server's date order is the default the history screen opens with,
     // and reversing it is left to the user's toggle.
@@ -88,6 +92,25 @@ export function HistoryBrowser() {
     const [flash, setFlash] = useState<string | null>(null);
 
     const images = useImages(path, sort, reverse, depth);
+    // The listing stops at MaxImagesInHistory, so a search of it alone can miss older images. Once
+    // typing settles, the server is asked to search further itself (legacy's
+    // scheduleImageHistoryServerFilter), unless the user's ImageHistoryServerFilter setting is off.
+    const query = search.trim();
+    const serverSearchOn = useUserSetting<boolean>('imagehistoryserverfilter', true) === true;
+    const [serverQuery, setServerQuery] = useState('');
+    useEffect(() => {
+        if (!serverSearchOn || !query) {
+            setServerQuery('');
+            return;
+        }
+        const timer = setTimeout(() => setServerQuery(query), 500);
+        return () => clearTimeout(timer);
+    }, [query, serverSearchOn]);
+    const deepSearch = useImages(path, sort, reverse, depth, serverQuery, serverQuery !== '');
+    // Only an answer to what is typed right now is used; while the next one is pending, the
+    // listing on hand is searched instead.
+    const deepResult = serverQuery === query ? deepSearch.data : undefined;
+    const deepSearching = serverSearchOn && query !== '' && (serverQuery !== query || deepSearch.isFetching);
     const toggleStar = useToggleImageStar();
     const deleteImage = useDeleteImage();
     const canDelete = usePermission('user_delete_image');
@@ -103,7 +126,7 @@ export function HistoryBrowser() {
     // current folder has to be joined back on. At root that is a no-op.
     const urlFor = (src: string) => urlForPath(joinPath(path, src));
 
-    const files = images.data?.files ?? EMPTY;
+    const files = (deepResult ?? images.data)?.files ?? EMPTY;
     // Every entry carries its whole generation metadata as a JSON string, and all the listing
     // wants from it is the star. Parsed once per listing here rather than once per card per
     // render, which on a folder of a few thousand images was megabytes of JSON per keystroke.
@@ -111,10 +134,16 @@ export function HistoryBrowser() {
         () => new Set(files.filter(file => isImageStarred(file.metadata)).map(file => file.src)),
         [files]
     );
+    // Built once per listing, and only while searching: it means parsing every entry's metadata.
+    const searching = query !== '';
+    const searchIndex = useMemo(
+        () => (searching ? new Map(files.map(file => [file.src, imageSearchText(file)])) : null),
+        [files, searching]
+    );
     const filtered = useMemo(() => {
-        const query = search.trim().toLowerCase();
-        return query ? files.filter(f => f.src.toLowerCase().includes(query)) : files;
-    }, [files, search]);
+        const needle = query.toLowerCase();
+        return searchIndex ? files.filter(file => searchIndex.get(file.src)?.includes(needle)) : files;
+    }, [files, searchIndex, query]);
 
     // An output folder is routinely thousands of images; draw it as it is scrolled through.
     const shown = useIncremental(filtered);
@@ -292,7 +321,14 @@ export function HistoryBrowser() {
                     onDepth={setDepth}
                     count={filtered.length}
                     total={files.length}
-                />
+                >
+                    {deepSearching && (
+                        <span className="flex items-center gap-1 text-xs text-fg-soft">
+                            <Loader2 size={12} className="animate-spin" aria-hidden />
+                            {t('history.deepSearching')}
+                        </span>
+                    )}
+                </BrowserToolbar>
 
                 {selection.count > 0 && (
                     <SelectionBar
@@ -327,11 +363,13 @@ export function HistoryBrowser() {
                     ) : filtered.length === 0 ? (
                         <EmptyState
                             title={
-                                search
-                                    ? t('history.noSearchMatches', { search: search.trim() })
-                                    : t('history.noImages')
+                                deepSearching
+                                    ? t('history.deepSearching')
+                                    : searching
+                                      ? t('history.noSearchMatches', { search: query })
+                                      : t('history.noImages')
                             }
-                            hint={search ? undefined : t('history.noImagesHint')}
+                            hint={searching ? undefined : t('history.noImagesHint')}
                         />
                     ) : view === 'grid' ? (
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">

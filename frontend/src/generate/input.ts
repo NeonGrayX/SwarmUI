@@ -11,7 +11,7 @@
 
 import { useCallback } from 'react';
 import type { ParamSchema } from '@/api/types';
-import { useCurrentStatus, useSession } from '@/api/hooks';
+import { useSupportedFeatures } from '@/params/features';
 import { useParamSchema } from '@/params/schema';
 import type { NormalizedSchema } from '@/params/schema';
 import { isMediaListType, isMediaType, mediaValues, type MediaMeta } from '@/params/media';
@@ -123,11 +123,9 @@ export function buildGenInput(
  *  than subscribing keeps the Generate button from re-rendering on every keystroke. */
 export function useGenInput(): () => Record<string, unknown> {
     const schema = useParamSchema();
-    const session = useSession();
-    const status = useCurrentStatus(session.isSuccess);
-    const features = status.data?.supported_features;
+    const features = useSupportedFeatures();
     return useCallback(
-        () => buildGenInput(schema, useParamStore.getState(), features ?? []),
+        () => buildGenInput(schema, useParamStore.getState(), features),
         [schema, features]
     );
 }

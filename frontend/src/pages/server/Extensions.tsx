@@ -58,6 +58,7 @@ export function ExtensionsPage() {
     const { t } = useTranslation();
     const canRestart = usePermission('restart');
     const [filter, setFilter] = useState('');
+    const [showHidden, setShowHidden] = useState(false);
     const [rows, setRows] = useState<Record<string, RowState>>({});
     const [restartNeeded, setRestartNeeded] = useState(false);
     const [pendingUninstall, setPendingUninstall] = useState<PendingUninstall | null>(null);
@@ -112,7 +113,12 @@ export function ExtensionsPage() {
 
     const query = filter.trim().toLowerCase();
     const installed = (extensions.data?.installed ?? []).filter(ext => matches(ext, query));
-    const available = (extensions.data?.available ?? []).filter(ext => matches(ext, query));
+    // Hidden only applies to what could still be installed: one already on the server is listed
+    // whatever its tags say, as in legacy.
+    const hiddenCount = (extensions.data?.available ?? []).filter(ext => ext.hidden).length;
+    const available = (extensions.data?.available ?? []).filter(
+        ext => (showHidden || !ext.hidden) && matches(ext, query)
+    );
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -147,6 +153,21 @@ export function ExtensionsPage() {
                         </button>
                     )}
                 </div>
+
+                {hiddenCount > 0 && (
+                    <label
+                        className="flex cursor-pointer items-center gap-1 text-xs text-fg-soft"
+                        title={t('extensions.showHiddenHint')}
+                    >
+                        <input
+                            type="checkbox"
+                            checked={showHidden}
+                            onChange={e => setShowHidden(e.target.checked)}
+                            className="accent-[var(--emphasis)]"
+                        />
+                        {t('extensions.showHidden', { count: hiddenCount })}
+                    </label>
+                )}
 
                 <div className="flex-1" />
 

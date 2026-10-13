@@ -3,6 +3,7 @@ import { Copy, ImageOff, Star, Trash2 } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
+import { PRESET_HISTORY_KEY, useBrowseHistory } from '@/library/browseHistory';
 import { libraryKeys, useMyUserData } from '@/library/hooks';
 import { usePresetStars } from '@/library/stars';
 import { previewUrl, type PresetEntry, type ViewMode } from '@/library/types';
@@ -37,6 +38,7 @@ export function PresetsBrowser() {
     const schema = useParamSchema();
     const stars = usePresetStars();
     const contextMenu = useContextMenu();
+    const browseHistory = useBrowseHistory();
     const handOver = useWorkspaceHandoffStore(s => s.openWorkspace);
 
     const presets = userData.data?.presets ?? [];
@@ -107,6 +109,12 @@ export function PresetsBrowser() {
             {
                 label: stars.isStarred(preset.title) ? t('common.unstar') : t('common.star'),
                 onSelect: () => stars.toggle(preset.title)
+            },
+            // Only finds images whose request named the preset, which is how legacy's preset
+            // toggle sends it; applying one here writes its values into the form instead.
+            {
+                label: t('library.browseHistory'),
+                onSelect: () => browseHistory(PRESET_HISTORY_KEY, preset.title)
             }
         ];
         if (canManage) {

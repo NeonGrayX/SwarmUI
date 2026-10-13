@@ -234,6 +234,25 @@ function combineLoras(params: Record<string, unknown>): void {
     params.loras = lines;
 }
 
+/** Frame counts read as a duration too, at the image's own frame rate (metadatahelpers.js:346). */
+function describeFrames(params: Record<string, unknown>, schema: NormalizedSchema | null): void {
+    let fps = Number(params.videofps ?? schema?.byId.get('videofps')?.default);
+    if (!Number.isFinite(fps) || fps <= 0) {
+        fps = 24;
+    }
+    for (const key of Object.keys(params)) {
+        if (schema?.byId.get(key)?.view_type !== 'video_frames') {
+            continue;
+        }
+        const frames = parseInt(String(params[key]), 10);
+        if (!Number.isFinite(frames)) {
+            continue;
+        }
+        const seconds = Math.round((frames / fps) * 100) / 100;
+        params[key] = t('metadata.videoFrames', { count: seconds, seconds, frames });
+    }
+}
+
 function combineTimings(extra: Record<string, unknown>): void {
     if (isEmpty(extra.prep_time) || isEmpty(extra.generation_time)) {
         return;
@@ -277,9 +296,41 @@ function modelEntries(models: unknown, schema: NormalizedSchema | null): Metadat
     });
 }
 
+/** The prompt rows, `original_prompt` consumed along the way.
+ *
+ * `original_prompt` is only interesting when it differs from what was actually generated with - a
+ * wildcard or `<random>` rewrote it, say. Then both are shown, labelled apart, in the order the
+ * user's InterpretedPromptOnTop setting asks for (metadatahelpers.js:389). */
+function promptEntries(
+    params: Record<string, unknown>,
+    extra: Record<string, unknown>,
+    schema: NormalizedSchema | null,
+    interpretedOnTop: boolean
+): (MetadataEntry | null)[] {
+    const prompt = params.prompt;
+    const original = extra.original_prompt;
+    delete extra.original_prompt;
+    if (typeof prompt !== 'string' || typeof original !== 'string') {
+        return [makeEntry('prompt', prompt, schema, true), makeEntry('original_prompt', original, schema, true)];
+    }
+    if (prompt.replace(CID_MARKER, '<$1>') === original) {
+        return [makeEntry('prompt', original, schema, true)];
+    }
+    const originalEntry = makeEntry('original_prompt', original, schema, true);
+    const interpreted = makeEntry('prompt', prompt, schema, true);
+    const interpretedEntry = interpreted && { ...interpreted, label: t('metadata.label.interpreted_prompt') };
+    return interpretedOnTop ? [interpretedEntry, originalEntry] : [originalEntry, interpretedEntry];
+}
+
+export interface MetadataOptions {
+    /** The InterpretedPromptOnTop user setting. */
+    interpretedPromptOnTop?: boolean;
+}
+
 export function parseImageMetadata(
     raw: string | null | undefined,
-    schema: NormalizedSchema | null
+    schema: NormalizedSchema | null,
+    options: MetadataOptions = {}
 ): ParsedMetadata | null {
     if (!raw) {
         return null;
@@ -308,27 +359,18 @@ export function parseImageMetadata(
     combineMedia(params, extra, schema);
     combineResolution(params);
     combineLoras(params);
+    describeFrames(params, schema);
     combineTimings(extra);
     // Version says nothing about the image itself; it belongs with the other bookkeeping.
     if (!isEmpty(params.swarm_version)) {
         extra.swarm_version = params.swarm_version;
         delete params.swarm_version;
     }
-    // `original_prompt` is only interesting when it differs from what was actually generated with.
-    if (
-        typeof params.prompt === 'string' &&
-        typeof extra.original_prompt === 'string' &&
-        params.prompt.replace(CID_MARKER, '<$1>') === extra.original_prompt
-    ) {
-        params.prompt = extra.original_prompt;
-        delete extra.original_prompt;
-    }
 
     const prompts = [
-        ...PROMPT_KEYS.map(key => makeEntry(key, params[key], schema, true)),
-        makeEntry('original_prompt', extra.original_prompt, schema, true)
+        ...promptEntries(params, extra, schema, options.interpretedPromptOnTop === true),
+        makeEntry('negativeprompt', params.negativeprompt, schema, true)
     ].filter((entry): entry is MetadataEntry => entry !== null);
-    delete extra.original_prompt;
 
     const paramKeys = [
         ...TOP_KEYS.filter(key => key in params),

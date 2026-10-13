@@ -40,6 +40,9 @@ export interface ExtensionEntry {
     license: string;
     /** Anything but MIT, which is the line the legacy page draws when it highlights a license. */
     licenseWarning: boolean;
+    /** Tagged `hidden`: broken, outdated or unsafe. Legacy lists these but keeps them collapsed
+     *  behind its "Show Hidden" checkbox. */
+    hidden: boolean;
 }
 
 export interface InstalledExtension extends ExtensionEntry {
@@ -55,8 +58,8 @@ export interface InstalledExtension extends ExtensionEntry {
 export interface LegacyExtensions {
     /** Installed extensions, enabled ones first, as the legacy table orders them. */
     installed: InstalledExtension[];
-    /** Known extensions that are not installed. Legacy drops `hidden` ones server-side and sorts
-     *  the riskier tags last, both of which carry over into this list's order. */
+    /** Known extensions that are not installed, `hidden` ones included. Legacy sorts the riskier
+     *  tags (hidden among them) last, which carries over into this list's order. */
     available: ExtensionEntry[];
 }
 
@@ -130,15 +133,18 @@ function description(cell: Element | undefined): string {
 
 function entry(row: Record<string, Element | undefined>, actionName: string): ExtensionEntry {
     const license = text(row.license);
+    const tags = parseTags(row.tags);
     return {
         name: text(row.name),
         actionName,
         author: text(row.author),
         description: description(row.description),
-        tags: parseTags(row.tags),
+        tags,
         readmeUrl: link(row.readme),
         license,
-        licenseWarning: license !== 'MIT'
+        licenseWarning: license !== 'MIT',
+        // The row's `extension-hidden-row` class is written from the same tag.
+        hidden: tags.some(tag => tag.kind === 'hidden')
     };
 }
 

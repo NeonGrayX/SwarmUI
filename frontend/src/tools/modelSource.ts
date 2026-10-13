@@ -304,7 +304,7 @@ const CIVITAI_CACHE_LIMIT = 16;
 
 /** One Civitai API call through the server's proxy. Answers null for anything that went wrong —
  *  a bad id, a rate limit and an outage all leave the caller with the same "no metadata". */
-function civitaiGet<T>(path: string): Promise<T | null> {
+export function civitaiGet<T>(path: string): Promise<T | null> {
     const cached = CIVITAI_CACHE.get(path);
     if (cached) {
         return cached as Promise<T | null>;
@@ -578,7 +578,24 @@ function toThumbnailDataUrl(
     }
 }
 
-function imageThumbnail(url: string): Promise<string | null> {
+/** Civitai's image CDN does not send CORS headers reliably, which taints the canvas. */
+const CIVITAI_IMAGE_PREFIX = 'https://image.civitai.com/';
+
+async function imageThumbnail(url: string): Promise<string | null> {
+    if (url.startsWith(CIVITAI_IMAGE_PREFIX)) {
+        // Fetched by the server instead and handed back as a data URL, which draws untainted. The
+        // same route legacy's imageToData takes (src/wwwroot/js/util.js:920).
+        try {
+            const forwarded = await api.post<{ image?: string }>('ForwardImageRequest', { url });
+            if (!forwarded.image) {
+                return null;
+            }
+            url = forwarded.image;
+        }
+        catch {
+            return null;
+        }
+    }
     return new Promise(resolve => {
         const image = new Image();
         image.crossOrigin = 'anonymous';

@@ -116,6 +116,42 @@ export function isImageStarred(metadata: string | null | undefined): boolean {
     }
 }
 
+/** Metadata sections whose entries a history search can hit as `key: value`. */
+const SEARCHED_SECTIONS = ['sui_image_params', 'sui_extra_data'];
+
+function searchValue(value: unknown): string {
+    return typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value);
+}
+
+/** Everything a history search is matched against, lowercased: the path, the raw metadata, and a
+ *  `key: value` line per generation parameter and extra-data entry, one per item for lists. So
+ *  `model: sdxl` finds what was made with that model, and `loras: detail` what used that LoRA.
+ *
+ *  The same text legacy searches (describeOutputFile, src/wwwroot/js/genpage/gentab/outputhistory.js)
+ *  and the same lines the server's `filter` matches (ImageHistoryMatchesFilter, src/WebAPI/T2IAPI.cs),
+ *  so a server-side search and the local one agree on what counts as a hit. */
+export function imageSearchText(entry: ImageEntry): string {
+    const lines = [entry.src, entry.metadata ?? ''];
+    try {
+        const parsed = JSON.parse(entry.metadata ?? '') as Record<string, unknown>;
+        for (const section of SEARCHED_SECTIONS) {
+            const values = parsed?.[section];
+            if (typeof values !== 'object' || values === null || Array.isArray(values)) {
+                continue;
+            }
+            for (const [key, value] of Object.entries(values)) {
+                for (const item of Array.isArray(value) ? value : [value]) {
+                    lines.push(`${key}: ${searchValue(item)}`);
+                }
+            }
+        }
+    }
+    catch {
+        // Not JSON: the raw text above is all there is to search.
+    }
+    return lines.join('\n').toLowerCase();
+}
+
 /** Resolves a preview image path to something an <img> can load. */
 export function previewUrl(src: string | null | undefined): string | undefined {
     if (!src) {

@@ -17,6 +17,7 @@ import {
     type ViewMode,
     type WildcardCard
 } from '@/library/types';
+import { historyKeyForSubtype, useBrowseHistory } from '@/library/browseHistory';
 import { usePermission } from '@/api/permissions';
 import { BrowserToolbar, EmptyState, FolderPane, MODEL_SORTS, StarButton } from './BrowserChrome';
 import { SelectionBar, SelectionButton, SelectionCheckbox, useSelection } from './Selection';
@@ -54,6 +55,8 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
     const renameModel = useRenameModel();
     const selectModel = useSelectModel();
     const contextMenu = useContextMenu();
+    const browseHistory = useBrowseHistory();
+    const historyKey = historyKeyForSubtype(props.subtype);
 
     const canDelete = usePermission('delete_models');
     const canEdit = usePermission('edit_model_metadata');
@@ -116,6 +119,12 @@ export function ModelBrowser(props: { subtype: ModelSubtype; label: string; empt
             actions.push({
                 label: t('modelBrowser.action.loadOnBackends'),
                 onSelect: () => selectModel.mutate({ name: file.name })
+            });
+        }
+        if (historyKey) {
+            actions.push({
+                label: t('library.browseHistory'),
+                onSelect: () => browseHistory(historyKey, file.name)
             });
         }
         if (canEdit) {
