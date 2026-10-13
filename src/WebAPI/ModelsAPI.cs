@@ -544,7 +544,57 @@ public static class ModelsAPI
             actualModel.Metadata.PredictionType = string.IsNullOrWhiteSpace(prediction_type) ? null : prediction_type;
         }
         handler.ResetMetadataFrom(actualModel);
-        _ = Utilities.RunCheckedTask(() => actualModel.ResaveModel(), "model resave");
+        static bool isLockError(IOException ex) => OperatingSystem.IsWindows() && (ex.HResult & 0xffff) is 32 or 33; // ERROR_SHARING_VIOLATION (used by another process), ERROR_LOCK_VIOLATION (obscure variant of same)
+        try
+        {
+            await Task.Run(() => actualModel.ResaveModel());
+        }
+        catch (IOException ex) when (isLockError(ex)) // File locked, may be held by a backend, so reserve and clear them
+        {
+            AbstractT2IBackend[] backends = [.. Program.Backends.RunningBackendsOfType<AbstractT2IBackend>()];
+            if (backends.Length == 0)
+            {
+                throw;
+            }
+            foreach (AbstractT2IBackend backend in backends)
+            {
+                Interlocked.Increment(ref backend.Reservations);
+            }
+            try
+            {
+                while (backends.Any(b => b.BackendData.Usages > 0 || b.BackendData.ReserveModelLoad))
+                {
+                    await Task.Delay(100, Program.GlobalProgramCancel);
+                }
+                await Task.WhenAll(backends.Select(b => b.FreeMemory(true)));
+                for (int attempt = 0; attempt < 10; attempt++)
+                {
+                    try
+                    {
+                        await Task.Run(() => actualModel.ResaveModel());
+                        break;
+                    }
+                    catch (IOException retryEx) when (isLockError(retryEx) && attempt < 9)
+                    {
+                        Logs.Verbose($"Lock error, will retry...");
+                        await Task.Delay(500, Program.GlobalProgramCancel);
+                    }
+                    catch (IOException retryEx) when (isLockError(retryEx))
+                    {
+                        Logs.Error($"Error resaving model '{actualModel.Name}': {retryEx.ReadableString()}");
+                        return new JObject() { ["error"] = "Model file is locked by another process, cannot update it." };
+                    }
+                }
+            }
+            finally
+            {
+                foreach (AbstractT2IBackend backend in backends)
+                {
+                    Interlocked.Decrement(ref backend.Reservations);
+                }
+                Program.Backends.CheckBackendsSignal.Set();
+            }
+        }
         Interlocked.Increment(ref ModelEditID);
         return new JObject() { ["success"] = true };
     }
@@ -582,7 +632,7 @@ public static class ModelsAPI
     {
         if (!url.StartsWith("http://") && !url.StartsWith("https://"))
         {
-            await ws.SendJson(new JObject() { ["error"] = "Invalid URL." }, API.WebsocketTimeout);
+            await ws.SendAndReportError($"User '{session.User.UserID}' trying to download a model", "Invalid URL.", API.WebsocketTimeout);
             return null;
         }
         name = Utilities.StrictFilenameClean(name.Replace(' ', '_'));
@@ -593,7 +643,7 @@ public static class ModelsAPI
         }
         if (!Program.T2IModelSets.TryGetValue(type, out T2IModelHandler handler))
         {
-            await ws.SendJson(new JObject() { ["error"] = "Invalid type." }, API.WebsocketTimeout);
+            await ws.SendAndReportError($"User '{session.User.UserID}' trying to download a model", "Invalid type.", API.WebsocketTimeout);
             return null;
         }
         if (!string.IsNullOrWhiteSpace(backendId))
@@ -618,7 +668,7 @@ public static class ModelsAPI
             string outPath = $"{folder}/{name}.{extension}";
             if (File.Exists(outPath))
             {
-                await ws.SendJson(new JObject() { ["error"] = "Model at that save path already exists." }, API.WebsocketTimeout);
+                await ws.SendAndReportError($"User '{session.User.UserID}' trying to download a model", "Model at that save path already exists.", API.WebsocketTimeout);
                 return null;
             }
             string tempPath = $"{folder}/{name}.download.tmp";
@@ -631,7 +681,7 @@ public static class ModelsAPI
             using CancellationTokenSource canceller = new();
             Task downloading = Utilities.DownloadFile(url, tempPath, (progress, total, perSec) =>
             {
-                ws.SendJson(new JObject()
+                ws.SendJsonNoError(new JObject()
                 {
                     ["current_percent"] = progress / (double)total,
                     ["overall_percent"] = 0.2,
@@ -691,14 +741,12 @@ public static class ModelsAPI
         }
         catch (SwarmReadableErrorException userErr)
         {
-            Logs.Warning($"Failed to download the model due to: {userErr.Message}");
-            await ws.SendJson(new JObject() { ["error"] = userErr.Message }, API.WebsocketTimeout);
+            await ws.SendAndReportError($"User '{session.User.UserID}' trying to download a model, got error", userErr.Message, API.WebsocketTimeout);
             return null;
         }
         catch (TaskCanceledException)
         {
-            Logs.Info("Download was cancelled.");
-            await ws.SendJson(new JObject() { ["error"] = "Download was cancelled." }, API.WebsocketTimeout);
+            await ws.SendAndReportError($"User '{session.User.UserID}' trying to download a model", "Download was cancelled.", API.WebsocketTimeout);
             return null;
         }
         catch (Exception ex)
@@ -774,7 +822,7 @@ public static class ModelsAPI
     [API.APIDescription("Forwards an image file request, eg to civitai image CDN.", "\"image\": \"data:image/jpeg;base64,...\"")]
     public static async Task<JObject> ForwardImageRequest(Session session, string url)
     {
-        if (!url.StartsWithFast("https://image.civitai.com/"))
+        if (!url.StartsWithFast("https://image.civitai.com/") && !url.StartsWithFast("https://blobs-b2.civitai.com/"))
         {
             return new JObject() { ["error"] = "Invalid URL." };
         }
@@ -894,7 +942,7 @@ public static class ModelsAPI
         (string oldNameNoExt, string ext) = match.Name.BeforeAndAfterLast('.');
         newName = newName.BeforeLast('.');
         newName = Utilities.StrictFilenameClean(newName).Trim().Trim('/').Replace(' ', '_');
-        if (string.IsNullOrWhiteSpace(newName) || !session.User.IsAllowedModel(oldName))
+        if (string.IsNullOrWhiteSpace(newName) || !session.User.IsAllowedModel(newName))
         {
             return new JObject() { ["error"] = "Model new name is not valid." };
         }

@@ -151,6 +151,9 @@ public partial class WorkflowGenerator
     /// <summary>Mapping of any extra nodes to keep track of, Name->ID, eg "MyNode" -> "15".</summary>
     public Dictionary<string, string> NodeHelpers = [];
 
+    /// <summary>Combined Comfy hook group for LoRAs controlled by step-scheduled prompt tags.</summary>
+    public JArray DynamicLoraHooks = null;
+
     /// <summary>Last used ID, tracked to safely add new nodes with sequential IDs. Note that this starts at 100, as below 100 is reserved for constant node IDs.</summary>
     public int LastID = 100;
 
@@ -313,6 +316,10 @@ public partial class WorkflowGenerator
         JArray last = null;
         for (int i = 0; i < loras.Count; i++)
         {
+            if (UserInput.DynamicLoraIndices.Contains(i))
+            {
+                continue;
+            }
             int confinementId = -1;
             if (confinements is not null && confinements.Count > i)
             {
@@ -359,6 +366,44 @@ public partial class WorkflowGenerator
         return [newHooks, 0];
     }
 
+    /// <summary>Creates the ordered hook list referenced by generated //hook attachments on dynamic LoRA prompt tags.</summary>
+    public JArray CreateDynamicLoraHooks()
+    {
+        if (DynamicLoraHooks is not null || UserInput.DynamicLoraIndices.Count == 0)
+        {
+            return DynamicLoraHooks;
+        }
+        List<string> loras = UserInput.Get(T2IParamTypes.Loras, []);
+        List<string> weights = UserInput.Get(T2IParamTypes.LoraWeights);
+        List<string> tencWeights = UserInput.Get(T2IParamTypes.LoraTencWeights);
+        T2IModelHandler loraHandler = Program.T2IModelSets["LoRA"];
+        JArray last = null;
+        for (int hookId = 0; hookId < UserInput.DynamicLoraIndices.Count; hookId++)
+        {
+            int i = UserInput.DynamicLoraIndices[hookId];
+            if (!loraHandler.Models.TryGetValue(loras[i] + ".safetensors", out T2IModel lora))
+            {
+                if (!loraHandler.Models.TryGetValue(loras[i], out lora))
+                {
+                    throw new SwarmUserErrorException($"LoRA Model '{loras[i]}' not found in the model set.");
+                }
+            }
+            FinalLoadedModelList.Add(lora);
+            float weight = weights is null || i >= weights.Count ? 1 : float.Parse(weights[i]);
+            float tencWeight = tencWeights is null || i >= tencWeights.Count ? weight : float.Parse(tencWeights[i]);
+            string newId = CreateNode("CreateHookLora", new JObject()
+            {
+                ["prev_hooks"] = last,
+                ["lora_name"] = lora.ToString(ModelFolderFormat),
+                ["strength_model"] = weight,
+                ["strength_clip"] = tencWeight
+            }, GetStableDynamicID(3000, hookId), false);
+            last = [newId, 0];
+        }
+        DynamicLoraHooks = last;
+        return DynamicLoraHooks;
+    }
+
     /// <summary>Loads and applies LoRAs in the user parameters for the given LoRA confinement ID.</summary>
     public (JArray, JArray) LoadLorasForConfinement(int confinement, JArray model, JArray clip)
     {
@@ -376,6 +421,10 @@ public partial class WorkflowGenerator
         T2IModelHandler loraHandler = Program.T2IModelSets["LoRA"];
         for (int i = 0; i < loras.Count; i++)
         {
+            if (UserInput.DynamicLoraIndices.Contains(i))
+            {
+                continue;
+            }
             int confinementId = -1;
             if (confinements is not null && confinements.Count > i)
             {
@@ -785,9 +834,9 @@ public partial class WorkflowGenerator
     public (JArray, JArray, JArray, JArray) BuildInputImageHandling(List<JArray> images, JArray pos, JArray neg, JArray latent)
     {
         JArray imgNeg = null;
-        if (IsKontext() || IsOmniGen() || IsQwenImage() || IsAnyFlux2() || IsBoogu() || IsMageFlow() || (IsKrea2() && UserInput.Get(ComfyUIBackendExtension.EnableReferenceLatents, "none") != "none"))
+        if (IsKontext() || IsOmniGen() || IsQwenImage() || IsQwenImage21() || IsAnyFlux2() || IsBoogu() || IsMageFlow() || IsMingImage() || (IsKrea2() && UserInput.Get(ComfyUIBackendExtension.EnableReferenceLatents, "none") != "none"))
         {
-            if (IsOmniGen() || IsQwenImageEditPlus() || IsBoogu() || IsMageFlow())
+            if (IsOmniGen() || IsQwenImageEditPlus() || IsQwenImage21() || IsBoogu() || IsMageFlow())
             {
                 imgNeg = neg;
             }
@@ -819,7 +868,7 @@ public partial class WorkflowGenerator
             }
             if (img is not null)
             {
-                if (IsQwenImageEditPlus() || IsBoogu() || IsMageFlow())
+                if (IsQwenImageEditPlus() || IsQwenImage21() || IsBoogu() || IsMageFlow())
                 {
                     neg = imgNeg;
                 }
@@ -965,6 +1014,11 @@ public partial class WorkflowGenerator
             defsampler ??= "res_multistep";
             defscheduler ??= "simple";
         }
+        else if (IsYue2())
+        {
+            defsampler ??= "dpm_2";
+            defscheduler ??= "sgm_uniform";
+        }
         else if (IsAnima())
         {
             defsampler ??= "er_sde";
@@ -1010,7 +1064,7 @@ public partial class WorkflowGenerator
             defscheduler ??= "simple";
         }
         // TODO: Registry of model default preferences instead of this
-        else if (IsFlux() || IsWanVideo() || IsWanVideo22() || IsOmniGen() || IsQwenImage() || IsZImage() || IsZetaChroma() || IsErnie() || IsHiDreamO1() || IsLens() || IsPixelDiT() || IsKrea2() || IsBoogu() || IsMageFlow() || IsMiniMaxMusic3() || IsSeedVR2())
+        else if (IsFlux() || IsWanVideo() || IsWanVideo22() || IsOmniGen() || IsQwenImage() || IsQwenImage21() || IsZImage() || IsMingImage() || IsZetaChroma() || IsErnie() || IsHiDreamO1() || IsLens() || IsPixelDiT() || IsKrea2() || IsBoogu() || IsMageFlow() || IsMiniMaxMusic3() || IsSeedVR2())
         {
             defscheduler ??= "simple";
         }
@@ -1114,7 +1168,7 @@ public partial class WorkflowGenerator
         }
         else
         {
-            if (IsKontext() || (IsQwenImage() && IsQwenImageEdit()))
+            if (IsKontext() || (IsQwenImage() && IsQwenImageEdit()) || IsQwenImage21())
             {
                 if (MaskShrunkInfo is not null && MaskShrunkInfo.ScaledImage is not null)
                 {
@@ -1371,6 +1425,10 @@ public partial class WorkflowGenerator
             else if (IsQwenImage())
             {
                 target = 1024; // Qwen image targets 1328 for gen but wants 1024 inputs.
+                doesFit = Math.Abs(actual - target) <= 64;
+            }
+            else if (IsMingImage())
+            {
                 doesFit = Math.Abs(actual - target) <= 64;
             }
             if (fixSize && !doesFit)
@@ -1716,6 +1774,11 @@ public partial class WorkflowGenerator
                 VideoFPS ??= 24;
                 Frames = MiniMaxH3AlignFrames(Frames ?? 124);
                 origSrcImg = FixMediaLen();
+                WGNodeData explicitAudio = null;
+                if (g.UserInput.TryGet(T2IParamTypes.VideoAudioInput, out AudioFile _) && g.CurrentMedia?.AttachedAudio?.DataType == WGNodeData.DT_AUDIO)
+                {
+                    explicitAudio = g.CurrentMedia.AttachedAudio;
+                }
                 JArray endFramePath = null;
                 if (VideoEndImage is not null)
                 {
@@ -1737,6 +1800,11 @@ public partial class WorkflowGenerator
                     ["last_frame"] = endFramePath
                 });
                 PosCond = [keyframesNode, 0];
+                if (explicitAudio is not null)
+                {
+                    g.CurrentMedia = g.CurrentMedia.AsLatentImage(Vae);
+                    g.CurrentMedia.AttachedAudio = explicitAudio;
+                }
                 DefaultCFG = 1;
             }
             else if (VideoModel.ModelClass?.CompatClass?.ID == "nvidia-cosmos-1")
@@ -2511,6 +2579,43 @@ public partial class WorkflowGenerator
                 ["min_p"] = 0
             }, id);
         }
+        else if (IsYue2())
+        {
+            if (!isPositive)
+            {
+                return FinalPrompt;
+            }
+            string abc = CreateNode("YuE2GenerateABC", new JObject()
+            {
+                ["clip"] = clip,
+                ["style"] = UserInput.Get(T2IParamTypes.Text2AudioStyle, ""),
+                ["lyrics"] = prompt,
+                ["seed"] = UserInput.Get(T2IParamTypes.Seed, 0) + 10,
+                ["mode"] = "full", // TODO: Parameter? ("melody", "none" available) ref https://github.com/multimodal-art-projection/YuE ('none' means skip this node and just load plain text)
+                // TODO: Parameters for these?
+                ["max_abc_tokens"] = 8192,
+                ["temperature"] = 0.7,
+                ["top_p"] = 0.9,
+                ["top_k"] = 30,
+                ["repetition_penalty"] = 1.005,
+                ["penalty_window"] = 100
+            });
+            node = CreateNode("YuE2GenerateMusic", new JObject()
+            {
+                ["clip"] = clip,
+                ["style"] = UserInput.Get(T2IParamTypes.Text2AudioStyle, ""),
+                ["lyrics"] = prompt,
+                ["abc"] = NodePath(abc, 0),
+                ["seed"] = UserInput.Get(T2IParamTypes.Seed, 0) + 20,
+                ["mode"] = "full",
+                ["max_duration"] = Math.Clamp(UserInput.Get(T2IParamTypes.Text2AudioDuration, 300), 0.04, 900),
+                // TODO: Parameters for these?
+                ["temperature"] = 1.0,
+                ["top_p"] = 0.95,
+                ["top_k"] = 100,
+                ["repetition_penalty"] = 1.2
+            }, id);
+        }
         else if (IsMiniMaxMusic3())
         {
             node = CreateNode("MiniMaxMusic3TextEncode", new JObject()
@@ -2553,6 +2658,7 @@ public partial class WorkflowGenerator
             node = CreateNode("SwarmTextEncodeAdvanced", new JObject()
             {
                 ["clip"] = clip,
+                ["lora_hooks"] = CreateDynamicLoraHooks(),
                 ["steps"] = steps,
                 ["prompt"] = prompt,
                 ["width"] = width,
@@ -2591,6 +2697,7 @@ public partial class WorkflowGenerator
                 node = CreateNode("SwarmTextEncodeAdvanced", new JObject()
                 {
                     ["clip"] = clip,
+                    ["lora_hooks"] = CreateDynamicLoraHooks(),
                     ["steps"] = steps,
                     ["prompt"] = prompt,
                     ["width"] = width,
@@ -2625,6 +2732,67 @@ public partial class WorkflowGenerator
                 }, id);
             }
         }
+        else if (IsQwenImage21())
+        {
+            JArray imageNode = GetPromptImage(true, true, 0);
+            for (int i = 1; i < 16; i++)
+            {
+                JArray image2 = GetPromptImage(true, true, i);
+                if (image2 is null)
+                {
+                    break;
+                }
+                string batched = CreateNode("ImageBatch", new JObject()
+                {
+                    ["image1"] = imageNode,
+                    ["image2"] = image2
+                });
+                imageNode = [batched, 0];
+            }
+            node = CreateNode("SwarmTextEncodeAdvanced", new JObject()
+            {
+                ["clip"] = clip,
+                ["lora_hooks"] = CreateDynamicLoraHooks(),
+                ["steps"] = steps,
+                ["prompt"] = prompt,
+                ["width"] = width,
+                ["height"] = height,
+                ["target_width"] = width,
+                ["target_height"] = height,
+                ["images"] = imageNode
+            }, id);
+        }
+        else if (IsMingImage() && isPositive)
+        {
+            JArray imageNode = GetPromptImage(true, true, 0);
+            for (int i = 1; i < 8; i++)
+            {
+                JArray image2 = GetPromptImage(true, true, i);
+                if (image2 is null)
+                {
+                    break;
+                }
+                string batched = CreateNode("ImageBatch", new JObject()
+                {
+                    ["image1"] = imageNode,
+                    ["image2"] = image2
+                });
+                imageNode = [batched, 0];
+            }
+            // TODO: Just hit wantsSwarmCustom
+            node = CreateNode("SwarmTextEncodeAdvanced", new JObject()
+            {
+                ["clip"] = clip,
+                ["lora_hooks"] = CreateDynamicLoraHooks(),
+                ["steps"] = steps,
+                ["prompt"] = prompt,
+                ["width"] = width,
+                ["height"] = height,
+                ["target_width"] = width,
+                ["target_height"] = height,
+                ["images"] = imageNode
+            }, id);
+        }
         else if (IsHunyuanVideoI2V() && prompt.StartsWith("<image:"))
         {
             (string prefix, string content) = prompt.BeforeAndAfter('>');
@@ -2646,6 +2814,7 @@ public partial class WorkflowGenerator
                 node = CreateNode("SwarmTextEncodeAdvanced", new JObject()
                 {
                     ["clip"] = clip,
+                    ["lora_hooks"] = CreateDynamicLoraHooks(),
                     ["steps"] = steps,
                     ["prompt"] = content,
                     ["width"] = width,
@@ -2673,6 +2842,7 @@ public partial class WorkflowGenerator
             node = CreateNode("SwarmTextEncodeAdvanced", new JObject()
             {
                 ["clip"] = clip,
+                ["lora_hooks"] = CreateDynamicLoraHooks(),
                 ["steps"] = steps,
                 ["prompt"] = prompt,
                 ["width"] = enhance ? (int)Utilities.RoundToPrecision(width * mult, 64) : width,
@@ -2848,7 +3018,7 @@ public partial class WorkflowGenerator
         string explicitSampler = UserInput.Get(ComfyUIBackendExtension.SamplerParam, null, sectionId: sectionId, includeBase: false) ?? (isRefiner ? UserInput.Get(ComfyUIBackendExtension.RefinerSamplerParam, null) : null);
         string explicitScheduler = UserInput.Get(ComfyUIBackendExtension.SchedulerParam, null, sectionId: sectionId, includeBase: false) ?? (isRefiner ? UserInput.Get(ComfyUIBackendExtension.RefinerSchedulerParam, null) : null);
         string sampled = CreateKSampler(CurrentModel.Path, [cond, 0], neg, [emptyLatent, 0], cfg, steps, 0, 10000, seed, false, true, explicitSampler: explicitSampler ?? "lcm", explicitScheduler: explicitScheduler ?? "simple", sectionId: sectionId);
-        WGNodeData result = media.WithPath([sampled, 0], WGNodeData.DT_LATENT_IMAGE, pidModel.ModelClass?.CompatClass);
+        WGNodeData result = media.WithPath([sampled, 0], WGNodeData.DT_LATENT_IMAGE, pidModel.ModelClass?.CompatClass, mayHaveAlpha: false);
         result.Width = width;
         result.Height = height;
         result = result.DecodeLatents(CurrentVae, false);
@@ -2922,7 +3092,7 @@ public partial class WorkflowGenerator
             ["original_resized_images"] = resized,
             ["color_correction_method"] = UserInput.Get(ComfyUIBackendExtension.SeedVRColorCorrectionBehavior, "lab")
         });
-        WGNodeData result = raw.WithPath([post, 0]);
+        WGNodeData result = raw.WithPath([post, 0], mayHaveAlpha: false);
         result.Width = raw.Width;
         result.Height = raw.Height;
         FinalLoadedModel = priorFinalModel;

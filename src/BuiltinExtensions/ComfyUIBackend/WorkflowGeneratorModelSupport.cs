@@ -130,6 +130,9 @@ public partial class WorkflowGenerator
     /// <summary>Returns true if the current model is a Z-Image model.</summary>
     public bool IsZImage() => IsModelCompatClass(T2IModelClassSorter.CompatZImage);
 
+    /// <summary>Returns true if the current model is a Ming Image model.</summary>
+    public bool IsMingImage() => IsModelCompatClass(T2IModelClassSorter.CompatMingImage);
+
     /// <summary>Returns true if the current model is a Zeta Chroma model.</summary>
     public bool IsZetaChroma() => IsModelCompatClass(T2IModelClassSorter.CompatZetaChroma);
 
@@ -150,7 +153,13 @@ public partial class WorkflowGenerator
     public bool IsQwenImage()
     {
         string clazz = CurrentCompatClass();
-        return clazz is not null && clazz.StartsWith("qwen-image");
+        return clazz is not null && clazz.StartsWith("qwen-image") && !IsQwenImage21();
+    }
+
+    /// <summary>Returns true if the current model is Qwen Image 2.1.</summary>
+    public bool IsQwenImage21()
+    {
+        return IsModelCompatClass(T2IModelClassSorter.CompatQwenImage21);
     }
 
     /// <summary>Returns true if the current model is Qwen Image Edit.</summary>
@@ -278,6 +287,12 @@ public partial class WorkflowGenerator
         return IsModelCompatClass(T2IModelClassSorter.CompatMiniMaxMusic3);
     }
 
+    /// <summary>Returns true if the current model is YuE2.</summary>
+    public bool IsYue2()
+    {
+        return IsModelCompatClass(T2IModelClassSorter.CompatYue2);
+    }
+
     /// <summary>Returns true if the current model primarily operates on audio.</summary>
     public bool IsAudioModel()
     {
@@ -337,7 +352,7 @@ public partial class WorkflowGenerator
                 ["width"] = width
             }, id));
         }
-        else if (IsSD3() || IsFlux() || IsHiDream() || IsChroma() || IsOmniGen() || IsQwenImage() || IsZImage() || IsOvis() || IsKandinsky5ImgLite() || IsAnima() || IsLongcatImage() || IsKrea2())
+        else if (IsSD3() || IsFlux() || IsHiDream() || IsChroma() || IsOmniGen() || IsQwenImage() || IsZImage() || IsOvis() || IsKandinsky5ImgLite() || IsAnima() || IsLongcatImage() || IsKrea2() || IsMingImage())
         {
             return resultImage(CreateNode("EmptySD3LatentImage", new JObject()
             {
@@ -419,9 +434,9 @@ public partial class WorkflowGenerator
                 ["seconds"] = UserInput.Get(T2IParamTypes.Text2AudioDuration, 120)
             }, id));
         }
-        else if (IsMiniMaxMusic3())
+        else if (IsMiniMaxMusic3() || IsYue2())
         {
-            JProperty encodedNode = NodesOfClass("MiniMaxMusic3TextEncode").FirstOrDefault();
+            JProperty encodedNode = NodesOfClass(IsYue2() ? "YuE2GenerateMusic" : "MiniMaxMusic3TextEncode").FirstOrDefault();
             JToken targetSeconds;
             if (encodedNode is not null)
             {
@@ -431,7 +446,7 @@ public partial class WorkflowGenerator
             {
                 targetSeconds = NodePath("6", 1); // TODO: This is a very wrong hack hardcoding the prompt path. This will break in many practical edge cases. Need to figure out the special routing that applies here.
             }
-            return resultAudio(CreateNode("EmptyMiniMaxMusic3LatentAudio", new JObject()
+            return resultAudio(CreateNode(IsYue2() ? "EmptyYuE2LatentAudio" : "EmptyMiniMaxMusic3LatentAudio", new JObject()
             {
                 ["batch_size"] = batchSize,
                 ["seconds"] = targetSeconds
@@ -505,7 +520,8 @@ public partial class WorkflowGenerator
                 ["width"] = width
             }, id));
         }
-        else if (UserInput.Get(ComfyUIBackendExtension.ShiftedLatentAverageInit, false))
+        // Note: check type before arg to cause it to fall into unused list if enabled on wrong model type
+        else if ((IsModelCompatClass(T2IModelClassSorter.CompatSdv1) || IsModelCompatClass(T2IModelClassSorter.CompatSdv2) || IsModelCompatClass(T2IModelClassSorter.CompatSdxl)) && UserInput.Get(ComfyUIBackendExtension.ShiftedLatentAverageInit, false))
         {
             double offA = 0, offB = 0, offC = 0, offD = 0;
             switch (FinalLoadedModel.ModelClass?.CompatClass?.ID)
@@ -533,6 +549,16 @@ public partial class WorkflowGenerator
                 ["off_b"] = offB,
                 ["off_c"] = offC,
                 ["off_d"] = offD
+            }, id));
+        }
+        else if (IsQwenImage21())
+        {
+            // TODO: This ain't right, but there's no correct node.
+            return resultImage(CreateNode("EmptyLatentImage", new JObject()
+            {
+                ["batch_size"] = batchSize,
+                ["height"] = height / 2,
+                ["width"] = width / 2
             }, id));
         }
         else
@@ -679,6 +705,16 @@ public partial class WorkflowGenerator
         public string GetOmniQwenModel()
         {
             return RequireClipModel("qwen_2.5_vl_fp16.safetensors", "https://huggingface.co/Comfy-Org/Omnigen2_ComfyUI_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_fp16.safetensors", "ba05dd266ad6a6aa90f7b2936e4e775d801fb233540585b43933647f8bc4fbc3", T2IParamTypes.QwenModel);
+        }
+
+        public string GetQwenImage21TextEncoder()
+        {
+            return RequireClipModel("qwen3vl_8b_int8_convrot.safetensors", "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors", "8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f", T2IParamTypes.QwenModel);
+        }
+
+        public string GetMingImageTextEncoder()
+        {
+            return RequireClipModel("ming_image_0.1_ling_mini_2.0_int8_convrot.safetensors", "https://huggingface.co/Comfy-Org/Ming-Image/resolve/main/text_encoders/ming_image_0.1_ling_mini_2.0_int8_convrot.safetensors", "9d9f31cfce37c24ae1589287f5c33bd9dda80e14ddf773b5e17a0bb69c8cc4b1", null);
         }
 
         public string GetQwenImage25_7b_tenc()
@@ -1366,6 +1402,11 @@ public partial class WorkflowGenerator
             helpers.LoadClip("omnigen2", helpers.GetOmniQwenModel());
             helpers.DoVaeLoader(UserInput.SourceSession?.User?.Settings?.VAEs?.DefaultFluxVAE, "flux-1", "flux-ae");
         }
+        else if (IsQwenImage21())
+        {
+            helpers.LoadClip("qwen_image", helpers.GetQwenImage21TextEncoder());
+            helpers.DoVaeLoader(UserInput.SourceSession?.User?.Settings?.VAEs?.DefaultQwen21VAE, T2IModelClassSorter.CompatQwenImage21, "qwen-image-2.1-vae");
+        }
         else if (IsQwenImage())
         {
             helpers.LoadClip("qwen_image", helpers.GetQwenImage25_7b_tenc());
@@ -1376,6 +1417,11 @@ public partial class WorkflowGenerator
                 ["shift"] = UserInput.Get(T2IParamTypes.SigmaShift, 3, sectionId: sectionId)
             });
             LoadingModel = [samplingNode, 0];
+        }
+        else if (IsMingImage())
+        {
+            helpers.LoadClip("qwen_image", helpers.GetMingImageTextEncoder());
+            helpers.DoVaeLoader(null, T2IModelClassSorter.CompatMingImage, "ming-image-vae");
         }
         else if (IsHunyuanImage())
         {
@@ -1529,6 +1575,10 @@ public partial class WorkflowGenerator
             helpers.DoVaeLoader(null, T2IModelClassSorter.CompatMiniMaxMusic3, "minimax-music-3-vae");
             CurrentAudioVae = new WGNodeData([LoadingVAE, 0], this, WGNodeData.DT_AUDIOVAE, CurrentCompat());
         }
+        else if (IsYue2())
+        {
+            CurrentAudioVae = new WGNodeData([LoadingVAE, 0], this, WGNodeData.DT_AUDIOVAE, CurrentCompat());
+        }
         else if (IsAceStep15())
         {
             // TODO: WTF? these twin qwen tencs are wacky.
@@ -1580,7 +1630,7 @@ public partial class WorkflowGenerator
                 });
                 LoadingModel = [samplingNode, 0];
             }
-            else if (IsZImage() || IsAceStep15() || IsAnima() || IsBoogu())
+            else if (IsZImage() || IsAceStep15() || IsAnima() || IsBoogu() || IsMingImage())
             {
                 string samplingNode = CreateNode("ModelSamplingAuraFlow", new JObject()
                 {

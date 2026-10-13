@@ -1,7 +1,7 @@
 ---
 name: image-editor-tools
-description: Architecture and patterns for developing image editor tools and UI in the SwarmUI image editor (the browser UI under src/wwwroot). For the React frontend's editor see new-ui-image-editor.
----
+description: Architecture and patterns for developing image editor tools and UI in the SwarmUI image editor (the browser UI under src/wwwroot). Not to be confused with the 'advanced media editor', that is separate. For the React frontend's editor see new-ui-image-editor.
+
 
 # Image Editor Tools
 
@@ -15,6 +15,7 @@ differently; see [new-ui-image-editor](../new-ui-image-editor/SKILL.md) for that
 - Use this skill when adding or modifying image editor tools
 - Use this skill when working with layers, color controls, or the image editor toolbar
 - Use this skill when adding new helper JS files that interact with the image editor
+- Do not use if you are working on the 'advanced media editor', that is a separate tool
 
 ## Architecture
 

@@ -36,6 +36,9 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
     /// <summary>If known and relevant (eg latent), what class of models this is compatible with.</summary>
     public T2IModelCompatClass Compat = _compat;
 
+    /// <summary>Whether this media may contain an alpha channel when decoded.</summary>
+    public bool MayHaveAlpha = false;
+
     /// <summary>Returns true if this data has the same compat class as given.</summary>
     public bool IsCompat(T2IModelCompatClass clazz) => Compat is not null && clazz.ID == Compat.ID;
 
@@ -79,12 +82,13 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
     public (string, JObject) SourceNodeData => Gen.Workflow.TryGetValue($"{Path[0]}", out JToken tok) && tok is JObject node ? ($"{node["class_type"]}", (JObject)node["inputs"]) : (null, null);
 
     /// <summary>Returns a copy of this node data with a different node path and optional different type. Always returns a new object instance.</summary>
-    public WGNodeData WithPath(JArray path, string dataType = null, T2IModelCompatClass compat = null)
+    public WGNodeData WithPath(JArray path, string dataType = null, T2IModelCompatClass compat = null, bool? mayHaveAlpha = null)
     {
         WGNodeData dup = Duplicate();
         dup.Path = path;
         dup.DataType = dataType ?? dup.DataType;
         dup.Compat = compat ?? dup.Compat;
+        dup.MayHaveAlpha = mayHaveAlpha ?? dup.MayHaveAlpha;
         return dup;
     }
 
@@ -327,7 +331,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
                     ["pixels"] = Path
                 }, id);
             }
-            return WithPath([encoded, 0], DataType == DT_IMAGE ? DT_LATENT_IMAGE : DT_LATENT_VIDEO, vae.Compat);
+            return WithPath([encoded, 0], DataType == DT_IMAGE ? DT_LATENT_IMAGE : DT_LATENT_VIDEO, vae.Compat, mayHaveAlpha: vae.Compat?.SupportsAlpha ?? false);
         }
         if (DataType == DT_AUDIO)
         {
@@ -533,6 +537,22 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         return null;
     }
 
+    /// <summary>Returns an object that is definitely compatible with raw RGB image or video inputs, decoding and splitting out alpha as needed.</summary>
+    public (WGNodeData Image, JArray AlphaMask) AsRawImageNoAlpha(WGNodeData vae)
+    {
+        WGNodeData result = AsRawImage(vae);
+        if (!result.MayHaveAlpha)
+        {
+            return (result, null);
+        }
+        string split = Gen.CreateNode("SplitImageWithAlpha", new JObject()
+        {
+            ["image"] = result.Path
+        });
+        result = result.WithPath([split, 0], mayHaveAlpha: false);
+        return (result, [split, 1]);
+    }
+
     /// <summary>Returns a copy of this node data. If it has attached audio, the copy's audio will be masked off.</summary>
     public WGNodeData WithMaskedAudio(WGNodeData audioVae)
     {
@@ -645,13 +665,33 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         if (DataType == DT_AUDIO)
         {
             WGAssert(AttachedAudio is null, $"Cannot attach audio onto other audio.");
-            // TODO: SwarmSaveAudio? Better format control instead of just using mp3?
-            return Gen.CreateNode("SaveAudioMP3", new JObject()
+            string audioFormat = UserInput.Get(T2IParamTypes.AudioFormat, "mp3");
+            if (Features.Contains("comfy_saveaudio_ws") && !WorkflowGenerator.RestrictCustomNodes)
             {
-                ["audio"] = Path,
-                ["filename_prefix"] = $"SwarmUI_{Random.Shared.Next():X4}_",
-                ["quality"] = "V0"
-            }, id);
+                return Gen.CreateNode("SwarmSaveAudioWS", new JObject()
+                {
+                    ["audio"] = Path,
+                    ["format"] = audioFormat
+                }, id);
+            }
+            else
+            {
+                WGAssert(audioFormat is "mp3" or "flac", $"Audio format '{audioFormat}' requires SwarmUI custom nodes.");
+                JObject fallbackFormat = new()
+                {
+                    ["format"] = audioFormat
+                };
+                if (audioFormat == "mp3")
+                {
+                    fallbackFormat["quality"] = "V0";
+                }
+                return Gen.CreateNode("SaveAudioAdvanced", new JObject()
+                {
+                    ["audio"] = Path,
+                    ["filename_prefix"] = $"SwarmUI_{Random.Shared.Next():X4}_",
+                    ["format"] = fallbackFormat
+                }, id);
+            }
         }
         WGAssert(false, $"Unknown data type {DataType}, cannot save output.");
         return null;

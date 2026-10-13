@@ -228,6 +228,8 @@ class ImageFullViewHelper {
             }
             img.style.objectFit = '';
             img.style.maxWidth = '';
+            img.style.marginLeft = '0';
+            img.style.marginRight = '0';
             wrap.style.textAlign = 'left';
         }
     }
@@ -336,6 +338,7 @@ class ImageFullViewHelper {
             let wrapAspectRatio = imagewrap.offsetWidth / imagewrap.offsetHeight;
             let defaultHeight = Math.min(100, (wrapAspectRatio / videoAspectRatio) * 100);
             container.style.height = `${defaultHeight}%`;
+            container.style.left = `${(imagewrap.offsetWidth - container.offsetWidth) / 2}px`;
             container.style.top = `${(imagewrap.offsetHeight - imagewrap.offsetHeight * defaultHeight / 100) / 2}px`;
         }
     }
@@ -974,6 +977,12 @@ function setCurrentImage(src, metadata = '', batchId = '', previewGrow = false, 
         return;
     }
     let mediaType = getMediaType(src);
+    if (!metadata && canReparse && (mediaType == 'audio' || mediaType == 'video')) {
+        parseMediaMetadata(src, (data, parsedMetadata) => {
+            setCurrentImage(src, parsedMetadata, batchId, previewGrow, false, false);
+        });
+        return;
+    }
     if ((smoothAdd || !metadata) && canReparse && mediaType == 'image') {
         let image = new Image();
         image.onload = () => {
@@ -1234,9 +1243,6 @@ function setCurrentImage(src, metadata = '', batchId = '', previewGrow = false, 
         imageEditor.setBaseImage(img);
         imageEditor.activate();
     }, '', 'Opens an Image Editor for this image', ['image']);
-    includeButton('Edit Video', () => {
-        videoEditorInterface.open(img);
-    }, '', 'Opens a Video Editor to trim or crop this video', ['video']);
     includeButton('Upscale 2x', () => {
         toDataURL(img.src, (url => {
             let [width, height] = naturalDim();
@@ -1516,6 +1522,11 @@ function imageInputHandler() {
                         setCurrentImage(e.target.result, null);
                     }
                 }
+                reader.readAsDataURL(file);
+            }
+            else if (file.type.startsWith('video/') || file.type.startsWith('audio/')) {
+                let reader = new FileReader();
+                reader.onload = (e) => setCurrentImage(e.target.result);
                 reader.readAsDataURL(file);
             }
             else if (file.name.endsWith('.json') || file.type == 'application/json') {

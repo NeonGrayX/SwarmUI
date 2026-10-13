@@ -333,7 +333,7 @@ public class T2IParamTypes
         return update;
     }
 
-    public static T2IRegisteredParam<string> Prompt, NegativePrompt, AspectRatio, BackendType, RefinerMethod, FreeUApplyTo, FreeUVersion, PersonalNote, VideoFormat, VideoResolution, UnsamplerPrompt, ImageFormat, MaskBehavior, ColorCorrectionBehavior, RawResolution, SeamlessTileable, SD3TextEncs, BitDepth, Webhooks, WildcardSeedBehavior, SegmentSortOrder, SegmentTargetResolution, SegmentApplyAfter, TorchCompile, VideoExtendFormat, ExactBackendID, OverridePredictionType, OverrideOutpathFormat, Text2AudioTimeSignature, Text2AudioLanguage, Text2AudioKeyScale, Text2AudioStyle;
+    public static T2IRegisteredParam<string> Prompt, NegativePrompt, AspectRatio, BackendType, RefinerMethod, FreeUApplyTo, FreeUVersion, PersonalNote, VideoFormat, VideoResolution, UnsamplerPrompt, ImageFormat, MaskBehavior, ColorCorrectionBehavior, RawResolution, SeamlessTileable, SD3TextEncs, BitDepth, Webhooks, WildcardSeedBehavior, SegmentSortOrder, SegmentTargetResolution, SegmentApplyAfter, TorchCompile, VideoExtendFormat, ExactBackendID, OverridePredictionType, OverrideOutpathFormat, AudioFormat, Text2AudioTimeSignature, Text2AudioLanguage, Text2AudioKeyScale, Text2AudioStyle;
     public static T2IRegisteredParam<int> Images, Steps, Width, Height, SideLength, BatchSize, VAETileSize, VAETileOverlap, VAETemporalTileSize, VAETemporalTileOverlap, ClipStopAtLayer, VideoFrames, VideoMotionBucket, VideoFPS, VideoSteps, RefinerSteps, CascadeLatentCompression, MaskShrinkGrow, MaskBlur, MaskGrow, SegmentMaskBlur, SegmentMaskGrow, SegmentMaskOversize, SegmentSteps, Text2VideoFrames, TrimVideoStartFrames, TrimVideoEndFrames, VideoExtendFrameOverlap;
     public static T2IRegisteredParam<long> Seed, VariationSeed, WildcardSeed, Text2AudioBPM;
     public static T2IRegisteredParam<double> CFGScale, VariationSeedStrength, InitImageCreativity, InitImageResetToNorm, InitImageNoise, RefinerControl, RefinerUpscale, RefinerCFGScale, ReVisionStrength, AltResolutionHeightMult,
@@ -434,7 +434,7 @@ public class T2IParamTypes
         List<string> videoFormats = ["webp", "gif", "gif-hd", "webm", "h264-mp4", "h265-mp4", "prores"];
         // ================================================ Text2Audio ================================================
         GroupText2Audio = new("Text To Audio", Open: false, OrderPriority: -29, Toggles: true, Description: $"Support for Text2Audio models.");
-        Text2AudioDuration = Register<double>(new("Text2Audio Duration", "How long the generated audio clip should be, in seconds.",
+        Text2AudioDuration = Register<double>(new("Text2Audio Duration", "How long the generated audio clip should be, in seconds.\nFor some models this is interpreted as a *max* duration, if the lyrics are short the song will be short.\nFor some models, this is a *target* duration and it may try to stretch to fit.",
             "120", Min: 1, Max: 1000, Step: 1, Examples: ["60", "120", "240"], OrderPriority: -10, Group: GroupText2Audio, FeatureFlag: "text2audio", Toggleable: true
             ));
         Text2AudioStyle = Register<string>(new("Text2Audio Style", "The style or genre of the generated audio.\nThis value only applies to models that use a separate style control, such as ACE-Step.",
@@ -442,16 +442,19 @@ public class T2IParamTypes
             ));
         // TODO: These are dirty ACE-Step-specific values probably, will likely need a reorg after other audio models are added.
         Text2AudioBPM = Register<long>(new("Text2Audio BPM", "The tempo of the generated music, in Beats Per Minute (BPM).\nThis value only applies to compatible music models, such as ACE-Step.",
-            "120", Min: 10, Max: 300, Step: 1, Examples: ["60", "90", "120", "150", "180"], OrderPriority: 2, Group: GroupText2Audio, FeatureFlag: "text2audio"
+            "120", Min: 10, Max: 300, Step: 1, Examples: ["60", "90", "120", "150", "180"], OrderPriority: 2, Group: GroupText2Audio, FeatureFlag: "text2audio,audio_ace_inputs"
             ));
         Text2AudioTimeSignature = Register<string>(new("Text2Audio Time Signature", "The time signature of the generated music, in beats per measure.\nThis value is specific to ACE-Step.",
-            "4", Min: 1, Max: 12, Step: 1, GetValues: _ => ["2", "3", "4", "6"], OrderPriority: 3, Group: GroupText2Audio, FeatureFlag: "text2audio"
+            "4", Min: 1, Max: 12, Step: 1, GetValues: _ => ["2", "3", "4", "6"], OrderPriority: 3, Group: GroupText2Audio, FeatureFlag: "text2audio,audio_ace_inputs"
             ));
         Text2AudioLanguage = Register<string>(new("Text2Audio Language", "The language of the generated audio.\nThis value is specific to models that support general vocals in targetable languages, such as ACE-Step.",
-            "en", GetValues: _ => ["en///English", "ja///Japanese", "zh///Chinese", "es///Spanish", "de///German", "fr///French", "pt///Portuguese", "ru///Russian", "it///Italian", "nl///Dutch", "pl///Polish", "tr///Turkish", "vi///Vietnamese", "cs///Czech", "fa///Persian", "id///Indonesian", "ko///Korean", "uk///Ukrainian", "hu///Hungarian", "ar///Arabic", "sv///Swedish", "ro///Romanian", "el///Greek"], OrderPriority: 4, Group: GroupText2Audio, FeatureFlag: "text2audio"
+            "en", GetValues: _ => ["en///English", "ja///Japanese", "zh///Chinese", "es///Spanish", "de///German", "fr///French", "pt///Portuguese", "ru///Russian", "it///Italian", "nl///Dutch", "pl///Polish", "tr///Turkish", "vi///Vietnamese", "cs///Czech", "fa///Persian", "id///Indonesian", "ko///Korean", "uk///Ukrainian", "hu///Hungarian", "ar///Arabic", "sv///Swedish", "ro///Romanian", "el///Greek"], OrderPriority: 4, Group: GroupText2Audio, FeatureFlag: "text2audio,audio_ace_inputs"
             ));
         Text2AudioKeyScale = Register<string>(new("Text2Audio Key Scale", "The musical key scale of the generated audio.\nThis value is specific to models that support targeting specific keys, such as ACE-Step.",
-            "C", GetValues: _ => ["C major", "C# major", "Db major", "D major", "D# major", "Eb major", "E major", "F major", "F# major", "Gb major", "G major", "G# major", "Ab major", "A major", "A# major", "Bb major", "B major", "C minor", "C# minor", "Db minor", "D minor", "D# minor", "Eb minor", "E minor", "F minor", "F# minor", "Gb minor", "G minor", "G# minor", "Ab minor", "A minor", "A# minor", "Bb minor", "B minor"], OrderPriority: 5, Group: GroupText2Audio, FeatureFlag: "text2audio"
+            "C", GetValues: _ => ["C major", "C# major", "Db major", "D major", "D# major", "Eb major", "E major", "F major", "F# major", "Gb major", "G major", "G# major", "Ab major", "A major", "A# major", "Bb major", "B major", "C minor", "C# minor", "Db minor", "D minor", "D# minor", "Eb minor", "E minor", "F minor", "F# minor", "Gb minor", "G minor", "G# minor", "Ab minor", "A minor", "A# minor", "Bb minor", "B minor"], OrderPriority: 5, Group: GroupText2Audio, FeatureFlag: "text2audio,audio_ace_inputs"
+            ));
+        AudioFormat = Register<string>(new("Audio Format", "What format to save generated audio in.\nMP3 is small and widely compatible. Wav is uncompressed. FLAC is lossless and compressed. Ogg uses the efficient and open source Opus codec.",
+            "mp3", GetValues: _ => ["mp3", "wav", "flac", "ogg"], OrderPriority: 10, Group: GroupText2Audio, FeatureFlag: "text2audio", ChangeWeight: -1, Toggleable: true, IsAdvanced: true
             ));
         // ================================================ Variation Seed ================================================
         GroupVariation = new("Variation Seed", Toggles: true, Open: false, OrderPriority: -17, Description: "Variation Seeds let you reuse a single seed, but slightly vary it according to a second seed and a weight value.\nThis technique results in creating images that are almost the same, but with small variations.\nUsing two static seeds and adjusting the strength can produce a smooth transition between two seeds.");

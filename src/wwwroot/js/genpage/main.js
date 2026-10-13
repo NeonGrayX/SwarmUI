@@ -209,7 +209,8 @@ function reviseBackendFeatureSet() {
     doAnyCompatFeature(['stable-diffusion-v1', 'stable-diffusion-v2', 'stable-diffusion-xl-v1'], 'supports_reference_only');
     doAnyCompatFeature(['stable-diffusion-v1', 'stable-diffusion-v2', 'stable-diffusion-xl-v1'], 'supports_hypertile');
     doAnyCompatFeature(['genmo-mochi-1', 'lightricks-ltx-video', 'hunyuan-video', 'nvidia-cosmos-1', `wan-21`, `wan-22`, 'kandinsky5-vidlite', 'kandinsky5-vidpro', 'minimax-h3'], 'text2video');
-    doAnyCompatFeature(['ace-step-1_5', 'minimax-music-3'], 'text2audio');
+    doAnyCompatFeature(['ace-step-1_5', 'minimax-music-3', 'yue-2'], 'text2audio');
+    doCompatFeature('ace-step-1_5', 'audio_ace_inputs');
     for (let changer of featureSetChangers) {
         let [add, remove] = changer();
         addMe.push(...add);
@@ -563,7 +564,7 @@ function imagePromptAddImage(file) {
 
 /** Extracts a prompt video's audio on the server and attaches the saved audio result. */
 function imagePromptSplitVideoAudio(video, startMilliseconds = 0, endMilliseconds = -1, onComplete = null) {
-    genericRequest('ExtractVideoAudio', { video: video.dataset.filedata, filename: video.dataset.filename || '', startMilliseconds, endMilliseconds }, result => {
+    genericRequest('EditMedia', { media: video.dataset.filedata, filename: video.dataset.filename || '', startMilliseconds, endMilliseconds, audioOnly: true }, result => {
         imagePromptAddImageData(`${getImageOutPrefix()}/${result.result}`, 'audio', result.result, result.result);
         if (inputBrowserHelper.inputImageBrowser) {
             inputBrowserHelper.inputImageBrowser.lightRefresh();
@@ -593,10 +594,13 @@ function showPromptMediaMenu(media, menuButton, x = null, y = null) {
             title: "Extract this video's audio and attach it as a separate prompt audio input",
             action: () => imagePromptSplitVideoAudio(media)
         });
+    }
+    if (media.tagName == 'VIDEO' || media.tagName == 'AUDIO') {
+        let mediaName = media.tagName == 'AUDIO' ? 'audio' : 'video';
         buttons.push({
-            key: 'Advanced Video Editor',
-            title: 'Trim or crop this video and save the result',
-            action: () => videoEditorInterface.open(media)
+            key: `Advanced ${mediaName[0].toUpperCase()}${mediaName.substring(1)} Editor`,
+            title: `Trim${mediaName == 'video' ? ' or crop' : ''} this ${mediaName} and save the result`,
+            action: () => mediaEditorInterface.open(media)
         });
     }
     buttons.push({

@@ -135,6 +135,10 @@ public static class BasicAPIFeatures
         [API.APIParameter("New registered account username.")] string username,
         [API.APIParameter("New registered account password.")] string password)
     {
+        if (!Program.ServerSettings.UserAuthorization.Registration.AllowRegistration || !Program.ServerSettings.UserAuthorization.Registration.SimplePasswordRegistration)
+        {
+            return new JObject() { ["error_id"] = "bad_api" };
+        }
         username = SessionHandler.UsernameValidator.TrimToMatches(username).ToLowerFast();
         string ip = WebUtil.GetIPString(context);
         if (username.Length < 3 || username.Length > 100 || password.Length < 8 || password.Length > 500)
@@ -190,6 +194,10 @@ public static class BasicAPIFeatures
         [API.APIParameter("Tracker key to identify the source OAuth request.")] string oauth_tracker_key,
         [API.APIParameter("OAuth provider type.")] string oauth_type)
     {
+        if (!Program.ServerSettings.UserAuthorization.Registration.AllowRegistration || !Program.ServerSettings.UserAuthorization.Registration.OAuthRegistration)
+        {
+            return new JObject() { ["error_id"] = "bad_api" };
+        }
         username = SessionHandler.UsernameValidator.TrimToMatches(username).ToLowerFast();
         string ip = WebUtil.GetIPString(context);
         if (username.Length < 3 || username.Length > 100)
@@ -330,7 +338,7 @@ public static class BasicAPIFeatures
     {
         if (Program.ServerSettings.IsInstalled)
         {
-            await socket.SendJson(new JObject() { ["error"] = $"Server is already installed!" }, API.WebsocketTimeout);
+            await socket.SendAndReportError($"InstallConfirmWS triggered by {session.User.UserID}", "Server is already installed!", API.WebsocketTimeout);
             return null;
         }
         try
